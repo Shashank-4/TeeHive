@@ -1,0 +1,17 @@
+# .gitignore
+
+# Dependencies
+/node_modules
+/frontend/node_modules
+/backend/node_modules
+
+# Vite build output
+/frontend/dist
+
+# Environment variables
+.env
+.env.*
+
+# IDE and OS files
+.DS_Store
+.vscode/
