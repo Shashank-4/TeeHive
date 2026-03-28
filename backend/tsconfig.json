@@ -1,14 +1,21 @@
 {
     "compilerOptions": {
-        "target": "ES2020", // Modern JS output
-        "module": "commonjs", // Node-friendly module system
-        "esModuleInterop": true, // Allows default imports from CommonJS modules
-        "strict": true, // Enable strict type checking
-        "skipLibCheck": true, // Skip type checks of node_modules
-        "outDir": "dist", // Compiled JS output folder
-        "rootDir": "./", // Root folder of TS files
-        "forceConsistentCasingInFileNames": true
+        "target": "es2016", // A safe, widely compatible target
+        "module": "CommonJS", // The most important change!
+        "lib": [
+            "ESNext"
+        ],
+        "esModuleInterop": true,
+        "forceConsistentCasingInFileNames": true,
+        "strict": true,
+        "skipLibCheck": true,
+        "outDir": "./dist"
     },
-    "include": ["**/*.ts"], // Include all TS files
-    "exclude": ["node_modules", "dist"] // Exclude these folders
+    "include": [
+        "src/**/*"
+    ],
+    "exclude": [
+        "node_modules",
+        "dist"
+    ]
 }

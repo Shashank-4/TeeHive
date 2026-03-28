@@ -5,8 +5,8 @@ import Footer from "../shared/Footer";
 export default function MainLayout() {
     return (
         <div className="min-h-screen bg-white">
-            {/* <Navbar />, */}
-            <main className="container mx-auto">
+            <Navbar />
+            <main className="w-full">
                 <Outlet />
             </main>
             <Footer />

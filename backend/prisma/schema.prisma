@@ -1,15 +1,239 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
-// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
-// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
-
 generator client {
   provider = "prisma-client-js"
-  output   = "../generated/prisma"
 }
 
 datasource db {
   provider = "postgresql"
   url      = env("DATABASE_URL")
+}
+
+model User {
+  id                      String             @id @default(uuid())
+  email                   String             @unique
+  name                    String
+  password                String?
+  tokenVersion            Int                @default(0)
+  createdAt               DateTime           @default(now())
+  updatedAt               DateTime           @updatedAt
+  payoutDetails           Json?
+  artistNumber            Int?               @unique
+  authProvider            String             @default("LOCAL")
+  behanceUrl              String?
+  bio                     String?
+  canResubmitVerification Boolean            @default(false)
+  coverPhotoKey           String?
+  coverPhotoUrl           String?
+  displayName             String?
+  displayPhotoKey         String?
+  displayPhotoUrl         String?
+  dribbbleUrl             String?
+  googleId                String?            @unique
+  instagramUrl            String?
+  isAdmin                 Boolean            @default(false)
+  isArtist                Boolean            @default(false)
+  isEmailVerified         Boolean            @default(false)
+  otpCode                 String?
+  otpExpiresAt            DateTime?
+  portfolioUrl            String?
+  resetPasswordExpires    DateTime?
+  resetPasswordToken      String?
+  twitterUrl              String?
+  verificationNote        String?
+  verificationStatus      VerificationStatus @default(UNVERIFIED)
+  verifiedAt              DateTime?
+  designs                 Design[]
+  orders                  Order[]
+  products                Product[]
+}
+
+model Design {
+  id              String       @id @default(uuid())
+  title           String
+  imageUrl        String
+  fileKey         String       @unique
+  status          DesignStatus @default(PENDING)
+  rejectionReason String?
+  artistId        String
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
+  isDeleted       Boolean      @default(false)
+  isRejected      Boolean      @default(false)
+  designCode      String?      @unique
+  artist          User         @relation(fields: [artistId], references: [id])
+  products        Product[]
+}
+
+model Category {
+  id       String  @id @default(uuid())
+  name     String  @unique
+  imageUrl String?
+}
+
+model SiteConfig {
+  id        String   @id @default(uuid())
+  key       String   @unique
+  value     Json
+  updatedAt DateTime @updatedAt
+}
+
+model Product {
+  id                 String           @id @default(uuid())
+  name               String
+  description        String?
+  price              Float
+  compareAtPrice     Float?
+  tshirtColor        String
+  stock              Int              @default(0)
+  status             ProductStatus    @default(DRAFT)
+  mockupImageUrl     String
+  mockupFileKey      String?
+  designId           String
+  artistId           String
+  createdAt          DateTime         @default(now())
+  updatedAt          DateTime         @updatedAt
+  tags               String[]
+  availableColors    String[]
+  primaryColor       String           @default("")
+  primaryView        String           @default("front")
+  backMockupImageUrl String?
+  backMockupFileKey  String?
+  categories         String[]
+  stockStatus        StockStatus      @default(IN_STOCK)
+  orderItems         OrderItem[]
+  artist             User             @relation(fields: [artistId], references: [id])
+  design             Design           @relation(fields: [designId], references: [id])
+  variants           ProductVariant[]
+}
+
+model ProductVariant {
+  id          String      @id @default(uuid())
+  productId   String
+  color       String
+  size        String
+  stockStatus StockStatus @default(IN_STOCK)
+  stock       Int         @default(0)
+  product     Product     @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@unique([productId, color, size])
+}
+
+model Order {
+  id              String           @id @default(uuid())
+  userId          String
+  totalAmount     Float
+  status          OrderStatus      @default(PENDING)
+  paymentIntentId String?          @unique
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+  couponCode      String?
+  discountAmount  Float            @default(0)
+  user            User             @relation(fields: [userId], references: [id])
+  items           OrderItem[]
+  payment         Payment?
+  shippingAddress ShippingAddress?
+}
+
+model Coupon {
+  id              String   @id @default(uuid())
+  code            String   @unique
+  discountPercent Float
+  isActive        Boolean  @default(true)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+}
+
+model SpecialOffer {
+  id              String   @id @default(uuid())
+  title           String
+  subtitle        String?
+  categoryName    String
+  discountPercent Float
+  isVisible       Boolean  @default(false)
+  ctaText         String   @default("SHOP COLLECTION")
+  updatedAt       DateTime @updatedAt
+}
+
+model OrderItem {
+  id        String  @id @default(uuid())
+  orderId   String
+  quantity  Int
+  price     Float
+  size      String
+  color     String
+  productId String
+  order     Order   @relation(fields: [orderId], references: [id])
+  product   Product @relation(fields: [productId], references: [id])
+}
+
+model ShippingAddress {
+  id         String  @id @default(uuid())
+  orderId    String  @unique
+  name       String
+  line1      String
+  line2      String?
+  city       String
+  state      String
+  postalCode String
+  country    String
+  order      Order   @relation(fields: [orderId], references: [id])
+}
+
+model Payment {
+  id              String          @id @default(uuid())
+  orderId         String          @unique
+  amount          Float
+  currency        String          @default("inr")
+  status          PaymentStatus   @default(PENDING)
+  provider        PaymentProvider @default(RAZORPAY)
+  paymentIntentId String          @unique
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+  order           Order           @relation(fields: [orderId], references: [id])
+}
+
+enum VerificationStatus {
+  UNVERIFIED
+  PENDING_VERIFICATION
+  VERIFIED
+  REJECTED
+}
+
+enum DesignStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum ProductStatus {
+  DRAFT
+  PUBLISHED
+  ARCHIVED
+}
+
+enum StockStatus {
+  IN_STOCK
+  LOW_STOCK
+  OUT_OF_STOCK
+}
+
+enum OrderStatus {
+  PENDING
+  PAID
+  SHIPPED
+  DELIVERED
+  CANCELLED
+  RECEIVED
+  PROCESSING
+  OUT_FOR_DELIVERY
+}
+
+enum PaymentStatus {
+  PENDING
+  SUCCEEDED
+  FAILED
+}
+
+enum PaymentProvider {
+  STRIPE
+  RAZORPAY
 }
