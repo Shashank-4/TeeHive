@@ -126,7 +126,7 @@ router.get("/my-orders", requireUser, async (req: Request, res: Response) => {
 
 
 // Create a new order and initialize Razorpay payment
-router.post("/checkout", async (req, res) => {
+router.post("/checkout", async (req: Request, res: Response): Promise<any> => {
     const { items, shippingAddress, userId, couponCode } = req.body;
 
     try {
