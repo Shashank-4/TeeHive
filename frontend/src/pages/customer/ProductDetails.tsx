@@ -62,6 +62,7 @@ export default function ProductDetails() {
     const sizes = ["XS", "S", "M", "L", "XL", "XXL"];
 
     const [matrix, setMatrix] = useState<any>(null);
+    const [globalColors, setGlobalColors] = useState<{ name: string; hex: string; mockupUrl: string }[]>([]);
 
     useEffect(() => {
         const fetchGlobalInventory = async () => {
@@ -74,7 +75,16 @@ export default function ProductDetails() {
                 console.error("Failed to fetch global inventory:", err);
             }
         };
+        const fetchGlobalColors = async () => {
+            try {
+                const res = await api.get("/api/colors");
+                setGlobalColors(res.data.data.colors);
+            } catch (err) {
+                console.error("Failed to fetch global colors:", err);
+            }
+        };
         fetchGlobalInventory();
+        fetchGlobalColors();
     }, []);
 
     const isOutOfStock = (colorHex: string, size: string) => {
@@ -171,12 +181,42 @@ export default function ProductDetails() {
                 <div className="grid lg:grid-cols-[1.1fr_1fr] gap-16 items-start">
                     {/* LEFT: Images */}
                     <div className="space-y-6">
-                        <div className="aspect-[4/5] rounded-[2px] overflow-hidden bg-neutral-g1 border-[1.5px] border-neutral-black relative group">
-                            <img
-                                src={currentView === "front" ? product.mockupImageUrl : (product.backMockupImageUrl || product.mockupImageUrl)}
-                                alt={product.name}
-                                className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-1000"
-                            />
+                        <div className="aspect-[4/5] rounded-[2px] overflow-hidden bg-white border-[1.5px] border-neutral-black relative group">
+                            {(() => {
+                                // Default image logic
+                                let displayImage = currentView === "front" ? product.mockupImageUrl : (product.backMockupImageUrl || product.mockupImageUrl);
+                                let needsOverlay = false;
+
+                                // Dynamically swap if a different global color is selected and we are on front view
+                                if (currentView === "front" && selectedColor !== (product.primaryColor || product.tshirtColor)) {
+                                    const matchingGlobalColor = globalColors.find(gc => gc.hex.toLowerCase() === selectedColor.toLowerCase());
+                                    if (matchingGlobalColor) {
+                                        displayImage = matchingGlobalColor.mockupUrl;
+                                        needsOverlay = true;
+                                    }
+                                }
+
+                                return (
+                                    <>
+                                        <img
+                                            src={displayImage}
+                                            alt={product.name}
+                                            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-1000"
+                                            style={needsOverlay ? { position: 'absolute', top: 0, left: 0, zIndex: 0 } : {}}
+                                        />
+                                        {needsOverlay && (
+                                            <div className="absolute inset-0 z-10 flex items-center justify-center pointer-events-none group-hover:scale-105 transition-transform duration-1000" style={{ padding: '20%' }}>
+                                                <img 
+                                                    src={product.design.imageUrl} 
+                                                    alt="Design overlay" 
+                                                    className="w-[50%] h-auto object-contain mt-[-10%]"
+                                                />
+                                            </div>
+                                        )}
+                                    </>
+                                );
+                            })()}
+                            
                             {product.isDiscounted && (
                                 <div className="absolute top-6 left-6 bg-danger text-white font-display text-[11px] font-black px-3 py-1 uppercase tracking-[1px] transform -rotate-1 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]">
                                     {product.discountPercent}% OFF

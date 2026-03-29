@@ -17,6 +17,7 @@ import AdminArtists from "./pages/admin/AdminArtists";
 import AdminDesigns from "./pages/admin/AdminDesigns";
 import AdminUsers from "./pages/admin/AdminUsers";
 import AdminCategories from "./pages/admin/AdminCategories";
+import AdminColors from "./pages/admin/AdminColors";
 import AdminConfig from "./pages/admin/AdminConfig";
 import AdminArtistReview from "./pages/admin/AdminArtistReview";
 import AdminInventoryMatrix from "./pages/admin/AdminInventoryMatrix";
@@ -93,6 +94,7 @@ const router: RouteObject[] = [
             { path: "orders", element: <AdminOrders /> },
             { path: "users", element: <AdminUsers /> },
             { path: "categories", element: <AdminCategories /> },
+            { path: "colors", element: <AdminColors /> },
             { path: "config", element: <AdminConfig /> },
         ],
     },

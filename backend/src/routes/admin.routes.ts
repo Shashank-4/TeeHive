@@ -17,7 +17,12 @@ import {
     getProductVariantsHandler,
     updateProductVariantsHandler
 } from "../controllers/adminProducts.controller";
-import { listOrdersHandler, updateOrderStatusHandler } from "../controllers/adminOrders.controller";
+import { 
+    listOrdersHandler, 
+    updateOrderStatusHandler,
+    updatePaymentStatusHandler,
+    getOrderByIdHandler
+} from "../controllers/adminOrders.controller";
 import { listDesignsHandler, bulkFlagDesignsHandler, bulkDownloadDesignsHandler } from "../controllers/adminDesigns.controller";
 import { memoryRateLimit } from "../middleware/rateLimit";
 
@@ -49,7 +54,9 @@ router.patch("/products/:id/variants", updateProductVariantsHandler);
 
 // ── Order Management ──
 router.get("/orders", listOrdersHandler);
+router.get("/orders/:id", getOrderByIdHandler);
 router.patch("/orders/:id/status", updateOrderStatusHandler);
+router.patch("/orders/:id/payment", updatePaymentStatusHandler);
 
 // ── Design Management ──
 router.get("/designs", listDesignsHandler);

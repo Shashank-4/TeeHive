@@ -98,6 +98,7 @@ model Product {
   backMockupImageUrl String?
   backMockupFileKey  String?
   categories         String[]
+  globalColors       GlobalColor[]
   stockStatus        StockStatus      @default(IN_STOCK)
   orderItems         OrderItem[]
   artist             User             @relation(fields: [artistId], references: [id])
@@ -224,16 +225,34 @@ enum OrderStatus {
   CANCELLED
   RECEIVED
   PROCESSING
+  IN_TRANSIT
   OUT_FOR_DELIVERY
+  UNDELIVERED_1
+  UNDELIVERED_2
+  UNDELIVERED_3
 }
 
 enum PaymentStatus {
   PENDING
   SUCCEEDED
   FAILED
+  PAID
+  CANCELLED
+  REFUNDED
 }
 
 enum PaymentProvider {
   STRIPE
   RAZORPAY
+}
+
+model GlobalColor {
+  id        String    @id @default(uuid())
+  name      String    @unique
+  hex       String
+  mockupUrl String
+  fileKey   String
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  products  Product[]
 }

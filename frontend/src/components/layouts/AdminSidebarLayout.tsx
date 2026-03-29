@@ -16,7 +16,8 @@ import {
     Bell,
     ExternalLink,
     Search,
-    FolderLock
+    FolderLock,
+    Droplet
 } from "lucide-react";
 import { useState, useEffect } from "react";
 
@@ -26,6 +27,7 @@ const adminNavItems = [
     { to: "/admin/designs", icon: FolderLock, label: "Designs Vault" },
     { to: "/admin/products", icon: Package, label: "Inventory" },
     { to: "/admin/categories", icon: Tag, label: "Taxonomy" },
+    { to: "/admin/colors", icon: Droplet, label: "Global Colors" },
     { to: "/admin/orders", icon: ShoppingBag, label: "Logistics" },
     { to: "/admin/users", icon: Users, label: "Identities" },
     { to: "/admin/config", icon: Settings, label: "Protocol Config" },
@@ -37,6 +39,7 @@ const pageTitles: Record<string, { title: string; subtitle: string; code: string
     "/admin/designs": { title: "SECURE VAULT", subtitle: "Centralized design asset management", code: "DSGN_VAULT_08" },
     "/admin/products": { title: "ASSET REPOSITORY", subtitle: "SKU management & publication states", code: "INV_LOG_03" },
     "/admin/categories": { title: "TAXONOMY ENGINE", subtitle: "System-wide classification schema", code: "STRUC_NODE_04" },
+    "/admin/colors": { title: "COLOR MATRIX", subtitle: "Global blank mockup and hex mappings", code: "CLR_ATTRIB_09" },
     "/admin/orders": { title: "LOGISTICS LEDGER", subtitle: "Transaction fulfillment & authorization", code: "TRANS_OPS_05" },
     "/admin/users": { title: "IDENTITY REGISTRY", subtitle: "Access level monitoring & control", code: "USR_SESS_06" },
     "/admin/config": { title: "SYSTEM PROTOCOLS", subtitle: "Global site toggles & endpoint logic", code: "CORE_CFG_07" },

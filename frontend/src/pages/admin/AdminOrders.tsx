@@ -10,17 +10,20 @@ import {
     Filter,
     Calendar
 } from "lucide-react";
-import { Link } from "react-router-dom";
 import api from "../../api/axios";
 import Toast from "../../components/shared/Toast";
+import OrderDetailsModal from "../../components/modals/OrderDetailsModal";
 
 interface AdminOrder {
     id: string;
     customer: string;
+    customerEmail: string;
     date: string;
     total: number;
-    status: string;
+    fulfillmentStatus: string;
+    paymentStatus: string;
     items: number;
+    artistsInvolved: string;
 }
 
 interface PaginationData {
@@ -31,14 +34,27 @@ interface PaginationData {
 }
 
 const ORDER_STATUSES = [
-    { value: "PENDING", label: "Pending" },
-    { value: "PAID", label: "Paid" },
     { value: "RECEIVED", label: "Received" },
     { value: "PROCESSING", label: "Processing" },
     { value: "SHIPPED", label: "Shipped" },
-    { value: "OUT_FOR_DELIVERY", label: "Out for Delivery" },
+    { value: "IN_TRANSIT", label: "In-transit" },
+    { value: "OUT_FOR_DELIVERY", label: "Out for delivery" },
+    { value: "UNDELIVERED_1", label: "Undelivered - 1st Attempt" },
+    { value: "UNDELIVERED_2", label: "Undelivered - 2nd Attempt" },
+    { value: "UNDELIVERED_3", label: "Undelivered - 3rd Attempt" },
     { value: "DELIVERED", label: "Delivered" },
+    { value: "PENDING", label: "Pending" },
+    { value: "PAID", label: "Paid" },
     { value: "CANCELLED", label: "Cancelled" },
+];
+
+const PAYMENT_STATUSES = [
+    { value: "PAID", label: "Paid" },
+    { value: "PENDING", label: "Pending" },
+    { value: "CANCELLED", label: "Cancelled" },
+    { value: "REFUNDED", label: "Refunded" },
+    { value: "SUCCEEDED", label: "Succeeded" },
+    { value: "FAILED", label: "Failed" }
 ];
 
 const statusSelectClass = (status: string) => {
@@ -66,6 +82,7 @@ export default function AdminOrders() {
     const [statusFilter, setStatusFilter] = useState("all");
     const [actionLoading, setActionLoading] = useState<Record<string, boolean>>({});
     const [toast, setToast] = useState<{ message: string; type: "success" | "error" } | null>(null);
+    const [selectedOrderId, setSelectedOrderId] = useState<string | null>(null);
 
     const fetchOrders = async (page = 1, search = searchQuery, statusType = statusFilter) => {
         setLoading(true);
@@ -91,11 +108,25 @@ export default function AdminOrders() {
         setActionLoading({ ...actionLoading, [orderId]: true });
         try {
             await api.patch(`/api/admin/orders/${orderId}/status`, { status: newStatus });
-            setOrders(orders.map(o => o.id === orderId ? { ...o, status: newStatus } : o));
-            setToast({ message: `Order updated to ${statusLabel(newStatus)}`, type: "success" });
+            setOrders(orders.map(o => o.id === orderId ? { ...o, fulfillmentStatus: newStatus } : o));
+            setToast({ message: `Fulfillment status updated format ${statusLabel(newStatus)}`, type: "success" });
         } catch (err) {
             console.error("Failed to update status", err);
-            setToast({ message: "Failed to update order status", type: "error" });
+            setToast({ message: "Failed to update fulfillment status", type: "error" });
+        } finally {
+            setActionLoading({ ...actionLoading, [orderId]: false });
+        }
+    };
+
+    const handlePaymentChange = async (orderId: string, newStatus: string) => {
+        setActionLoading({ ...actionLoading, [orderId]: true });
+        try {
+            await api.patch(`/api/admin/orders/${orderId}/payment`, { status: newStatus });
+            setOrders(orders.map(o => o.id === orderId ? { ...o, paymentStatus: newStatus } : o));
+            setToast({ message: `Payment status updated`, type: "success" });
+        } catch (err) {
+            console.error("Failed to update payment status", err);
+            setToast({ message: "Failed to update payment status", type: "error" });
         } finally {
             setActionLoading({ ...actionLoading, [orderId]: false });
         }
@@ -104,6 +135,12 @@ export default function AdminOrders() {
     return (
         <div className="w-full min-h-screen bg-neutral-g1 flex flex-col pt-4 text-neutral-black">
             {toast && <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
+            {selectedOrderId && (
+                <OrderDetailsModal 
+                    orderId={selectedOrderId} 
+                    onClose={() => setSelectedOrderId(null)} 
+                />
+            )}
             <div className="flex-1 px-4 sm:px-8 pb-12 w-full">
                 {/* Header Section */}
                 <div className="flex flex-col md:flex-row md:items-end justify-between mb-10 gap-6">
@@ -169,7 +206,7 @@ export default function AdminOrders() {
                         <table className="w-full border-collapse">
                             <thead>
                                 <tr className="bg-neutral-black text-white">
-                                    {["Order ID", "Date", "Customer", "Items", "Total", "Status", "Actions"].map(h => (
+                                    {["Order ID", "Date", "Customer", "Artists Involved", "Total", "Payment", "Fulfillment", "Actions"].map(h => (
                                         <th key={h} className="font-display text-[10px] font-black tracking-[2px] uppercase py-5 px-6 text-left whitespace-nowrap">
                                             {h}
                                         </th>
@@ -193,10 +230,10 @@ export default function AdminOrders() {
                                     </td></tr>
                                 ) : (
                                     orders.map((order) => (
-                                        <tr key={order.id} className="hover:bg-primary/5 transition-colors group">
+                                    <tr key={order.id} className="hover:bg-primary/5 transition-colors group">
                                             <td className="py-5 px-6">
                                                 <div className="flex items-center gap-3">
-                                                    <div className="w-10 h-10 border-[1px] border-neutral-black bg-neutral-g1 rounded-[2px] flex items-center justify-center group-hover:bg-primary transition-all">
+                                                    <div className="w-10 h-10 border-[1px] border-neutral-black bg-neutral-g1 rounded-[2px] flex items-center justify-center group-hover:bg-primary transition-all shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] group-hover:shadow-none translate-x-[-1px] group-hover:translate-x-0 group-hover:translate-y-0">
                                                         <Package className="w-4 h-4" />
                                                     </div>
                                                     <span className="font-display text-[14px] font-black text-neutral-black uppercase italic tracking-tight">#{order.id.slice(-6).toUpperCase()}</span>
@@ -205,18 +242,35 @@ export default function AdminOrders() {
                                             <td className="py-5 px-6 font-display text-[11px] font-bold text-neutral-g4 uppercase">
                                                 <div className="flex items-center gap-2"><Calendar className="w-3 h-3" /> {new Date(order.date).toLocaleDateString('en-GB')}</div>
                                             </td>
-                                            <td className="py-5 px-6 font-display text-[15px] font-black text-neutral-black uppercase tracking-tight">{order.customer}</td>
-                                            <td className="py-5 px-6 font-display text-[13px] font-black text-neutral-black italic uppercase">
-                                                {order.items} <span className="text-[9px] opacity-40 ml-1">Units</span>
+                                            <td className="py-5 px-6 font-display text-[13px] font-black text-neutral-black uppercase tracking-tight">
+                                                {order.customer}
+                                                <div className="text-[9px] font-bold text-neutral-g4 lowercase mt-1 tracking-normal">{order.customerEmail}</div>
                                             </td>
-                                            <td className="py-5 px-6 font-display text-[18px] font-black text-neutral-black italic">₹{order.total.toLocaleString('en-IN')}</td>
+                                            <td className="py-5 px-6 font-display text-[11px] font-bold text-neutral-black break-words line-clamp-2 w-32 uppercase">
+                                                {order.artistsInvolved}
+                                            </td>
+                                            <td className="py-5 px-6 font-display text-[16px] font-black text-neutral-black italic tracking-tight">₹{order.total.toLocaleString('en-IN')}</td>
                                             <td className="py-5 px-6">
                                                 <div className="relative group/sel">
                                                     <select
-                                                        value={order.status}
+                                                        value={order.paymentStatus}
+                                                        onChange={(e) => handlePaymentChange(order.id, e.target.value)}
+                                                        disabled={actionLoading[order.id]}
+                                                        className={`appearance-none px-4 py-2 pr-8 rounded-[2px] font-display text-[9px] font-black tracking-[1.5px] uppercase border-[2px] focus:outline-none cursor-pointer transition-all shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:shadow-none translate-x-[-1px] translate-y-[-1px] hover:translate-x-0 hover:translate-y-0 text-white ${['PAID', 'SUCCEEDED'].includes(order.paymentStatus) ? "bg-success border-neutral-black" : "bg-neutral-black border-neutral-black"} ${actionLoading[order.id] ? "opacity-50 cursor-wait" : ""}`}
+                                                    >
+                                                        {PAYMENT_STATUSES.map(s => (
+                                                            <option key={s.value} value={s.value}>{s.label}</option>
+                                                        ))}
+                                                    </select>
+                                                </div>
+                                            </td>
+                                            <td className="py-5 px-6">
+                                                <div className="relative group/sel">
+                                                    <select
+                                                        value={order.fulfillmentStatus}
                                                         onChange={(e) => handleStatusChange(order.id, e.target.value)}
                                                         disabled={actionLoading[order.id]}
-                                                        className={`appearance-none px-4 py-2 pr-8 rounded-[2px] font-display text-[9px] font-black tracking-[1.5px] uppercase border-[2px] focus:outline-none cursor-pointer transition-all shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:shadow-none translate-x-[-1px] translate-y-[-1px] hover:translate-x-0 hover:translate-y-0 ${statusSelectClass(order.status)} ${actionLoading[order.id] ? "opacity-50 cursor-wait" : ""}`}
+                                                        className={`appearance-none px-4 py-2 pr-8 rounded-[2px] font-display text-[9px] font-black tracking-[1.5px] uppercase border-[2px] focus:outline-none cursor-pointer transition-all shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:shadow-none translate-x-[-1px] translate-y-[-1px] hover:translate-x-0 hover:translate-y-0 ${statusSelectClass(order.fulfillmentStatus)} ${actionLoading[order.id] ? "opacity-50 cursor-wait" : ""}`}
                                                     >
                                                         {ORDER_STATUSES.map(s => (
                                                             <option key={s.value} value={s.value}>{s.label}</option>
@@ -225,10 +279,11 @@ export default function AdminOrders() {
                                                 </div>
                                             </td>
                                             <td className="py-5 px-6 text-right">
-                                                <Link to={`/orders`}
+                                                <button 
+                                                    onClick={() => setSelectedOrderId(order.id)}
                                                     className="p-3 bg-white border-[2px] border-neutral-black rounded-[4px] hover:bg-neutral-black hover:text-white transition-all shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] active:translate-x-[1px] active:translate-y-[1px] active:shadow-none inline-flex items-center gap-2">
                                                     <Eye className="w-4 h-4" />
-                                                </Link>
+                                                </button>
                                             </td>
                                         </tr>
                                     ))

@@ -18,6 +18,7 @@ import categoryRouter from "./routes/category.routes";
 import configRouter from "./routes/config.routes";
 import proxyRouter from "./routes/proxy.routes";
 import promotionRouter from "./routes/promotion.routes";
+import colorRouter from "./routes/color.routes";
 
 const PORT = process.env.PORT || 3000;
 const app = express();
@@ -66,6 +67,7 @@ app.use("/api/categories", categoryRouter);
 app.use("/api/config", configRouter);
 app.use("/api/proxy", proxyRouter);
 app.use("/api/promotions", promotionRouter);
+app.use("/api/colors", colorRouter);
 
 app.listen(PORT, () => {
     console.log(`Server is running on port ${PORT} in ${process.env.NODE_ENV || 'development'} mode`);

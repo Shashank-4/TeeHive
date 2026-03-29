@@ -57,6 +57,7 @@ export default function ArtistMockupCreator() {
     const [categories, setCategories] = useState<Category[]>([]);
     const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
     const [pricingProtocols, setPricingProtocols] = useState<PricingProtocol[]>([]);
+    const [globalColors, setGlobalColors] = useState<{ name: string; hex: string; mockupUrl: string }[]>([]);
 
     useEffect(() => {
         const fetchCategories = async () => {
@@ -77,8 +78,21 @@ export default function ArtistMockupCreator() {
                 console.error("Failed to load pricing protocols", err);
             }
         };
+        const fetchColors = async () => {
+            try {
+                const res = await api.get("/api/colors");
+                setGlobalColors(res.data.data.colors);
+                if (res.data.data.colors.length > 0) {
+                    // Only set if not already set, or just let users select.
+                    // We'll leave primary selection intact
+                }
+            } catch (err) {
+                console.error("Failed to load global colors", err);
+            }
+        };
         fetchCategories();
         fetchPricing();
+        fetchColors();
     }, []);
 
     const [frontDesign, setFrontDesign] = useState<Design | null>(null);
@@ -122,15 +136,8 @@ export default function ArtistMockupCreator() {
         else setBackDesign(null);
     };
 
-    const colors = [
-        { name: "White", color: TShirtColor.White },
-        { name: "Black", color: TShirtColor.Black },
-        { name: "Grey", color: TShirtColor.Grey },
-        { name: "Navy Blue", color: TShirtColor.NavyBlue },
-        { name: "Maroon", color: TShirtColor.Maroon },
-        { name: "Red", color: TShirtColor.Red },
-        { name: "Royal Blue", color: TShirtColor.RoyalBlue },
-    ];
+    // colors is now dynamically fetched
+    const activeColorsList = globalColors.length > 0 ? globalColors.map(c => ({ name: c.name, color: c.hex as TShirtColor, mockupUrl: c.mockupUrl })) : [];
 
     const handleSaveProduct = async (status: "DRAFT" | "PUBLISHED") => {
         setSaveError(null);
@@ -358,7 +365,7 @@ export default function ArtistMockupCreator() {
                                 <div className="space-y-3">
                                     <label className="font-display text-[10px] font-black uppercase tracking-[2px] text-neutral-g4 px-1">Available Fabrics ({selectedColors.length})</label>
                                     <div className="flex flex-wrap gap-3">
-                                        {colors.map((c) => {
+                                        {activeColorsList.map((c) => {
                                             const isSelected = selectedColors.includes(c.color);
                                             const isPrimary = primaryColor === c.color;
                                             return (
@@ -370,6 +377,7 @@ export default function ArtistMockupCreator() {
                                                         }}
                                                         className={`w-10 h-10 border-[2px] border-neutral-black rounded-full shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] group-hover:scale-110 group-hover:shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] transition-all ${isSelected ? 'scale-110 shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] ring-offset-2 ring-2 ring-primary' : ''}`}
                                                         style={{ backgroundColor: c.color }}
+                                                        title={c.name}
                                                     />
                                                     {isSelected && (
                                                         <button
