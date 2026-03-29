@@ -22,21 +22,24 @@ import {
 const client = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
 
 const isProd = process.env.NODE_ENV === "production";
+const COOKIE_DOMAIN = isProd ? ".teehive.co.in" : undefined;
 
 const accessTokenCookieOptions = {
     expires: new Date(Date.now() + 15 * 60 * 1000), // 15 minutes
     maxAge: 15 * 60 * 1000,
     httpOnly: true,
-    sameSite: (isProd ? "none" : "lax") as "none" | "lax",
+    sameSite: "lax" as const,
     secure: isProd,
+    domain: COOKIE_DOMAIN,
 };
 
 const refreshTokenCookieOptions = {
     expires: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000), // 7 days
     maxAge: 7 * 24 * 60 * 60 * 1000,
     httpOnly: true,
-    sameSite: (isProd ? "none" : "lax") as "none" | "lax",
+    sameSite: "lax" as const,
     secure: isProd,
+    domain: COOKIE_DOMAIN,
 };
 
 export const signUpHandler = async (
@@ -282,9 +285,10 @@ export const signOutHandler = async (
 ) => {
     try {
         // Clear cookies by setting them to an empty value with an immediate expiration date.
-        res.cookie("access_token", "", { maxAge: -1 });
-        res.cookie("refresh_token", "", { maxAge: -1 });
-        res.cookie("logged_in", "", { maxAge: -1 });
+        const clearOpts = { maxAge: -1, sameSite: "lax" as const, secure: isProd, httpOnly: true, domain: COOKIE_DOMAIN };
+        res.cookie("access_token", "", clearOpts);
+        res.cookie("refresh_token", "", clearOpts);
+        res.cookie("logged_in", "", { ...clearOpts, httpOnly: false });
 
         res.status(200).json({ status: "success" });
     } catch (err) {
