@@ -1,10 +1,18 @@
-// frontend/src/components/mockup-editor/MockupCanvas.tsx (FINAL FIX - BASE REMOVAL)
+/**
+ * MockupCanvas.tsx — Realistic "Sandwich" Layering Mockup Editor
+ *
+ * 3-Layer Stack:
+ *   Layer 0 (tshirt-base)   → High-res AI-generated color base image
+ *   Layer 1 (user-design)   → Artist's transparent design (blur + reduced opacity)
+ *   Layer 2 (shadow-overlay) → Grayscale shadow/highlight map (multiply/overlay blend)
+ *
+ * The shadow overlay sits on top of the design so folds appear "over" the print,
+ * creating a realistic "printed into the fabric" look.
+ */
 
 import { useState, useEffect, useRef, useImperativeHandle, forwardRef } from "react";
 import * as fabric from "fabric";
 import {
-    TSHIRT_FRONT_URL,
-    TSHIRT_BACK_URL,
     CANVAS_WIDTH,
     CANVAS_HEIGHT,
     PRINT_AREA_FRONT,
@@ -39,11 +47,34 @@ interface MockupCanvasProps {
     frontDesignUrl: string | null;
     backDesignUrl: string | null;
     currentView: ViewType;
+    /** URL to the color base mockup (AI-generated blank t-shirt photo) */
+    colorBaseUrl?: string | null;
+    /** URL to the shadow/highlight map PNG for sandwich overlay */
+    shadowMapUrl?: string | null;
 }
 
 export interface MockupCanvasHandle {
     exportView: (view: ViewType) => Promise<Blob>;
+    /** Return the current design transform for backend rendering */
+    getDesignTransform: (view: ViewType) => DesignTransform | null;
 }
+
+// ── Helpers ──
+
+const PROXY_BASE = () =>
+    `${import.meta.env.VITE_API_URL || "http://localhost:3000"}/api/proxy/image?url=`;
+
+/** Determine if a hex color is "dark" (for shadow blend mode selection) */
+function isDarkColor(hex: string): boolean {
+    const c = hex.replace("#", "");
+    const r = parseInt(c.substring(0, 2), 16);
+    const g = parseInt(c.substring(2, 4), 16);
+    const b = parseInt(c.substring(4, 6), 16);
+    const luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
+    return luminance < 0.5;
+}
+
+// ── Component ──
 
 const MockupCanvas = forwardRef<MockupCanvasHandle, MockupCanvasProps>((
     {
@@ -53,6 +84,8 @@ const MockupCanvas = forwardRef<MockupCanvasHandle, MockupCanvasProps>((
         frontDesignUrl,
         backDesignUrl,
         currentView,
+        colorBaseUrl,
+        shadowMapUrl,
     },
     ref
 ) => {
@@ -60,29 +93,35 @@ const MockupCanvas = forwardRef<MockupCanvasHandle, MockupCanvasProps>((
     const fabricRef = useRef<fabric.Canvas | null>(null);
     const [isLoading, setIsLoading] = useState(false);
 
-    // Store transforms for each view
     const frontTransformRef = useRef<DesignTransform | null>(null);
     const backTransformRef = useRef<DesignTransform | null>(null);
-
-    // Track current view in a ref (for closures)
     const currentViewRef = useRef<ViewType>(currentView);
     const containerRef = useRef<HTMLDivElement>(null);
 
-    // Update canvas scaling dynamically
+    // Track props in refs for stable closures
+    const tshirtColorRef = useRef(tshirtColor);
+    const colorBaseUrlRef = useRef(colorBaseUrl);
+    const shadowMapUrlRef = useRef(shadowMapUrl);
+
+    useEffect(() => { tshirtColorRef.current = tshirtColor; }, [tshirtColor]);
+    useEffect(() => { colorBaseUrlRef.current = colorBaseUrl; }, [colorBaseUrl]);
+    useEffect(() => { shadowMapUrlRef.current = shadowMapUrl; }, [shadowMapUrl]);
+
+    const currentDesignUrl = currentView === "front" ? frontDesignUrl : backDesignUrl;
+    const currentPrintArea = currentView === "front" ? PRINT_AREA_FRONT : PRINT_AREA_BACK;
+
+    // ── Responsive scaling ──
     useEffect(() => {
         if (!containerRef.current) return;
 
         const resizeObserver = new ResizeObserver((entries) => {
             const entry = entries[0];
             if (!entry) return;
-
             const { width } = entry.contentRect;
             const canvas = fabricRef.current;
-
             if (canvas && width > 0) {
-                // The base canvas target is 800px. We scale relative to that.
                 const scale = width / CANVAS_WIDTH;
-                canvas.setDimensions({ width: width, height: width });
+                canvas.setDimensions({ width, height: width * (CANVAS_HEIGHT / CANVAS_WIDTH) });
                 canvas.setZoom(scale);
             }
         });
@@ -91,22 +130,14 @@ const MockupCanvas = forwardRef<MockupCanvasHandle, MockupCanvasProps>((
         return () => resizeObserver.disconnect();
     }, []);
 
-    // Update ref whenever currentView changes
+    // Track current view
     useEffect(() => {
         currentViewRef.current = currentView;
-        console.log(`[ViewRef] Updated to: ${currentView}`);
     }, [currentView]);
 
-    const currentDesignUrl =
-        currentView === "front" ? frontDesignUrl : backDesignUrl;
-    const currentPrintArea =
-        currentView === "front" ? PRINT_AREA_FRONT : PRINT_AREA_BACK;
-
-    // Initialize Canvas ONCE
+    // ── Canvas initialization ──
     useEffect(() => {
         if (!canvasRef.current) return;
-
-        console.log("[Canvas] Initializing...");
 
         const canvas = new fabric.Canvas(canvasRef.current, {
             width: CANVAS_WIDTH,
@@ -119,36 +150,27 @@ const MockupCanvas = forwardRef<MockupCanvasHandle, MockupCanvasProps>((
         fabricRef.current = canvas;
         onCanvasReady(canvas);
 
-        // Set initial scale immediately based on container size
+        // Initial scale
         if (containerRef.current) {
             const width = containerRef.current.clientWidth;
             if (width > 0) {
                 const scale = width / CANVAS_WIDTH;
-                canvas.setDimensions({ width: width, height: width });
+                canvas.setDimensions({ width, height: width * (CANVAS_HEIGHT / CANVAS_WIDTH) });
                 canvas.setZoom(scale);
             }
         }
 
-        // Constraint Logic
+        // ── Constraint Logic ──
         const enforceConstraints = (obj: fabric.Object) => {
             if (!obj) return;
-
             obj.setCoords();
             let objBounds = obj.getBoundingRect();
-            const area =
-                currentViewRef.current === "front"
-                    ? PRINT_AREA_FRONT
-                    : PRINT_AREA_BACK;
+            const area = currentViewRef.current === "front" ? PRINT_AREA_FRONT : PRINT_AREA_BACK;
 
-            // Constrain scale
-            if (
-                objBounds.width > area.width ||
-                objBounds.height > area.height
-            ) {
+            if (objBounds.width > area.width || objBounds.height > area.height) {
                 const scaleX = area.width / objBounds.width;
                 const scaleY = area.height / objBounds.height;
                 const scaleFactor = Math.min(scaleX, scaleY);
-
                 if (scaleFactor < 1) {
                     obj.scaleX = (obj.scaleX || 1) * scaleFactor;
                     obj.scaleY = (obj.scaleY || 1) * scaleFactor;
@@ -157,38 +179,18 @@ const MockupCanvas = forwardRef<MockupCanvasHandle, MockupCanvasProps>((
                 }
             }
 
-            // Constrain position
-            let dx = 0;
-            let dy = 0;
-
+            let dx = 0, dy = 0;
             if (objBounds.width <= area.width) {
-                if (objBounds.left < area.x) {
-                    dx = area.x - objBounds.left;
-                } else if (
-                    objBounds.left + objBounds.width >
-                    area.x + area.width
-                ) {
-                    dx =
-                        area.x +
-                        area.width -
-                        (objBounds.left + objBounds.width);
-                }
+                if (objBounds.left < area.x) dx = area.x - objBounds.left;
+                else if (objBounds.left + objBounds.width > area.x + area.width)
+                    dx = area.x + area.width - (objBounds.left + objBounds.width);
             } else {
                 if (objBounds.left < area.x) dx = area.x - objBounds.left;
             }
-
             if (objBounds.height <= area.height) {
-                if (objBounds.top < area.y) {
-                    dy = area.y - objBounds.top;
-                } else if (
-                    objBounds.top + objBounds.height >
-                    area.y + area.height
-                ) {
-                    dy =
-                        area.y +
-                        area.height -
-                        (objBounds.top + objBounds.height);
-                }
+                if (objBounds.top < area.y) dy = area.y - objBounds.top;
+                else if (objBounds.top + objBounds.height > area.y + area.height)
+                    dy = area.y + area.height - (objBounds.top + objBounds.height);
             } else {
                 if (objBounds.top < area.y) dy = area.y - objBounds.top;
             }
@@ -200,10 +202,8 @@ const MockupCanvas = forwardRef<MockupCanvasHandle, MockupCanvasProps>((
             }
         };
 
-        // Save transform function
         const saveTransform = (obj: fabric.Object) => {
             if ((obj as any).id !== "user-design") return;
-
             const transform: DesignTransform = {
                 left: obj.left ?? 0,
                 top: obj.top ?? 0,
@@ -211,284 +211,130 @@ const MockupCanvas = forwardRef<MockupCanvasHandle, MockupCanvasProps>((
                 scaleY: obj.scaleY ?? 1,
                 angle: obj.angle ?? 0,
             };
-
-            const view = currentViewRef.current;
-
-            if (view === "front") {
-                frontTransformRef.current = transform;
-                console.log(`[Transform] Saved FRONT:`, transform);
-            } else {
-                backTransformRef.current = transform;
-                console.log(`[Transform] Saved BACK:`, transform);
-            }
+            if (currentViewRef.current === "front") frontTransformRef.current = transform;
+            else backTransformRef.current = transform;
         };
 
-        // Attach events
-        canvas.on("object:moving", (e) => {
-            if (e.target) {
-                enforceConstraints(e.target);
-                saveTransform(e.target);
-            }
-        });
-        canvas.on("object:scaling", (e) => {
-            if (e.target) {
-                enforceConstraints(e.target);
-                saveTransform(e.target);
-            }
-        });
-        canvas.on("object:rotating", (e) => {
-            if (e.target) {
-                enforceConstraints(e.target);
-                saveTransform(e.target);
-            }
-        });
-        canvas.on("object:modified", (e) => {
-            if (e.target) {
-                saveTransform(e.target);
-            }
-        });
+        canvas.on("object:moving", (e) => { if (e.target) { enforceConstraints(e.target); saveTransform(e.target); } });
+        canvas.on("object:scaling", (e) => { if (e.target) { enforceConstraints(e.target); saveTransform(e.target); } });
+        canvas.on("object:rotating", (e) => { if (e.target) { enforceConstraints(e.target); saveTransform(e.target); } });
+        canvas.on("object:modified", (e) => { if (e.target) { saveTransform(e.target); } });
 
-        // Load initial t-shirt base
-        loadTShirtBase(canvas, currentView, tshirtColor);
+        // Load initial scene
+        loadFullScene(canvas, currentView);
 
         return () => {
             canvas.dispose();
             fabricRef.current = null;
         };
-    }, []);
+    }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-    // Switch view - CRITICAL FIX HERE
+    // ── View / color change ──
     useEffect(() => {
         const canvas = fabricRef.current;
         if (!canvas) return;
-
-        console.log(`[View] Switching to ${currentView}`);
         setIsLoading(true);
-
-        // ✅ FIX 1: Remove ALL t-shirt bases (in case of duplicates)
-        const allObjects = canvas.getObjects();
-        const tshirtBases = allObjects.filter(
-            (obj) => (obj as any).id === "tshirt-base"
-        );
-
-        if (tshirtBases.length > 0) {
-            console.log(
-                `[View] Removing ${tshirtBases.length} t-shirt base(s)`
-            );
-            tshirtBases.forEach((base) => canvas.remove(base));
-        }
-
-        // ✅ FIX 2: Remove old design
-        const oldDesign = canvas
-            .getObjects()
-            .find((obj) => (obj as any).id === "user-design");
-        if (oldDesign) {
-            console.log("[View] Removing old design");
-            canvas.remove(oldDesign);
-        }
-
-        // ✅ FIX 3: Force render to clear canvas
+        clearCanvas(canvas);
         canvas.requestRenderAll();
 
-        // ✅ FIX 4: Wait a tick before loading new base (ensures removal completes)
         setTimeout(() => {
-            loadTShirtBase(canvas, currentView, tshirtColor).then(() => {
+            loadFullScene(canvas, currentView).then(() => {
                 setIsLoading(false);
-                console.log(`[View] Switch to ${currentView} complete`);
             });
         }, 0);
-    }, [currentView, tshirtColor]);
+    }, [currentView, tshirtColor, colorBaseUrl, shadowMapUrl]); // eslint-disable-line react-hooks/exhaustive-deps
 
-    // Load/update design
+    // ── Design changes ──
     useEffect(() => {
         const canvas = fabricRef.current;
-        if (!canvas || isLoading) {
-            console.log("[Design] Skipping load (canvas not ready or loading)");
-            return;
-        }
+        if (!canvas || isLoading) return;
 
-        console.log(`[Design] Loading for ${currentView}:`, currentDesignUrl);
+        // Remove old design + shadow
+        removeById(canvas, "user-design");
+        removeById(canvas, "shadow-overlay");
 
-        // Remove existing design
-        const existingDesign = canvas
-            .getObjects()
-            .find((obj) => (obj as any).id === "user-design");
-        if (existingDesign) {
-            console.log("[Design] Removing existing design");
-            canvas.remove(existingDesign);
-        }
-
-        // If no design URL, just exit
         if (!currentDesignUrl) {
-            console.log("[Design] No design URL");
             canvas.requestRenderAll();
             return;
         }
 
-        const savedTransform =
-            currentView === "front"
-                ? frontTransformRef.current
-                : backTransformRef.current;
+        loadDesignLayer(canvas, currentDesignUrl, currentView, currentPrintArea).then(() => {
+            // Re-add shadow on top of new design
+            loadShadowOverlay(canvas);
+        });
+    }, [currentDesignUrl, isLoading, currentView]); // eslint-disable-line react-hooks/exhaustive-deps
 
-        // Load new design via proxy to bypass CORS
-        const proxyUrl = `${import.meta.env.VITE_API_URL || "http://localhost:3000"}/api/proxy/image?url=${encodeURIComponent(currentDesignUrl)}`;
-        console.log("[Design] Loading image from URL...");
-        fabric.FabricImage.fromURL(proxyUrl, {
-            crossOrigin: "anonymous",
-        })
-            .then((img) => {
-                if (!img) {
-                    console.error("[Design] Failed to load image");
-                    return;
-                }
-
-                if (savedTransform) {
-                    console.log(
-                        `[Design] Restoring saved transform for ${currentView}:`,
-                        savedTransform
-                    );
-                    img.set({
-                        left: savedTransform.left,
-                        top: savedTransform.top,
-                        scaleX: savedTransform.scaleX,
-                        scaleY: savedTransform.scaleY,
-                        angle: savedTransform.angle,
-                        originX: "center",
-                        originY: "center",
-                        cornerColor: "white",
-                        cornerStrokeColor: "#3b82f6",
-                        borderColor: "#3b82f6",
-                        cornerSize: 10,
-                        transparentCorners: false,
-                        padding: 0,
-                        strokeWidth: 0,
-                    });
-                    img.setControlVisible("ml", false); // Middle Left
-                    img.setControlVisible("mr", false); // Middle Right
-                    img.setControlVisible("mt", false); // Middle Top
-                    img.setControlVisible("mb", false); // Middle Bottom
-                    img.setControlVisible("tl", false); // top left
-                    img.setControlVisible("tr", false); // top right
-                    img.setControlVisible("bl", false); // bottom left
-                    img.setControlVisible("mtr", false);
-                } else {
-                    console.log(`[Design] Initial load for ${currentView}`);
-                    const scale = Math.min(
-                        (currentPrintArea.width * 0.8) / (img.width || 1),
-                        (currentPrintArea.height * 0.8) / (img.height || 1)
-                    );
-
-                    img.set({
-                        scaleX: scale,
-                        scaleY: scale,
-                        left: currentPrintArea.x + currentPrintArea.width / 2,
-                        top: currentPrintArea.y + currentPrintArea.height / 2,
-                        originX: "center",
-                        originY: "center",
-                        cornerColor: "white",
-                        cornerStrokeColor: "#3b82f6",
-                        borderColor: "#3b82f6",
-                        cornerSize: 10,
-                        transparentCorners: false,
-                        // padding: 0,
-                        // strokeWidth: 0,
-                    });
-                    img.setControlVisible("ml", false); // Middle Left
-                    img.setControlVisible("mr", false); // Middle Right
-                    img.setControlVisible("mt", false); // Middle Top
-                    img.setControlVisible("mb", false); // Middle Bottom
-                    img.setControlVisible("tl", false); // top left
-                    img.setControlVisible("tr", false); // top right
-                    img.setControlVisible("bl", false); // bottom left
-                    img.setControlVisible("mtr", false);
-                    const initialTransform: DesignTransform = {
-                        left: img.left ?? 0,
-                        top: img.top ?? 0,
-                        scaleX: img.scaleX ?? 1,
-                        scaleY: img.scaleY ?? 1,
-                        angle: img.angle ?? 0,
-                    };
-
-                    if (currentView === "front") {
-                        frontTransformRef.current = initialTransform;
-                    } else {
-                        backTransformRef.current = initialTransform;
-                    }
-
-                    console.log(
-                        `[Design] Saved initial ${currentView} transform:`,
-                        initialTransform
-                    );
-                }
-
-                (img as any).id = "user-design";
-
-                canvas.add(img);
-                canvas.setActiveObject(img);
-                canvas.requestRenderAll();
-                console.log("[Design] Loaded and added to canvas");
-            })
-            .catch((err) => {
-                console.error("[Design] Error loading:", err);
-            });
-    }, [currentDesignUrl, isLoading, currentView]);
-
-    // Update guides SEPARATELY
+    // ── Guides ──
     useEffect(() => {
         const canvas = fabricRef.current;
         if (!canvas) return;
-
-        console.log(`[Guides] Updating - show: ${showGuides}`);
         updateGuides(canvas, showGuides, currentPrintArea);
     }, [showGuides, currentPrintArea]);
 
-    const applyTShirtColor = (img: fabric.Image, color: string) => {
-        const blendFilter = img.filters?.find(
-            (filter) => filter.type === "BlendColor"
-        ) as fabric.filters.BlendColor;
+    // ─────────────────────────────────────────────────────────
+    // LAYER MANAGEMENT FUNCTIONS
+    // ─────────────────────────────────────────────────────────
 
-        if (blendFilter) {
-            blendFilter.color = color;
-        } else {
-            const newBlendFilter = new fabric.filters.BlendColor({
-                color: color,
-                mode: "multiply",
-                alpha: 1,
-            });
-            img.filters = [...(img.filters || []), newBlendFilter];
+    /** Clear all managed layers from canvas */
+    function clearCanvas(canvas: fabric.Canvas) {
+        const ids = ["tshirt-base", "user-design", "shadow-overlay", "print-guide"];
+        ids.forEach((id) => removeById(canvas, id));
+    }
+
+    /** Remove all objects with a specific id */
+    function removeById(canvas: fabric.Canvas, id: string) {
+        canvas.getObjects().filter((o) => (o as any).id === id).forEach((o) => canvas.remove(o));
+    }
+
+    /** Load the full 3-layer scene */
+    async function loadFullScene(canvas: fabric.Canvas, view: ViewType) {
+        // Layer 0: Base
+        await loadBaseLayer(canvas, view);
+
+        // Layer 1: Design (if exists)
+        const designUrl = view === "front" ? frontDesignUrl : backDesignUrl;
+        const printArea = view === "front" ? PRINT_AREA_FRONT : PRINT_AREA_BACK;
+        if (designUrl) {
+            await loadDesignLayer(canvas, designUrl, view, printArea);
         }
-        img.applyFilters();
-    };
 
-    const loadTShirtBase = async (
-        canvas: fabric.Canvas,
-        view: ViewType,
-        color: string
-    ): Promise<void> => {
+        // Layer 2: Shadow overlay
+        await loadShadowOverlay(canvas);
+
+        // Guides on top
+        updateGuides(canvas, showGuides, printArea);
+    }
+
+    /**
+     * LAYER 0: Load the base t-shirt image.
+     *
+     * If a colorBaseUrl is provided (from global colors), use it directly.
+     * Otherwise fall back to the local white mockup with a BlendColor filter.
+     */
+    async function loadBaseLayer(canvas: fabric.Canvas, view: ViewType) {
+        removeById(canvas, "tshirt-base");
+
+        let imageUrl: string;
+        let useColorFilter = false;
+        const currentColorBaseUrl = colorBaseUrlRef.current;
+
+        if (currentColorBaseUrl) {
+            // Use the admin-configured AI-generated base image
+            imageUrl = `${PROXY_BASE()}${encodeURIComponent(currentColorBaseUrl)}`;
+        } else {
+            // Fallback to local static mockup
+            imageUrl = view === "front" ? "/mockups/white-front.png" : "/mockups/white-back.png";
+            useColorFilter = true;
+        }
+
         try {
-            const imageUrl =
-                view === "front" ? TSHIRT_FRONT_URL : TSHIRT_BACK_URL;
-
-            console.log(`[Base] Loading ${view} t-shirt from:`, imageUrl);
-
-            const img = await fabric.FabricImage.fromURL(imageUrl, {
-                crossOrigin: "anonymous",
-            });
-
-            if (!img) {
-                throw new Error("Image failed to load");
-            }
-
-            console.log(`[Base] Image loaded successfully for ${view}`);
+            const img = await fabric.FabricImage.fromURL(imageUrl, { crossOrigin: "anonymous" });
+            if (!img) throw new Error("Image failed to load");
 
             const padding = 20;
             const maxWidth = CANVAS_WIDTH - padding * 2;
             const maxHeight = CANVAS_HEIGHT - padding * 2;
-
-            const scale = Math.min(
-                maxWidth / (img.width || 1),
-                maxHeight / (img.height || 1)
-            );
+            const scale = Math.min(maxWidth / (img.width || 1), maxHeight / (img.height || 1));
 
             img.set({
                 scaleX: scale,
@@ -502,72 +348,173 @@ const MockupCanvas = forwardRef<MockupCanvasHandle, MockupCanvasProps>((
                 hoverCursor: "default",
             });
 
-            applyTShirtColor(img, color);
-            (img as any).id = "tshirt-base";
+            // Only apply color filter for fallback local images
+            if (useColorFilter) {
+                const blendFilter = new fabric.filters.BlendColor({
+                    color: tshirtColorRef.current,
+                    mode: "multiply",
+                    alpha: 1,
+                });
+                img.filters = [blendFilter];
+                img.applyFilters();
+            }
 
-            // ✅ FIX 5: Use insertAt(0) to ensure it's at the back
+            (img as any).id = "tshirt-base";
             canvas.insertAt(0, img);
             canvas.requestRenderAll();
-
-            console.log(`[Base] ${view} t-shirt added to canvas at index 0`);
         } catch (err) {
-            console.error(`[Base] Failed to load ${view} t-shirt:`, err);
-
-            // Fallback
-            if (view === "back") {
-                console.log("[Base] Falling back to front image for back view");
-                try {
-                    const img = await fabric.FabricImage.fromURL(
-                        TSHIRT_FRONT_URL,
-                        {
-                            crossOrigin: "anonymous",
-                        }
-                    );
-
-                    if (img) {
-                        const padding = 20;
-                        const maxWidth = CANVAS_WIDTH - padding * 2;
-                        const maxHeight = CANVAS_HEIGHT - padding * 2;
-                        const scale = Math.min(
-                            maxWidth / (img.width || 1),
-                            maxHeight / (img.height || 1)
-                        );
-
-                        img.set({
-                            scaleX: scale,
-                            scaleY: scale,
-                            left: CANVAS_WIDTH / 2,
-                            top: CANVAS_HEIGHT / 2,
-                            originX: "center",
-                            originY: "center",
-                            selectable: false,
-                            evented: false,
-                            hoverCursor: "default",
-                        });
-
-                        applyTShirtColor(img, color);
-                        (img as any).id = "tshirt-base";
-
-                        canvas.insertAt(0, img);
-                        canvas.requestRenderAll();
-                        console.log("[Base] Fallback front image loaded");
-                    }
-                } catch (fallbackErr) {
-                    console.error("[Base] Fallback also failed:", fallbackErr);
-                }
-            }
+            console.error(`[Base] Failed to load:`, err);
         }
-    };
+    }
 
-    const updateGuides = (
+    /**
+     * LAYER 1: Load the artist's design with realism tweaks.
+     *
+     * - 0.5px Gaussian blur
+     * - 95% opacity to allow texture bleed-through
+     */
+    async function loadDesignLayer(
+        canvas: fabric.Canvas,
+        designUrl: string,
+        view: ViewType,
+        printArea: typeof PRINT_AREA_FRONT
+    ) {
+        removeById(canvas, "user-design");
+
+        const savedTransform = view === "front" ? frontTransformRef.current : backTransformRef.current;
+        const proxyUrl = `${PROXY_BASE()}${encodeURIComponent(designUrl)}`;
+
+        try {
+            const img = await fabric.FabricImage.fromURL(proxyUrl, { crossOrigin: "anonymous" });
+            if (!img) return;
+
+            // Apply realism filters: subtle blur for "printed" look
+            const blurFilter = new fabric.filters.Blur({ blur: 0.01 }); // ~0.5px at canvas scale
+            img.filters = [blurFilter];
+            img.applyFilters();
+
+            if (savedTransform) {
+                img.set({
+                    left: savedTransform.left,
+                    top: savedTransform.top,
+                    scaleX: savedTransform.scaleX,
+                    scaleY: savedTransform.scaleY,
+                    angle: savedTransform.angle,
+                    originX: "center",
+                    originY: "center",
+                    opacity: 0.95, // Allow underlying texture bleed-through
+                    cornerColor: "white",
+                    cornerStrokeColor: "#3b82f6",
+                    borderColor: "#3b82f6",
+                    cornerSize: 10,
+                    transparentCorners: false,
+                    padding: 0,
+                    strokeWidth: 0,
+                });
+            } else {
+                const scale = Math.min(
+                    (printArea.width * 0.8) / (img.width || 1),
+                    (printArea.height * 0.8) / (img.height || 1)
+                );
+                img.set({
+                    scaleX: scale,
+                    scaleY: scale,
+                    left: printArea.x + printArea.width / 2,
+                    top: printArea.y + printArea.height / 2,
+                    originX: "center",
+                    originY: "center",
+                    opacity: 0.95,
+                    cornerColor: "white",
+                    cornerStrokeColor: "#3b82f6",
+                    borderColor: "#3b82f6",
+                    cornerSize: 10,
+                    transparentCorners: false,
+                });
+
+                // Save initial transform
+                const initialTransform: DesignTransform = {
+                    left: img.left ?? 0,
+                    top: img.top ?? 0,
+                    scaleX: img.scaleX ?? 1,
+                    scaleY: img.scaleY ?? 1,
+                    angle: img.angle ?? 0,
+                };
+                if (view === "front") frontTransformRef.current = initialTransform;
+                else backTransformRef.current = initialTransform;
+            }
+
+            // Hide middle-edge controls (only allow corner scale + rotate)
+            ["ml", "mr", "mt", "mb", "tl", "tr", "bl", "mtr"].forEach((c) =>
+                img.setControlVisible(c, false)
+            );
+
+            (img as any).id = "user-design";
+            canvas.add(img);
+            canvas.setActiveObject(img);
+            canvas.requestRenderAll();
+        } catch (err) {
+            console.error("[Design] Error loading:", err);
+        }
+    }
+
+    /**
+     * LAYER 2: Shadow/Highlight overlay.
+     *
+     * This sits on top of the design. The composite operation is set to
+     * 'multiply' for light shirts (darkens folds) or a custom approach for
+     * dark shirts so highlights appear correctly.
+     *
+     * It's non-interactive so the artist can still move the design underneath.
+     */
+    async function loadShadowOverlay(canvas: fabric.Canvas) {
+        removeById(canvas, "shadow-overlay");
+
+        const currentShadowUrl = shadowMapUrlRef.current;
+        if (!currentShadowUrl) return;
+
+        const proxyUrl = `${PROXY_BASE()}${encodeURIComponent(currentShadowUrl)}`;
+
+        try {
+            const img = await fabric.FabricImage.fromURL(proxyUrl, { crossOrigin: "anonymous" });
+            if (!img) return;
+
+            const padding = 20;
+            const maxWidth = CANVAS_WIDTH - padding * 2;
+            const maxHeight = CANVAS_HEIGHT - padding * 2;
+            const scale = Math.min(maxWidth / (img.width || 1), maxHeight / (img.height || 1));
+
+            img.set({
+                scaleX: scale,
+                scaleY: scale,
+                left: CANVAS_WIDTH / 2,
+                top: CANVAS_HEIGHT / 2,
+                originX: "center",
+                originY: "center",
+                selectable: false,
+                evented: false,
+                hoverCursor: "default",
+                opacity: 0.6, // Subtle effect, not overpowering
+            });
+
+            // Apply multiply blend via globalCompositeOperation
+            const dark = isDarkColor(tshirtColorRef.current);
+            (img as any).globalCompositeOperation = dark ? "overlay" : "multiply";
+
+            (img as any).id = "shadow-overlay";
+            canvas.add(img);
+            canvas.requestRenderAll();
+        } catch (err) {
+            console.error("[Shadow] Failed to load overlay:", err);
+        }
+    }
+
+    /** Update print area guides */
+    function updateGuides(
         canvas: fabric.Canvas,
         shouldShow: boolean,
         printArea: typeof PRINT_AREA_FRONT
-    ) => {
-        const existingGuide = canvas
-            .getObjects()
-            .find((obj) => (obj as any).id === "print-guide");
-        if (existingGuide) canvas.remove(existingGuide);
+    ) {
+        removeById(canvas, "print-guide");
 
         if (shouldShow) {
             const strokeWidth = 2;
@@ -581,7 +528,7 @@ const MockupCanvas = forwardRef<MockupCanvasHandle, MockupCanvasProps>((
                 height: printArea.height + strokeWidth,
                 fill: "transparent",
                 stroke: "#3b82f6",
-                strokeWidth: strokeWidth,
+                strokeWidth,
                 strokeDashArray: [5, 5],
                 selectable: false,
                 evented: false,
@@ -595,218 +542,71 @@ const MockupCanvas = forwardRef<MockupCanvasHandle, MockupCanvasProps>((
             canvas.add(guideRect);
         }
         canvas.requestRenderAll();
-    };
+    }
+
+    // ─────────────────────────────────────────────────────────
+    // IMPERATIVE HANDLE (export + transform access)
+    // ─────────────────────────────────────────────────────────
 
     useImperativeHandle(ref, () => ({
         exportView: async (view: ViewType) => {
             const canvas = fabricRef.current;
             if (!canvas) throw new Error("Canvas not ready");
 
-            console.log(`[Export] Starting export for ${view}`);
-
-            // Save current state to restore later
             const originalView = currentViewRef.current;
-            const originalGuide = canvas.getObjects().find(obj => (obj as any).id === "print-guide");
-            const originalGuideVisible = originalGuide?.visible;
 
             if (originalView !== view) {
-                // If we're exporting a different view, we need to temporarily load it
-                // This is a bit slow but ensures consistency with the component's logic
-                await loadTShirtBase(canvas, view, tshirtColor);
-
-                // Clear existing design
-                const oldDesign = canvas.getObjects().find((obj) => (obj as any).id === "user-design");
-                if (oldDesign) canvas.remove(oldDesign);
-
-                // Load the design for this view
-                const designUrl = view === "front" ? frontDesignUrl : backDesignUrl;
-                if (designUrl) {
-                    const savedTransform = view === "front" ? frontTransformRef.current : backTransformRef.current;
-                    const printArea = view === "front" ? PRINT_AREA_FRONT : PRINT_AREA_BACK;
-
-                    const proxyUrl = `${import.meta.env.VITE_API_URL || "http://localhost:3000"}/api/proxy/image?url=${encodeURIComponent(designUrl)}`;
-                    const img = await fabric.FabricImage.fromURL(proxyUrl, { crossOrigin: "anonymous" });
-
-                    if (img) {
-                        if (savedTransform) {
-                            img.set({
-                                left: savedTransform.left,
-                                top: savedTransform.top,
-                                scaleX: savedTransform.scaleX,
-                                scaleY: savedTransform.scaleY,
-                                angle: savedTransform.angle,
-                                originX: "center",
-                                originY: "center",
-                            });
-                        } else {
-                            const scale = Math.min(
-                                (printArea.width * 0.8) / (img.width || 1),
-                                (printArea.height * 0.8) / (img.height || 1)
-                            );
-                            img.set({
-                                scaleX: scale,
-                                scaleY: scale,
-                                left: printArea.x + printArea.width / 2,
-                                top: printArea.y + printArea.height / 2,
-                                originX: "center",
-                                originY: "center",
-                            });
-                        }
-                        (img as any).id = "user-design";
-                        canvas.add(img);
-                    }
-                }
+                clearCanvas(canvas);
+                await loadFullScene(canvas, view);
             }
 
-            // Hide guide
-            const guide = canvas.getObjects().find(obj => (obj as any).id === "print-guide");
+            // Hide guide for export
+            const guide = canvas.getObjects().find((o) => (o as any).id === "print-guide");
+            const guideWasVisible = guide?.visible;
             if (guide) {
                 guide.visible = false;
                 canvas.requestRenderAll();
             }
 
-            // Export
             const dataUrl = canvas.toDataURL({
                 format: "png",
                 quality: 1,
                 multiplier: 2,
             });
 
-            // Restore if needed
+            // Restore
             if (originalView !== view) {
-                await loadTShirtBase(canvas, originalView, tshirtColor);
-                // The main useEffect for design will handle restoring the original design because currentView prop hasn't changed
+                clearCanvas(canvas);
+                await loadFullScene(canvas, originalView);
             } else if (guide) {
-                guide.visible = !!originalGuideVisible;
+                guide.visible = !!guideWasVisible;
                 canvas.requestRenderAll();
             }
 
             const res = await fetch(dataUrl);
             return res.blob();
-        }
+        },
+
+        getDesignTransform: (view: ViewType) => {
+            return view === "front" ? frontTransformRef.current : backTransformRef.current;
+        },
     }));
 
-    /*
-    const deleteActiveObject = () => {
-        if (fabricRef.current && activeObject) {
-            fabricRef.current.remove(activeObject);
-            fabricRef.current.discardActiveObject();
-            fabricRef.current.requestRenderAll();
-
-            if (currentViewRef.current === "front") {
-                frontTransformRef.current = null;
-            } else {
-                backTransformRef.current = null;
-            }
-        }
-    };
-    */
-
-    /*
-    const rotateActiveObject = () => {
-        if (activeObject) {
-            activeObject.rotate((activeObject.angle || 0) + 90);
-            activeObject.setCoords();
-
-            const transform: DesignTransform = {
-                left: activeObject.left ?? 0,
-                top: activeObject.top ?? 0,
-                scaleX: activeObject.scaleX ?? 1,
-                scaleY: activeObject.scaleY ?? 1,
-                angle: activeObject.angle ?? 0,
-            };
-
-            if (currentViewRef.current === "front") {
-                frontTransformRef.current = transform;
-            } else {
-                backTransformRef.current = transform;
-            }
-
-            console.log(
-                `[Transform] Saved after rotate (${currentViewRef.current}):`,
-                transform
-            );
-
-            fabricRef.current?.requestRenderAll();
-        }
-    };
-    */
-
-    /*
-    const centerActiveObject = () => {
-        if (activeObject) {
-            activeObject.set({
-                left: currentPrintArea.x + currentPrintArea.width / 2,
-                top: currentPrintArea.y + currentPrintArea.height / 2,
-                originX: "center",
-                originY: "center",
-            });
-            activeObject.setCoords();
-
-            const transform: DesignTransform = {
-                left: activeObject.left ?? 0,
-                top: activeObject.top ?? 0,
-                scaleX: activeObject.scaleX ?? 1,
-                scaleY: activeObject.scaleY ?? 1,
-                angle: activeObject.angle ?? 0,
-            };
-
-            if (currentViewRef.current === "front") {
-                frontTransformRef.current = transform;
-            } else {
-                backTransformRef.current = transform;
-            }
-
-            console.log(
-                `[Transform] Saved after center (${currentViewRef.current}):`,
-                transform
-            );
-
-            fabricRef.current?.requestRenderAll();
-        }
-    };
-    */
-
+    // ── Render ──
     return (
-        <div ref={containerRef} className="w-full h-full relative" style={{ minHeight: '300px' }}>
+        <div ref={containerRef} className="w-full h-full relative" style={{ minHeight: "300px" }}>
             {isLoading && (
                 <div className="absolute inset-0 bg-white/80 z-10 flex items-center justify-center rounded-xl">
                     <Loader2 className="w-8 h-8 animate-spin text-yellow-500" />
                 </div>
             )}
-
             <div className="w-full h-full">
                 <canvas ref={canvasRef} className="w-full h-full rounded-xl" />
             </div>
-
-            {/* {activeObject && (
-                <div className="absolute bottom-6 left-1/2 transform -translate-x-1/2 bg-white/95 backdrop-blur-sm border border-gray-200 shadow-xl rounded-full px-4 py-2 flex items-center gap-2 z-10">
-                    <button
-                        onClick={rotateActiveObject}
-                        className="p-2 hover:bg-gray-100 rounded-full text-gray-700 transition-colors"
-                        title="Rotate 90°"
-                    >
-                        <RotateCw size={18} />
-                    </button>
-                    <button
-                        onClick={centerActiveObject}
-                        className="p-2 hover:bg-gray-100 rounded-full text-gray-700 transition-colors"
-                        title="Center"
-                    >
-                        <Move size={18} />
-                    </button>
-                    <div className="w-px h-4 bg-gray-300 mx-1"></div>
-                    <button
-                        onClick={deleteActiveObject}
-                        className="p-2 hover:bg-red-50 text-red-600 rounded-full transition-colors"
-                        title="Remove"
-                    >
-                        <X size={18} />
-                    </button>
-                </div>
-            )} */}
         </div>
     );
 });
+
+MockupCanvas.displayName = "MockupCanvas";
 
 export default MockupCanvas;

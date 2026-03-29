@@ -1,4 +1,5 @@
 import { Request, Response, NextFunction } from "express";
+import { PrismaClient } from "@prisma/client";
 import {
     createProductService,
     getProductByIdService,
@@ -11,6 +12,20 @@ import {
     getArtistOrdersService,
     uploadMockupToR2,
 } from "../services/product.service";
+import { renderProductionMockup } from "../services/mockup.service";
+import { S3Client, PutObjectCommand } from "@aws-sdk/client-s3";
+import crypto from "crypto";
+
+const prisma = new PrismaClient();
+
+const r2 = new S3Client({
+    region: "auto",
+    endpoint: `https://${process.env.CLOUDFLARE_ACCOUNT_ID}.r2.cloudflarestorage.com`,
+    credentials: {
+        accessKeyId: process.env.CLOUDFLARE_ACCESS_KEY_ID!,
+        secretAccessKey: process.env.CLOUDFLARE_SECRET_ACCESS_KEY!,
+    },
+});
 
 // ---------- Artist: Create product ----------
 export const createProductHandler = async (
@@ -105,6 +120,70 @@ export const createProductHandler = async (
         });
 
         res.status(201).json({ status: "success", data: { product } });
+
+        // ── Background: Render production-quality mockup using Sharp engine ──
+        // This runs asynchronously after the response so the artist isn't blocked.
+        (async () => {
+            try {
+                // Find the global color matching the primary color
+                const globalColor = await prisma.globalColor.findFirst({
+                    where: { hex: { equals: primaryColor || tshirtColor, mode: "insensitive" } },
+                });
+
+                if (!globalColor) {
+                    console.log("[ProductionRender] No matching global color found, skipping production render");
+                    return;
+                }
+
+                // Find the design image URL
+                const design = await prisma.design.findUnique({ where: { id: designId } });
+                if (!design) return;
+
+                // Determine if shirt is dark for shadow blend mode
+                const hex = globalColor.hex.replace("#", "");
+                const r = parseInt(hex.substring(0, 2), 16);
+                const g = parseInt(hex.substring(2, 4), 16);
+                const b = parseInt(hex.substring(4, 6), 16);
+                const isDark = (0.299 * r + 0.587 * g + 0.114 * b) / 255 < 0.5;
+
+                // High-res print area (scaled for production base images ~1024px)
+                const productionPrintArea = { x: 330, y: 400, width: 346, height: 440 };
+
+                const productionBuffer = await renderProductionMockup({
+                    baseImageUrl: globalColor.mockupUrl,
+                    designImageUrl: design.imageUrl,
+                    shadowMapUrl: globalColor.shadowMapUrl || undefined,
+                    displacementMapUrl: globalColor.displacementMapUrl || undefined,
+                    displacementStrength: 8,
+                    printArea: productionPrintArea,
+                    isDark,
+                });
+
+                // Upload production mockup to R2
+                const prodKey = `mockups/prod-${crypto.randomUUID()}.png`;
+                await r2.send(
+                    new PutObjectCommand({
+                        Bucket: process.env.CLOUDFLARE_BUCKET_NAME!,
+                        Key: prodKey,
+                        Body: productionBuffer,
+                        ContentType: "image/png",
+                    })
+                );
+
+                const prodUrl = `${process.env.CLOUDFLARE_PUBLIC_URL}/${prodKey}`;
+
+                // Update the product with the production mockup
+                await prisma.product.update({
+                    where: { id: product.id },
+                    data: { mockupImageUrl: prodUrl },
+                });
+
+                console.log(`[ProductionRender] ✓ Product ${product.id} updated with production mockup`);
+            } catch (err) {
+                console.error(`[ProductionRender] Background render failed for product ${product.id}:`, err);
+                // Non-fatal — the canvas screenshot is still saved as fallback
+            }
+        })();
     } catch (error: any) {
         console.error("Create product error:", error);
         if (error.message?.includes("not found") || error.message?.includes("does not belong")) {

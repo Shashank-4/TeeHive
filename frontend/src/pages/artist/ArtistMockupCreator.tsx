@@ -57,7 +57,7 @@ export default function ArtistMockupCreator() {
     const [categories, setCategories] = useState<Category[]>([]);
     const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
     const [pricingProtocols, setPricingProtocols] = useState<PricingProtocol[]>([]);
-    const [globalColors, setGlobalColors] = useState<{ name: string; hex: string; mockupUrl: string }[]>([]);
+    const [globalColors, setGlobalColors] = useState<{ name: string; hex: string; mockupUrl: string; shadowMapUrl?: string; displacementMapUrl?: string }[]>([]);
 
     useEffect(() => {
         const fetchCategories = async () => {
@@ -243,6 +243,8 @@ export default function ArtistMockupCreator() {
                                     backDesignUrl={backDesign?.imageUrl || null}
                                     currentView={currentView}
                                     onCanvasReady={() => { }}
+                                    colorBaseUrl={globalColors.find(c => c.hex.toLowerCase() === previewColor.toLowerCase())?.mockupUrl || null}
+                                    shadowMapUrl={globalColors.find(c => c.hex.toLowerCase() === previewColor.toLowerCase())?.shadowMapUrl || null}
                                 />
                                 {!frontDesign && !backDesign && (
                                     <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none opacity-20">

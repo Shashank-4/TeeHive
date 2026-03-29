@@ -62,7 +62,7 @@ export default function ProductDetails() {
     const sizes = ["XS", "S", "M", "L", "XL", "XXL"];
 
     const [matrix, setMatrix] = useState<any>(null);
-    const [globalColors, setGlobalColors] = useState<{ name: string; hex: string; mockupUrl: string }[]>([]);
+    const [globalColors, setGlobalColors] = useState<{ name: string; hex: string; mockupUrl: string; shadowMapUrl?: string; displacementMapUrl?: string }[]>([]);
 
     useEffect(() => {
         const fetchGlobalInventory = async () => {
