@@ -1,3 +1,5 @@
+import dotenv from "dotenv";
+dotenv.config();
 import express from "express";
 import cors from "cors";
 import helmet from "helmet";
@@ -46,10 +48,9 @@ app.use(express.json());
 app.use(cookieParser());
 app.use(
     cors({
-        origin: [
-            process.env.FRONTEND_URL || "http://localhost:5173",
-            "http://localhost:5173" // Always allow local dev
-        ],
+        origin: process.env.NODE_ENV === "production"
+            ? [process.env.FRONTEND_URL!]
+            : [process.env.FRONTEND_URL || "http://localhost:5173", "http://localhost:5173"],
         credentials: true,
     })
 );
@@ -70,6 +71,8 @@ app.use("/api/proxy", proxyRouter);
 app.use("/api/promotions", promotionRouter);
 app.use("/api/colors", colorRouter);
 app.use("/api/reviews", reviewRouter);
+
+app.get("/health", (_req, res) => res.status(200).json({ status: "ok" }));
 
 app.listen(PORT, () => {
     console.log(`Server is running on port ${PORT} in ${process.env.NODE_ENV || 'development'} mode`);
