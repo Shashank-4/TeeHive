@@ -31,12 +31,15 @@ import OrderConfirmation from "./pages/customer/OrderConfirmation";
 import OrderPage from "./pages/customer/OrderPage";
 import ProductDetails from "./pages/customer/ProductDetails";
 import CustomerProfile from "./pages/customer/ProfilePage";
+import RatePurchase from "./pages/customer/RatePurchase";
 import ArtistDesignManager from "./pages/artist/ArtistDesignManager";
 import ArtistMockupCreator from "./pages/artist/ArtistMockupCreator";
 import ArtistProductManager from "./pages/artist/ArtistProductManager";
 import ArtistOrders from "./pages/artist/ArtistOrders"
 import ArtistPayout from "./pages/artist/ArtistPayout";
 import ArtistEarnings from "./pages/artist/ArtistEarnings";
+import ArtistReviews from "./pages/artist/ArtistReviews";
+import AdminReviews from "./pages/admin/AdminReviews";
 import ForgotPassword from "./pages/auth/ForgotPassword";
 import ResetPassword from "./pages/auth/ResetPassword";
 
@@ -56,6 +59,7 @@ const router: RouteObject[] = [
             { path: "order/checkout", element: <Checkout /> },
             { path: "order/confirmation", element: <OrderConfirmation /> },
             { path: "orders", element: <OrderPage /> },
+            { path: "orders/:orderId/rate", element: <RatePurchase /> },
             { path: "products/:productId", element: <ProductDetails /> },
             { path: "user/profile", element: <CustomerProfile /> },
         ],
@@ -77,6 +81,7 @@ const router: RouteObject[] = [
             { path: "orders", element: <ArtistOrders /> },
             { path: "payout", element: <ArtistPayout /> },
             { path: "earnings", element: <ArtistEarnings /> },
+            { path: "reviews", element: <ArtistReviews /> },
         ],
     },
 
@@ -96,6 +101,7 @@ const router: RouteObject[] = [
             { path: "categories", element: <AdminCategories /> },
             { path: "colors", element: <AdminColors /> },
             { path: "config", element: <AdminConfig /> },
+            { path: "reviews", element: <AdminReviews /> },
         ],
     },
 

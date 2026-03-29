@@ -35,6 +35,8 @@ router.get("/", async (req: Request, res: Response) => {
                     bio: true,
                     instagramUrl: true,
                     portfolioUrl: true,
+                    artistRating: true,
+                    reviewCount: true,
                     _count: {
                         select: {
                             products: {
@@ -95,6 +97,8 @@ router.get("/:artistId", async (req: Request, res: Response) => {
                 twitterUrl: true,
                 behanceUrl: true,
                 dribbbleUrl: true,
+                artistRating: true,
+                reviewCount: true,
                 products: {
                     where: { status: "PUBLISHED" },
                     select: {

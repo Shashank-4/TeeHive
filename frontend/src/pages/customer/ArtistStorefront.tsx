@@ -32,6 +32,8 @@ interface Artist {
     twitterUrl: string | null;
     behanceUrl: string | null;
     dribbbleUrl: string | null;
+    artistRating: number;
+    reviewCount: number;
     products: Product[];
 }
 
@@ -132,10 +134,19 @@ export default function ArtistStorefront() {
                                 <h1 className="text-3xl md:text-4xl font-extrabold text-gray-900">
                                     {artist.displayName || artist.name}
                                 </h1>
-                                <p className="text-gray-500 flex items-center gap-2 mt-1">
-                                    <ShoppingBag className="w-4 h-4" />
-                                    {artist.products.length} {artist.products.length === 1 ? 'Design Available' : 'Designs Available'}
-                                </p>
+                                <div className="text-gray-500 flex flex-wrap items-center gap-4 mt-2">
+                                    <span className="flex items-center gap-2">
+                                        <ShoppingBag className="w-4 h-4" />
+                                        {artist.products.length} {artist.products.length === 1 ? 'Design Available' : 'Designs Available'}
+                                    </span>
+                                    {artist.reviewCount > 0 && (
+                                        <span className="flex items-center gap-1.5 px-2.5 py-1 bg-yellow-50 text-yellow-800 text-sm font-bold rounded-lg border border-yellow-200">
+                                            <span>⭐</span>
+                                            <span>{artist.artistRating.toFixed(1)}</span>
+                                            <span className="text-yellow-600/80">({artist.reviewCount})</span>
+                                        </span>
+                                    )}
+                                </div>
                             </div>
 
                             {artist.bio && (

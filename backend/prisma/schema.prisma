@@ -41,9 +41,13 @@ model User {
   verificationNote        String?
   verificationStatus      VerificationStatus @default(UNVERIFIED)
   verifiedAt              DateTime?
+  artistRating            Float              @default(0.0)
+  reviewCount             Int                @default(0)
   designs                 Design[]
   orders                  Order[]
   products                Product[]
+  customerReviews         Review[]           @relation("CustomerReviews")
+  artistReviews           Review[]           @relation("ArtistReviews")
 }
 
 model Design {
@@ -101,6 +105,7 @@ model Product {
   globalColors       GlobalColor[]
   stockStatus        StockStatus      @default(IN_STOCK)
   orderItems         OrderItem[]
+  reviews            Review[]
   artist             User             @relation(fields: [artistId], references: [id])
   design             Design           @relation(fields: [designId], references: [id])
   variants           ProductVariant[]
@@ -130,6 +135,7 @@ model Order {
   discountAmount  Float            @default(0)
   user            User             @relation(fields: [userId], references: [id])
   items           OrderItem[]
+  reviews         Review[]
   payment         Payment?
   shippingAddress ShippingAddress?
 }
@@ -247,16 +253,35 @@ enum PaymentProvider {
 }
 
 model GlobalColor {
-  id                  String    @id @default(uuid())
-  name                String    @unique
-  hex                 String
-  mockupUrl           String
-  fileKey             String
-  shadowMapUrl        String?
-  shadowMapKey        String?
-  displacementMapUrl  String?
-  displacementMapKey  String?
-  createdAt           DateTime  @default(now())
-  updatedAt           DateTime  @updatedAt
-  products            Product[]
+  id                 String    @id @default(uuid())
+  name               String    @unique
+  hex                String
+  mockupUrl          String
+  fileKey            String
+  shadowMapUrl       String?
+  shadowMapKey       String?
+  displacementMapUrl String?
+  displacementMapKey String?
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+  products           Product[]
+}
+
+model Review {
+  id            String   @id @default(uuid())
+  orderId       String
+  productId     String
+  customerId    String
+  artistId      String
+  productRating Int
+  artistRating  Int
+  feedback      String?
+  createdAt     DateTime @default(now())
+
+  order    Order   @relation(fields: [orderId], references: [id])
+  product  Product @relation(fields: [productId], references: [id])
+  customer User    @relation("CustomerReviews", fields: [customerId], references: [id])
+  artist   User    @relation("ArtistReviews", fields: [artistId], references: [id])
+
+  @@unique([orderId, productId])
 }

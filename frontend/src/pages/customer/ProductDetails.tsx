@@ -43,7 +43,10 @@ interface Product {
     artist: {
         id: string;
         name: string;
+        displayName?: string;
         email: string;
+        artistRating: number;
+        reviewCount: number;
     };
 }
 
@@ -266,7 +269,14 @@ export default function ProductDetails() {
                                 </div>
                                 <div>
                                     <div className="font-display text-[10px] font-extrabold tracking-[1px] uppercase text-neutral-g3 leading-none mb-1">Created By Artist</div>
-                                    <div className="font-display text-[17px] font-black text-neutral-black lowercase tracking-tight">@{product.artist.name.replace(/\s+/g, '')}</div>
+                                    <div className="font-display text-[17px] font-black text-neutral-black tracking-tight flex items-center gap-3">
+                                        <span className="lowercase">@{product.artist.displayName?.replace(/\s+/g, '') || product.artist.name.replace(/\s+/g, '')}</span>
+                                        {product.artist.reviewCount > 0 && (
+                                            <span className="inline-flex items-center text-[13px] font-bold text-neutral-black bg-white border border-neutral-g2 px-2 py-0.5 rounded-[2px] shadow-[1px_1px_0px_0px_rgba(0,0,0,0.1)]">
+                                                ⭐ {product.artist.artistRating.toFixed(1)} ({product.artist.reviewCount})
+                                            </span>
+                                        )}
+                                    </div>
                                 </div>
                             </div>
                         </div>

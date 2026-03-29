@@ -156,7 +156,7 @@ export const getProductByIdService = async (id: string) => {
             where: { id },
             include: {
                 design: { select: { id: true, title: true, imageUrl: true } },
-                artist: { select: { id: true, name: true, email: true } },
+                artist: { select: { id: true, name: true, email: true, artistRating: true, reviewCount: true, displayName: true } },
             },
         }),
         getActiveSpecialOffer()

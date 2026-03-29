@@ -14,6 +14,7 @@ import {
     ShieldCheck,
     Bell,
     ClipboardList,
+    Star,
 } from "lucide-react";
 import { useState, useEffect } from "react";
 
@@ -25,6 +26,7 @@ const artistNavItems = [
     { to: "/artist/manage-products", icon: Package, label: "My Products", requiresVerified: true },
     { to: "/artist/payout", icon: ShieldCheck, label: "Payout", requiresVerified: true },
     { to: "/artist/earnings", icon: Crown, label: "Earnings", requiresVerified: true },
+    { to: "/artist/reviews", icon: Star, label: "Reviews", requiresVerified: true },
     { to: "/artist/profile", icon: UserCircle, label: "Profile", requiresVerified: false },
 ];
 
@@ -37,6 +39,7 @@ const pageTitles: Record<string, { title: string; subtitle: string }> = {
     "/artist/manage-products": { title: "MY PRODUCTS", subtitle: "Manage your published products" },
     "/artist/payout": { title: "PAYOUT DETAILS", subtitle: "Where TeeHive sends your earnings every month" },
     "/artist/earnings": { title: "EARNINGS & PAYOUTS", subtitle: "Track your income — you earn 25% on every sale" },
+    "/artist/reviews": { title: "CUSTOMER REVIEWS", subtitle: "See what customers are saying about your products" },
     "/artist/profile": { title: "PROFILE", subtitle: "View and edit your artist profile" },
     "/artist/edit-profile": { title: "EDIT PROFILE", subtitle: "Update your storefront details and portfolio" },
     "/artist/setup-profile": { title: "SETUP PROFILE", subtitle: "Complete your artist profile to get started" },

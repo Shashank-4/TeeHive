@@ -17,7 +17,8 @@ import {
     ExternalLink,
     Search,
     FolderLock,
-    Droplet
+    Droplet,
+    Star
 } from "lucide-react";
 import { useState, useEffect } from "react";
 
@@ -29,6 +30,7 @@ const adminNavItems = [
     { to: "/admin/categories", icon: Tag, label: "Taxonomy" },
     { to: "/admin/colors", icon: Droplet, label: "Global Colors" },
     { to: "/admin/orders", icon: ShoppingBag, label: "Logistics" },
+    { to: "/admin/reviews", icon: Star, label: "Feedbacks" },
     { to: "/admin/users", icon: Users, label: "Identities" },
     { to: "/admin/config", icon: Settings, label: "Protocol Config" },
 ];
@@ -41,6 +43,7 @@ const pageTitles: Record<string, { title: string; subtitle: string; code: string
     "/admin/categories": { title: "TAXONOMY ENGINE", subtitle: "System-wide classification schema", code: "STRUC_NODE_04" },
     "/admin/colors": { title: "COLOR MATRIX", subtitle: "Global blank mockup and hex mappings", code: "CLR_ATTRIB_09" },
     "/admin/orders": { title: "LOGISTICS LEDGER", subtitle: "Transaction fulfillment & authorization", code: "TRANS_OPS_05" },
+    "/admin/reviews": { title: "CUSTOMER FEEDBACKS", subtitle: "Monitor product quality & artist ratings", code: "CUST_FB_10" },
     "/admin/users": { title: "IDENTITY REGISTRY", subtitle: "Access level monitoring & control", code: "USR_SESS_06" },
     "/admin/config": { title: "SYSTEM PROTOCOLS", subtitle: "Global site toggles & endpoint logic", code: "CORE_CFG_07" },
 };

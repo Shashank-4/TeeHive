@@ -269,6 +269,16 @@ export default function CustomerOrders() {
                                                             <span className="opacity-40 italic">PROTOCOL_AUTH</span>
                                                             <span className="text-success flex items-center gap-1.5"><Shield className="w-3 h-3" /> VERIFIED</span>
                                                         </div>
+                                                        {order.status === "DELIVERED" && (
+                                                            <div className="pt-4 text-center">
+                                                                <Link 
+                                                                    to={`/orders/${order.id}/rate`}
+                                                                    className="inline-block w-full py-3 bg-primary text-neutral-black border-[2px] border-neutral-black rounded-[2px] font-display text-[12px] font-black uppercase tracking-[2px] hover:translate-y-[2px] hover:translate-x-[2px] hover:shadow-none hover:bg-primary-dark transition-all shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] no-underline"
+                                                                >
+                                                                    Rate Your Purchase
+                                                                </Link>
+                                                            </div>
+                                                        )}
                                                     </div>
                                                 </div>
                                             </div>
