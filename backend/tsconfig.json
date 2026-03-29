@@ -1,0 +1,21 @@
+{
+    "compilerOptions": {
+        "target": "es2016", // A safe, widely compatible target
+        "module": "CommonJS", // The most important change!
+        "lib": [
+            "ESNext"
+        ],
+        "esModuleInterop": true,
+        "forceConsistentCasingInFileNames": true,
+        "strict": true,
+        "skipLibCheck": true,
+        "outDir": "./dist"
+    },
+    "include": [
+        "src/**/*"
+    ],
+    "exclude": [
+        "node_modules",
+        "dist"
+    ]
+}
