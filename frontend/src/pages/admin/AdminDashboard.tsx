@@ -28,7 +28,7 @@ interface DashboardStats {
         status: string;
         createdAt: string;
     }>;
-    pendingArtistsCount: number;
+    pendingDesignsCount: number;
     topArtists: Array<{
         id: string;
         name: string;
@@ -89,7 +89,7 @@ export default function AdminDashboard() {
         );
     }
 
-    const { stats, recentOrders, pendingArtistsCount, topArtists } = data;
+    const { stats, recentOrders, pendingDesignsCount, topArtists } = data;
 
     return (
         <div className="w-full min-h-screen bg-neutral-g1 flex flex-col pt-4">
@@ -138,20 +138,20 @@ export default function AdminDashboard() {
 
                 {/* Action Banners */}
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-10">
-                    <div className={`bg-white border-[2px] border-neutral-black rounded-[6px] p-8 shadow-[12px_12px_0px_0px_rgba(0,0,0,0.05)] relative overflow-hidden group ${pendingArtistsCount > 0 ? 'ring-2 ring-primary ring-offset-4' : ''}`}>
+                    <div className={`bg-white border-[2px] border-neutral-black rounded-[6px] p-8 shadow-[12px_12px_0px_0px_rgba(0,0,0,0.05)] relative overflow-hidden group ${pendingDesignsCount > 0 ? 'ring-2 ring-primary ring-offset-4' : ''}`}>
                         <div className="absolute top-0 right-0 w-32 h-full bg-primary/5 -skew-x-12 translate-x-16 pointer-events-none transition-transform group-hover:translate-x-12" />
                         <div className="flex items-start justify-between relative z-10 mb-8">
                             <div className="space-y-2">
-                                <h3 className="font-display text-[18px] font-black uppercase tracking-[1px]">Artist Verification</h3>
-                                <p className="font-display text-[11px] font-bold text-neutral-g4 uppercase tracking-wider">{pendingArtistsCount} applications awaiting authorization</p>
+                                <h3 className="font-display text-[18px] font-black uppercase tracking-[1px]">Design Verification</h3>
+                                <p className="font-display text-[11px] font-bold text-neutral-g4 uppercase tracking-wider">{pendingDesignsCount} designs awaiting review</p>
                             </div>
-                            <div className={`w-12 h-12 rounded-full border-[2px] border-neutral-black flex items-center justify-center ${pendingArtistsCount > 0 ? 'bg-primary animate-bounce' : 'bg-neutral-g1'}`}>
-                                <Users className="w-5 h-5 text-neutral-black" />
+                            <div className={`w-12 h-12 rounded-full border-[2px] border-neutral-black flex items-center justify-center ${pendingDesignsCount > 0 ? 'bg-primary animate-bounce' : 'bg-neutral-g1'}`}>
+                                <Palette className="w-5 h-5 text-neutral-black" />
                             </div>
                         </div>
-                        <Link to="/admin/artists">
+                        <Link to="/admin/designs">
                             <button className="w-full py-4 bg-primary border-[2px] border-neutral-black rounded-[4px] font-display text-[13px] font-black uppercase tracking-[2px] shadow-[6px_6px_0px_0px_rgba(0,0,0,1)] hover:translate-x-[2px] hover:translate-y-[2px] hover:shadow-none transition-all flex items-center justify-center gap-3">
-                                {pendingArtistsCount > 0 ? "Execute Authorization" : "Manage Artist Hub"} <ArrowRight className="w-4 h-4" />
+                                {pendingDesignsCount > 0 ? "Review Submissions" : "Manage Designs"} <ArrowRight className="w-4 h-4" />
                             </button>
                         </Link>
                     </div>

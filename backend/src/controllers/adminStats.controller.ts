@@ -36,9 +36,9 @@ export const getDashboardStatsHandler = async (req: Request, res: Response) => {
             select: { id: true, displayName: true, name: true, displayPhotoUrl: true }
         });
 
-        // Pending Approvals
-        const pendingArtistsCount = await prisma.user.count({
-            where: { isArtist: true, verificationStatus: "PENDING_VERIFICATION" },
+        // Pending Designs
+        const pendingDesignsCount = await prisma.design.count({
+            where: { status: "PENDING", isDeleted: false },
         });
 
         res.status(200).json({
@@ -57,7 +57,7 @@ export const getDashboardStatsHandler = async (req: Request, res: Response) => {
                     status: o.status,
                     createdAt: o.createdAt,
                 })),
-                pendingArtistsCount,
+                pendingDesignsCount,
                 topArtists: topArtists.map((a) => ({
                     id: a.id,
                     name: a.displayName || a.name,

@@ -162,17 +162,15 @@ export const submitForVerificationService = async (userId: string) => {
         throw new Error("User not found");
     }
 
-    if (!user.isArtist) {
-        throw new Error("Only artists can submit for verification");
+    if (user.isArtist && user.verificationStatus === "VERIFIED") {
+        throw new Error("You are already verified");
     }
 
     if (user.verificationStatus === "VERIFIED") {
         throw new Error("You are already verified");
     }
 
-    if (user.verificationStatus === "PENDING_VERIFICATION") {
-        throw new Error("Your profile is already under review");
-    }
+    // Removed pending verification check as we instantly verify now
 
     // Validate required fields
     if (!user.displayName || !user.displayPhotoUrl) {
@@ -181,20 +179,17 @@ export const submitForVerificationService = async (userId: string) => {
         );
     }
 
-    // Validate minimum design count
-    if (user.designs.length < 3) {
-        throw new Error(
-            `You need at least 3 designs to submit for verification. Currently you have ${user.designs.length}.`
-        );
-    }
+    // Removed minimum design count validation
 
-    // Update status
+    // Update status to activated
     const updatedUser = await prisma.user.update({
         where: { id: userId },
         data: {
-            verificationStatus: "PENDING_VERIFICATION",
+            verificationStatus: "VERIFIED",
             verificationNote: null,
             canResubmitVerification: false,
+            isArtist: true,
+            verifiedAt: new Date(),
         },
     });
 

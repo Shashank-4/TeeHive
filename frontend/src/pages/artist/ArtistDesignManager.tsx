@@ -16,6 +16,8 @@ interface Design {
     title: string;
     imageUrl: string;
     createdAt: string;
+    status: string;
+    rejectionReason?: string;
 }
 
 export default function ArtistDesignManager() {
@@ -29,14 +31,28 @@ export default function ArtistDesignManager() {
         setShowUploadModal(false);
     }
 
-    const handleDesignUpload = (newDesign: { id: string; title: string; imageUrl: string }) => {
+    const handleDesignUpload = (newDesign: { id: string; title: string; imageUrl: string; status?: string }) => {
         const formattedDesign = {
             id: newDesign.id,
             title: newDesign.title,
             imageUrl: newDesign.imageUrl,
+            status: newDesign.status || "PENDING",
             createdAt: new Date().toISOString(),
         };
         setDesigns((prevDesigns) => [formattedDesign, ...prevDesigns]);
+    };
+
+    const handleDeleteDesign = async (id: string, isRejected: boolean = false) => {
+        const action = isRejected ? "dismiss" : "terminate";
+        if (!confirm(`Are you sure you want to ${action} this design?`)) return;
+        
+        try {
+            await api.delete(`/api/designs/${id}`);
+            setDesigns((prev) => prev.filter((d) => d.id !== id));
+        } catch (err) {
+            console.error("Failed to delete design", err);
+            alert(`Failed to ${action} design. Please try again.`);
+        }
     };
 
     useEffect(() => {
@@ -156,17 +172,43 @@ export default function ArtistDesignManager() {
                                 key={design.id}
                                 className="group bg-white border-[2px] border-neutral-black rounded-[6px] overflow-hidden shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] hover:translate-x-[2px] hover:translate-y-[2px] hover:shadow-none transition-all"
                             >
-                                <div className="aspect-square overflow-hidden bg-neutral-g1 relative">
-                                    <img src={design.imageUrl} alt={design.title} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700" />
-                                    <div className="absolute inset-0 bg-neutral-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-                                        <Link to={`/artist/create-mockup`} className="bg-primary border-[2px] border-neutral-black px-4 py-2 font-display text-[10px] font-black uppercase tracking-[1px]">Manifest Prod</Link>
-                                    </div>
+                                <div className="aspect-square overflow-hidden bg-neutral-g1 relative group">
+                                    {design.status === "REJECTED" && (
+                                        <div className="absolute top-4 left-0 right-0 bg-danger text-white text-[10px] font-black uppercase text-center py-1 z-10 shadow-[0_2px_4px_rgba(0,0,0,0.5)]">
+                                            Rejected Violation
+                                        </div>
+                                    )}
+                                    {design.status === "PENDING" && (
+                                        <div className="absolute top-4 left-0 right-0 bg-primary/90 text-neutral-black text-[10px] font-black uppercase text-center py-1 z-10 shadow-[0_2px_4px_rgba(0,0,0,0.5)]">
+                                            Pending Review
+                                        </div>
+                                    )}
+                                    <img src={design.imageUrl} alt={design.title} className={`w-full h-full object-cover group-hover:scale-110 transition-transform duration-700 ${design.status === 'REJECTED' ? 'grayscale opacity-70' : ''}`} />
+                                    
+                                    {design.status === "APPROVED" && (
+                                        <div className="absolute inset-0 bg-neutral-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center z-20">
+                                            <Link to={`/artist/create-mockup`} className="bg-primary border-[2px] border-neutral-black px-4 py-2 font-display text-[10px] font-black uppercase tracking-[1px] hover:translate-x-[2px] hover:translate-y-[2px] hover:shadow-none shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] transition-all">Manifest Prod</Link>
+                                        </div>
+                                    )}
                                 </div>
-                                <div className="p-4 border-t-[2px] border-neutral-black">
-                                    <div className="font-display text-[13px] font-black text-neutral-black uppercase truncate mb-1">{design.title}</div>
-                                    <div className="flex items-center justify-between">
+                                <div className="flex flex-col flex-1 p-4 border-t-[2px] border-neutral-black">
+                                    <div className="font-display text-[13px] font-black text-neutral-black uppercase truncate mb-auto text-wrap line-clamp-2">{design.title}</div>
+                                    
+                                    {design.status === "REJECTED" && design.rejectionReason && (
+                                        <div className="mt-2 mb-2 bg-danger/10 border-[1px] border-danger p-2 rounded-[2px]">
+                                            <p className="font-display text-[9px] font-black text-danger uppercase mb-1">Reason:</p>
+                                            <p className="font-display text-[10px] font-black text-neutral-g4 line-clamp-3">{design.rejectionReason}</p>
+                                        </div>
+                                    )}
+
+                                    <div className="flex items-center justify-between mt-3 pt-3 border-t border-neutral-black/10">
                                         <span className="text-[10px] font-bold text-neutral-g4 uppercase">{new Date(design.createdAt).toLocaleDateString()}</span>
-                                        <button className="text-[9px] font-black uppercase text-danger hover:underline">Terminate</button>
+                                        <button 
+                                            onClick={() => handleDeleteDesign(design.id, design.status === "REJECTED")} 
+                                            className="text-[9px] font-black uppercase text-danger hover:underline"
+                                        >
+                                            {design.status === "REJECTED" ? "Dismiss" : "Terminate"}
+                                        </button>
                                     </div>
                                 </div>
                             </div>
@@ -189,10 +231,18 @@ export default function ArtistDesignManager() {
                                     <tr key={design.id} className="border-b-[1px] border-neutral-black/5 hover:bg-primary/5 transition-colors">
                                         <td className="py-5 px-6">
                                             <div className="flex items-center gap-4">
-                                                <div className="w-12 h-12 bg-neutral-g1 border-[1px] border-neutral-black rounded-[2px] overflow-hidden">
-                                                    <img src={design.imageUrl} alt={design.title} className="w-full h-full object-cover" />
+                                                <div className={`w-12 h-12 border-[1px] border-neutral-black rounded-[2px] overflow-hidden ${design.status === 'REJECTED' ? 'bg-danger/10' : 'bg-neutral-g1'}`}>
+                                                    <img src={design.imageUrl} alt={design.title} className={`w-full h-full object-cover ${design.status === 'REJECTED' ? 'grayscale opacity-70' : ''}`} />
                                                 </div>
-                                                <span className="font-display text-[14px] font-black text-neutral-black uppercase">{design.title}</span>
+                                                <div className="flex flex-col">
+                                                    <span className="font-display text-[14px] font-black text-neutral-black uppercase">{design.title}</span>
+                                                    {design.status === "REJECTED" && (
+                                                        <span className="font-display text-[10px] font-black text-danger uppercase mt-1">Rejected: {design.rejectionReason}</span>
+                                                    )}
+                                                    {design.status === "PENDING" && (
+                                                        <span className="font-display text-[10px] font-black text-primary-dark uppercase mt-1">Pending Review</span>
+                                                    )}
+                                                </div>
                                             </div>
                                         </td>
                                         <td className="py-5 px-6 font-display text-[11px] font-bold text-neutral-g4 uppercase">
@@ -200,13 +250,18 @@ export default function ArtistDesignManager() {
                                         </td>
                                         <td className="py-5 px-6">
                                             <div className="flex gap-3">
-                                                <Link to={`/artist/create-mockup`}>
-                                                    <button className="px-4 py-2 bg-primary border-[1.5px] border-neutral-black rounded-[2px] font-display text-[9px] font-black uppercase tracking-[1px] hover:translate-x-[1px] hover:translate-y-[1px] transition-all">
-                                                        Manifest
-                                                    </button>
-                                                </Link>
-                                                <button className="px-4 py-2 bg-white border-[1.5px] border-neutral-black rounded-[2px] font-display text-[9px] font-black text-danger uppercase tracking-[1px] hover:bg-neutral-black hover:text-white transition-all">
-                                                    Wipe
+                                                {design.status === "APPROVED" && (
+                                                    <Link to={`/artist/create-mockup`}>
+                                                        <button className="px-4 py-2 bg-primary border-[1.5px] border-neutral-black rounded-[2px] font-display text-[9px] font-black uppercase tracking-[1px] hover:translate-x-[1px] hover:translate-y-[1px] shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:shadow-none transition-all">
+                                                            Manifest
+                                                        </button>
+                                                    </Link>
+                                                )}
+                                                <button 
+                                                    onClick={() => handleDeleteDesign(design.id, design.status === "REJECTED")}
+                                                    className="px-4 py-2 bg-white border-[1.5px] border-neutral-black rounded-[2px] font-display text-[9px] font-black text-danger uppercase tracking-[1px] hover:bg-neutral-black hover:text-white transition-all shadow-[2px_2px_0px_0px_rgba(0,0,0,0.2)] hover:shadow-none"
+                                                >
+                                                    {design.status === "REJECTED" ? "Dismiss" : "Wipe"}
                                                 </button>
                                             </div>
                                         </td>

@@ -6,6 +6,7 @@ import {
     uploadDesignHandler,
     getMyDesignsHandler,
     getDesignByIdHandler,
+    deleteDesignHandler,
 } from "../controllers/design.controller";
 import { requireUser } from "../middleware/deserializeUser";
 
@@ -34,6 +35,9 @@ router.use(requireUser);
 router.get("/", getMyDesignsHandler);
 
 router.get("/:designId", getDesignByIdHandler);
+
+// Soft delete a design
+router.delete("/:designId", deleteDesignHandler);
 
 // Upload new design (file + title)
 router.post("/upload", upload.single("file"), uploadDesignHandler);

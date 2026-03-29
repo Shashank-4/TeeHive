@@ -39,21 +39,16 @@ export const uploadDesignHandler = async (
             });
         }
 
-        // Check Design Limits
-        const existingDesignsCount = await getDesignsByArtistService(user.id).then(designs => designs.length);
-        const isVerified = user.verificationStatus === "VERIFIED";
+        // Check Design Limits (Max 10 active designs)
+        // Only count PENDING and APPROVED designs towards the limit
+        const activeDesignsCount = await getDesignsByArtistService(user.id).then(
+            designs => designs.filter(d => d.status !== "REJECTED").length
+        );
 
-        if (!isVerified && existingDesignsCount >= 3) {
+        if (activeDesignsCount >= 10) {
             return res.status(403).json({
                 status: "fail",
-                message: "Unverified artists can only upload a maximum of 3 designs. Please submit your profile for verification."
-            });
-        }
-
-        if (isVerified && existingDesignsCount >= 10) {
-            return res.status(403).json({
-                status: "fail",
-                message: "You have reached the maximum limit of 10 designs allowed per artist."
+                message: "You have reached the maximum limit of 10 active designs allowed per artist."
             });
         }
 
@@ -78,7 +73,7 @@ export const uploadDesignHandler = async (
             imageUrl,
             fileKey,
             artistId: user.id,
-            status: isVerified ? "APPROVED" : "PENDING",
+            status: "PENDING", // All designs are now manually reviewed (Design Verification Model)
         });
 
         console.log("[Upload] Design saved to DB:", newDesign.id);
@@ -136,6 +131,42 @@ export const getDesignByIdHandler = async (
             data: {
                 design,
             },
+        });
+    } catch (err) {
+        next(err);
+    }
+};
+
+export const deleteDesignHandler = async (
+    req: Request,
+    res: Response,
+    next: NextFunction
+) => {
+    try {
+        const { designId } = req.params;
+        const user = res.locals.user;
+        const { PrismaClient } = await import("@prisma/client");
+        const prisma = new PrismaClient();
+
+        const design = await prisma.design.findUnique({
+            where: { id: designId },
+        });
+
+        if (!design || design.artistId !== user.id) {
+            return res.status(404).json({
+                status: "fail",
+                message: "Design not found or you do not have permission to delete it.",
+            });
+        }
+
+        await prisma.design.update({
+            where: { id: designId },
+            data: { isDeleted: true },
+        });
+
+        res.status(200).json({
+            status: "success",
+            message: "Design deleted successfully.",
         });
     } catch (err) {
         next(err);

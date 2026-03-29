@@ -4,6 +4,7 @@ import { PutObjectCommand } from "@aws-sdk/client-s3";
 import { nanoid } from "nanoid";
 import { r2 } from "../util/s3";
 import { PrismaClient } from "@prisma/client";
+import sharp from "sharp";
 
 const prisma = new PrismaClient();
 
@@ -43,8 +44,9 @@ export const uploadDesignToR2Service = async (
         const timestamp = Date.now();
         const randomId = nanoid(10);
         const fileKey = `designs/${artistId}/${timestamp}-${randomId}.${fileExtension}`;
+        const thumbKey = `designs/${artistId}/${timestamp}-${randomId}-thumb.jpg`;
 
-        // Upload to R2
+        // Upload High-Res to R2
         const command = new PutObjectCommand({
             Bucket: BUCKET_NAME,
             Key: fileKey,
@@ -54,7 +56,26 @@ export const uploadDesignToR2Service = async (
 
         await r2.send(command);
 
-        // Construct public URL
+        // Generate and Upload Thumbnail to R2
+        try {
+            const thumbBuffer = await sharp(file.buffer)
+                .resize(400)
+                .jpeg({ quality: 80 })
+                .toBuffer();
+                
+            const thumbCommand = new PutObjectCommand({
+                Bucket: BUCKET_NAME,
+                Key: thumbKey,
+                Body: thumbBuffer,
+                ContentType: "image/jpeg",
+            });
+            await r2.send(thumbCommand);
+        } catch (thumbErr) {
+            console.error("[R2Upload] Thumbnail generation/upload failed:", thumbErr);
+            // proceed anyway
+        }
+
+        // Construct public URL for high res initially
         const imageUrl = `${PUBLIC_URL}/${fileKey}`;
 
         return { imageUrl, fileKey };

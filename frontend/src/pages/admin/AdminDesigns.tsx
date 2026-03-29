@@ -11,6 +11,7 @@ import {
     Flag,
     CheckCircle,
     XCircle,
+    AlertCircle,
     Database
 } from "lucide-react";
 import api from "../../api/axios";
@@ -55,6 +56,12 @@ export default function AdminDesigns() {
     const [selectedIds, setSelectedIds] = useState<string[]>([]);
     const [isDownloading, setIsDownloading] = useState(false);
     const [isFlagging, setIsFlagging] = useState(false);
+
+    // Modals
+    const [fullscreenImage, setFullscreenImage] = useState<string | null>(null);
+    const [rejectModalOpen, setRejectModalOpen] = useState(false);
+    const [rejectReason, setRejectReason] = useState("Quality Issue");
+    const [rejectComments, setRejectComments] = useState("");
 
     const fetchDesigns = async (page = 1, search = searchQuery, statusType = statusFilter) => {
         setLoading(true);
@@ -150,18 +157,15 @@ export default function AdminDesigns() {
         }
     };
 
-    const handleBulkFlag = async (action: "APPROVE" | "REJECT") => {
+    const handleBulkFlag = async (action: "APPROVE" | "REJECT", customReason: string | null = null) => {
         if (selectedIds.length === 0) return;
-        
-        const reason = action === "REJECT" ? prompt("Enter rejection reason (or leave blank):") : null;
-        if (action === "REJECT" && reason === null) return; // cancelled prompt
         
         setIsFlagging(true);
         try {
             await api.patch(`/api/admin/designs/bulk-flag`, { 
                 designIds: selectedIds, 
                 action, 
-                reason 
+                reason: customReason 
             });
             // Refresh table
             await fetchDesigns(pagination.page);
@@ -171,6 +175,14 @@ export default function AdminDesigns() {
         } finally {
             setIsFlagging(false);
         }
+    };
+
+    const handleRejectSubmit = () => {
+        const fullReason = `${rejectReason}${rejectComments ? ` - ${rejectComments}` : ''}`;
+        setRejectModalOpen(false);
+        handleBulkFlag("REJECT", fullReason);
+        setRejectReason("Quality Issue");
+        setRejectComments("");
     };
 
     return (
@@ -235,7 +247,15 @@ export default function AdminDesigns() {
                             Batch Get
                         </button>
                         <button 
-                            onClick={() => handleBulkFlag("REJECT")}
+                            onClick={() => handleBulkFlag("APPROVE")}
+                            disabled={isFlagging}
+                            className="flex items-center gap-2 px-5 py-3 bg-success text-white border-[2px] border-neutral-black rounded-[4px] font-display text-[11px] font-black uppercase tracking-[1px] shadow-[4px_4px_0px_0px_rgba(0,0,0,0.2)] hover:translate-x-[2px] hover:translate-y-[2px] hover:shadow-none transition-all disabled:opacity-50"
+                        >
+                            {isFlagging ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle className="w-4 h-4" />}
+                            Approve
+                        </button>
+                        <button 
+                            onClick={() => setRejectModalOpen(true)}
                             disabled={isFlagging}
                             className="flex items-center gap-2 px-5 py-3 bg-danger text-white border-[2px] border-neutral-black rounded-[4px] font-display text-[11px] font-black uppercase tracking-[1px] shadow-[4px_4px_0px_0px_rgba(0,0,0,0.2)] hover:translate-x-[2px] hover:translate-y-[2px] hover:shadow-none transition-all disabled:opacity-50"
                         >
@@ -298,9 +318,12 @@ export default function AdminDesigns() {
                                                 </span>
                                             </td>
                                             <td className="py-5 px-6">
-                                                <div className="w-16 h-16 bg-neutral-black border-[1px] border-neutral-black rounded-[4px] overflow-hidden group-hover:shadow-[4px_4px_0px_0px_rgba(255,222,0,1)] transition-all flex-shrink-0">
+                                                <div 
+                                                    onClick={() => setFullscreenImage(design.imageUrl)}
+                                                    className="w-16 h-16 bg-neutral-black border-[1px] border-neutral-black rounded-[4px] overflow-hidden group-hover:shadow-[4px_4px_0px_0px_rgba(255,222,0,1)] transition-all flex-shrink-0 cursor-pointer"
+                                                >
                                                     {design.imageUrl ? (
-                                                        <img src={design.imageUrl} alt={design.title} className="w-full h-full object-cover bg-white" />
+                                                        <img src={design.imageUrl} alt={design.title} className="w-full h-full object-cover bg-white pointer-events-none" />
                                                     ) : (
                                                         <div className="w-full h-full flex items-center justify-center">
                                                             <ImageIcon className="w-6 h-6 text-white opacity-20" />
@@ -356,6 +379,86 @@ export default function AdminDesigns() {
                     )}
                 </div>
             </div>
+            
+            {/* Reject Modal */}
+            {rejectModalOpen && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+                    <div className="bg-white border-[2px] border-neutral-black rounded-[6px] shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] max-w-md w-full p-6">
+                        <div className="flex justify-between items-center mb-6 border-b-[2px] border-neutral-black pb-4">
+                            <h2 className="font-display text-[18px] font-black uppercase tracking-[1px] flex items-center gap-2">
+                                <AlertCircle className="w-5 h-5 text-danger" /> Reject Designs
+                            </h2>
+                            <button onClick={() => setRejectModalOpen(false)} className="hover:opacity-50 transition-opacity">
+                                <XCircle className="w-6 h-6" />
+                            </button>
+                        </div>
+                        
+                        <div className="space-y-4">
+                            <div className="space-y-2">
+                                <label className="font-display text-[11px] font-black uppercase tracking-[1px] text-neutral-g4">Violation Reason *</label>
+                                <select 
+                                    value={rejectReason}
+                                    onChange={(e) => setRejectReason(e.target.value)}
+                                    className="w-full px-4 py-3 bg-neutral-g1 border-[2px] border-neutral-black rounded-[4px] font-body text-[14px] font-black outline-none"
+                                >
+                                    <option value="Quality Issue">Quality Issue</option>
+                                    <option value="Copyright/Trademark">Copyright/Trademark</option>
+                                    <option value="NSFW/Explicit">NSFW/Explicit</option>
+                                    <option value="Hate Speech/Offensive">Hate Speech/Offensive</option>
+                                    <option value="Other">Other</option>
+                                </select>
+                            </div>
+                            <div className="space-y-2">
+                                <label className="font-display text-[11px] font-black uppercase tracking-[1px] text-neutral-g4">Additional Comments (Required)</label>
+                                <textarea 
+                                    value={rejectComments}
+                                    onChange={(e) => setRejectComments(e.target.value)}
+                                    placeholder="Provide specific feedback to the artist..."
+                                    rows={4}
+                                    className="w-full px-4 py-3 bg-neutral-g1 border-[2px] border-neutral-black rounded-[4px] font-body text-[14px] font-black outline-none resize-none"
+                                ></textarea>
+                            </div>
+                        </div>
+                        
+                        <div className="mt-8 flex gap-4">
+                            <button 
+                                onClick={() => setRejectModalOpen(false)}
+                                className="flex-1 py-3 px-4 bg-white border-[2px] border-neutral-black rounded-[4px] font-display text-[12px] font-black uppercase tracking-[1px] shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] hover:translate-y-[2px] hover:translate-x-[2px] hover:shadow-none transition-all"
+                            >
+                                Cancel
+                            </button>
+                            <button 
+                                onClick={handleRejectSubmit}
+                                disabled={!rejectComments.trim()}
+                                className="flex-[2] py-3 px-4 bg-danger text-white border-[2px] border-neutral-black rounded-[4px] font-display text-[12px] font-black uppercase tracking-[1px] shadow-[4px_4px_0px_0px_rgba(0,0,0,0.2)] hover:translate-y-[2px] hover:translate-x-[2px] hover:shadow-none transition-all disabled:opacity-50"
+                            >
+                                Execute Rejection
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+            
+            {/* Fullscreen Image viewer modal */}
+            {fullscreenImage && (
+                <div 
+                    className="fixed inset-0 z-[100] bg-black/90 flex items-center justify-center p-8 cursor-pointer"
+                    onClick={() => setFullscreenImage(null)}
+                >
+                    <img 
+                        src={fullscreenImage} 
+                        alt="Fullscreen View" 
+                        className="max-w-full max-h-full object-contain cursor-default bg-white border-[4px] border-neutral-black shadow-[16px_16px_0px_0px_rgba(255,222,0,1)]"
+                        onClick={(e) => e.stopPropagation()}
+                    />
+                    <button 
+                        className="absolute top-8 right-8 text-white hover:text-primary transition-colors bg-neutral-black border-[2px] border-neutral-g3 rounded-[4px] p-2"
+                        onClick={() => setFullscreenImage(null)}
+                    >
+                        <XCircle className="w-8 h-8" />
+                    </button>
+                </div>
+            )}
         </div>
     );
 }
