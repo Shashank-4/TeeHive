@@ -1,5 +1,6 @@
 import { Request, Response } from "express";
 import { PrismaClient, OrderStatus } from "@prisma/client";
+import { sendFeedbackRequestEmail } from "../services/email.service";
 
 const prisma = new PrismaClient();
 
@@ -102,7 +103,13 @@ export const updateOrderStatusHandler = async (req: Request, res: Response) => {
         const order = await prisma.order.update({
             where: { id },
             data: { status: status as OrderStatus },
+            include: { user: { select: { name: true, email: true } } }
         });
+
+        // Trigger review request email if order is marked as delivered
+        if (status === OrderStatus.DELIVERED && order.user?.email) {
+            sendFeedbackRequestEmail(order.user.email, order.user.name || "Customer", order.id).catch(console.error);
+        }
 
         res.status(200).json({
             status: "success",

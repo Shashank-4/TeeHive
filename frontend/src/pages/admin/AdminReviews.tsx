@@ -39,7 +39,7 @@ export default function AdminReviews() {
             try {
                 const res = await api.get("/api/reviews/admin");
                 setReviews(res.data.data.reviews);
-            } catch (err: any) {
+            } catch (err: unknown) {
                 setError("Failed to fetch admin reviews");
             } finally {
                 setLoading(false);

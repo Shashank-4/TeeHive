@@ -111,6 +111,16 @@ export const sendForgotPasswordEmail = async (to: string, name: string, resetLin
     );
 };
 
+export const sendFeedbackRequestEmail = async (to: string, name: string, orderId: string) => {
+    const feedbackLink = `${process.env.FRONTEND_URL || 'http://localhost:5173'}/orders/${orderId}/rate`;
+    return sendEmail(
+        to,
+        "Help the Hive grow 🐝",
+        "customer-feedback",
+        { Name: name, FeedbackLink: feedbackLink }
+    );
+};
+
 // Helper for other templates if needed
 export const sendCustomEmail = async (to: string, subject: string, templateName: string, data: any) => {
     return sendEmail(to, subject, templateName, data);

@@ -31,14 +31,15 @@ export default function RatePurchase() {
                     setError("All items in this order have already been reviewed or the order is not yet delivered.");
                 } else {
                     setProducts(items);
-                    const initialReviews: any = {};
+                    const initialReviews: Record<string, { productRating: number; artistRating: number; feedback: string }> = {};
                     items.forEach((p: ReviewableProduct) => {
                         initialReviews[p.id] = { productRating: 0, artistRating: 0, feedback: "" };
                     });
                     setReviews(initialReviews);
                 }
-            } catch (err: any) {
-                setError(err.response?.data?.message || "Failed to load reviewable items.");
+            } catch (err: unknown) {
+                const message = (err as any).response?.data?.message || "Failed to load reviewable items.";
+                setError(message);
             } finally {
                 setLoading(false);
             }
@@ -83,8 +84,9 @@ export default function RatePurchase() {
             setTimeout(() => {
                 navigate("/orders");
             }, 3000);
-        } catch (err: any) {
-            alert(err.response?.data?.message || "Failed to submit reviews.");
+        } catch (err: unknown) {
+            const message = (err as any).response?.data?.message || "Failed to submit reviews.";
+            alert(message);
         } finally {
             setSubmitting(false);
         }
