@@ -1,17 +1,10 @@
 import { Request, Response } from "express";
 import { PrismaClient } from "@prisma/client";
 import crypto from "crypto";
-import { S3Client, PutObjectCommand, DeleteObjectCommand } from "@aws-sdk/client-s3";
-const prisma = new PrismaClient();
+import { PutObjectCommand, DeleteObjectCommand } from "@aws-sdk/client-s3";
+import { r2 } from "../util/s3";
 
-const r2 = new S3Client({
-    region: "auto",
-    endpoint: process.env.CLOUDFLARE_ENDPOINT!,
-    credentials: {
-        accessKeyId: process.env.CLOUDFLARE_ACCESS_KEY_ID!,
-        secretAccessKey: process.env.CLOUDFLARE_SECRET_ACCESS_KEY!,
-    },
-});
+const prisma = new PrismaClient();
 
 const BUCKET = process.env.CLOUDFLARE_BUCKET_NAME!;
 const PUBLIC_URL = process.env.CLOUDFLARE_PUBLIC_URL!;
@@ -84,6 +77,16 @@ export const createColorHandler = async (req: Request, res: Response) => {
         // Upload base mockup (required)
         const base = await uploadToR2(mockupFile, "colors");
 
+        // Upload back mockup (optional)
+        let backMockupUrl: string | undefined;
+        let backFileKey: string | undefined;
+        const backMockupFile = files?.["backMockup"]?.[0];
+        if (backMockupFile) {
+            const back = await uploadToR2(backMockupFile, "colors/back");
+            backMockupUrl = back.url;
+            backFileKey = back.key;
+        }
+
         // Upload shadow map (optional)
         let shadowMapUrl: string | undefined;
         let shadowMapKey: string | undefined;
@@ -110,6 +113,8 @@ export const createColorHandler = async (req: Request, res: Response) => {
                 hex,
                 mockupUrl: base.url,
                 fileKey: base.key,
+                backMockupUrl,
+                backFileKey,
                 shadowMapUrl,
                 shadowMapKey,
                 displacementMapUrl,
@@ -140,6 +145,7 @@ export const deleteColorHandler = async (req: Request, res: Response) => {
 
         // Delete all R2 assets
         await deleteFromR2(color.fileKey);
+        if (color.backFileKey) await deleteFromR2(color.backFileKey);
         if (color.shadowMapKey) await deleteFromR2(color.shadowMapKey);
         if (color.displacementMapKey) await deleteFromR2(color.displacementMapKey);
 

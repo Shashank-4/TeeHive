@@ -262,6 +262,8 @@ model GlobalColor {
   shadowMapKey       String?
   displacementMapUrl String?
   displacementMapKey String?
+  backMockupUrl      String?
+  backFileKey        String?
   createdAt          DateTime  @default(now())
   updatedAt          DateTime  @updatedAt
   products           Product[]

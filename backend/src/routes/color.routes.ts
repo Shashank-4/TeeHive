@@ -12,9 +12,10 @@ const upload = multer({
     limits: { fileSize: 10 * 1024 * 1024 }, // 10 MB per file
 });
 
-// 3-asset upload: base mockup (required), shadow map, displacement map
+// 4-asset upload: base mockup (required), back mockup, shadow map, displacement map
 const colorAssetUpload = upload.fields([
     { name: "mockup", maxCount: 1 },
+    { name: "backMockup", maxCount: 1 },
     { name: "shadowMap", maxCount: 1 },
     { name: "displacementMap", maxCount: 1 },
 ]);

@@ -8,6 +8,7 @@ interface GlobalColor {
     name: string;
     hex: string;
     mockupUrl: string;
+    backMockupUrl?: string;
     shadowMapUrl?: string;
     displacementMapUrl?: string;
     createdAt: string;
@@ -23,15 +24,18 @@ export default function AdminColors() {
     const [newColorName, setNewColorName] = useState("");
     const [newColorHex, setNewColorHex] = useState("#000000");
 
-    // 3 file slots
+    // File slots
     const [mockupFile, setMockupFile] = useState<File | null>(null);
     const [mockupPreview, setMockupPreview] = useState<string | null>(null);
+    const [backMockupFile, setBackMockupFile] = useState<File | null>(null);
+    const [backMockupPreview, setBackMockupPreview] = useState<string | null>(null);
     const [shadowFile, setShadowFile] = useState<File | null>(null);
     const [shadowPreview, setShadowPreview] = useState<string | null>(null);
     const [displacementFile, setDisplacementFile] = useState<File | null>(null);
     const [displacementPreview, setDisplacementPreview] = useState<string | null>(null);
 
     const mockupInputRef = useRef<HTMLInputElement>(null);
+    const backMockupInputRef = useRef<HTMLInputElement>(null);
     const shadowInputRef = useRef<HTMLInputElement>(null);
     const displacementInputRef = useRef<HTMLInputElement>(null);
 
@@ -67,9 +71,11 @@ export default function AdminColors() {
         setNewColorName("");
         setNewColorHex("#000000");
         setMockupFile(null); setMockupPreview(null);
+        setBackMockupFile(null); setBackMockupPreview(null);
         setShadowFile(null); setShadowPreview(null);
         setDisplacementFile(null); setDisplacementPreview(null);
         if (mockupInputRef.current) mockupInputRef.current.value = "";
+        if (backMockupInputRef.current) backMockupInputRef.current.value = "";
         if (shadowInputRef.current) shadowInputRef.current.value = "";
         if (displacementInputRef.current) displacementInputRef.current.value = "";
     };
@@ -87,6 +93,7 @@ export default function AdminColors() {
         formData.append("name", newColorName.trim());
         formData.append("hex", newColorHex);
         formData.append("mockup", mockupFile);
+        if (backMockupFile) formData.append("backMockup", backMockupFile);
         if (shadowFile) formData.append("shadowMap", shadowFile);
         if (displacementFile) formData.append("displacementMap", displacementFile);
 
@@ -222,13 +229,22 @@ export default function AdminColors() {
                                     </p>
 
                                     <FileUploadSlot
-                                        label="Color Base"
-                                        sublabel="High-res blank garment photo"
+                                        label="Front Color Base"
+                                        sublabel="High-res front blank garment"
                                         icon={ImageIcon}
                                         fileRef={mockupInputRef}
                                         preview={mockupPreview}
                                         onFileChange={(e) => handleFileChange(e, setMockupFile, setMockupPreview)}
                                         required
+                                    />
+
+                                    <FileUploadSlot
+                                        label="Back Color Base"
+                                        sublabel="High-res back blank garment (Optional)"
+                                        icon={ImageIcon}
+                                        fileRef={backMockupInputRef}
+                                        preview={backMockupPreview}
+                                        onFileChange={(e) => handleFileChange(e, setBackMockupFile, setBackMockupPreview)}
                                     />
 
                                     <FileUploadSlot
@@ -317,7 +333,10 @@ export default function AdminColors() {
                                                     </td>
                                                     <td className="py-4 px-6 text-center">
                                                         <div className="flex items-center justify-center gap-2">
-                                                            <div className={`w-6 h-6 rounded-[2px] border-[1.5px] flex items-center justify-center text-[8px] font-black ${color.mockupUrl ? "border-success bg-success/10 text-success" : "border-neutral-g3 bg-neutral-g1 text-neutral-g3"}`} title="Color Base">
+                                                            <div className={`w-6 h-6 rounded-[2px] border-[1.5px] flex items-center justify-center text-[8px] font-black ${color.mockupUrl ? "border-success bg-success/10 text-success" : "border-neutral-g3 bg-neutral-g1 text-neutral-g3"}`} title="Front Base">
+                                                                F
+                                                            </div>
+                                                            <div className={`w-6 h-6 rounded-[2px] border-[1.5px] flex items-center justify-center text-[8px] font-black ${color.backMockupUrl ? "border-success bg-success/10 text-success" : "border-neutral-g3 bg-neutral-g1 text-neutral-g3"}`} title="Back Base">
                                                                 B
                                                             </div>
                                                             <div className={`w-6 h-6 rounded-[2px] border-[1.5px] flex items-center justify-center text-[8px] font-black ${color.shadowMapUrl ? "border-success bg-success/10 text-success" : "border-neutral-g3 bg-neutral-g1 text-neutral-g3"}`} title="Shadow Map">
