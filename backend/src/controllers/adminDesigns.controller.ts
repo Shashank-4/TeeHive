@@ -3,6 +3,7 @@ import { PrismaClient } from "@prisma/client";
 import { GetObjectCommand } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import { r2 } from "../util/s3";
+import { sendArtistRejectionEmail } from "../services/email.service";
 
 const prisma = new PrismaClient();
 const BUCKET_NAME = process.env.CLOUDFLARE_BUCKET_NAME || "";
@@ -75,7 +76,7 @@ export const bulkFlagDesignsHandler = async (req: Request, res: Response, next: 
             // For REJECT, we delete high res from R2 and point imageUrl to thumbnail
             const designs = await prisma.design.findMany({
                 where: { id: { in: designIds } },
-                select: { id: true, fileKey: true }
+                select: { id: true, fileKey: true, artist: { select: { email: true, name: true, displayName: true } } }
             });
             
             for (const design of designs) {
@@ -107,6 +108,15 @@ export const bulkFlagDesignsHandler = async (req: Request, res: Response, next: 
                         where: { id: design.id },
                         data: { isRejected: true, status: "REJECTED", rejectionReason: reason }
                     });
+                }
+
+                // Send rejection email (fire-and-forget)
+                if (design.artist?.email) {
+                    sendArtistRejectionEmail(
+                        design.artist.email,
+                        design.artist.displayName || design.artist.name || "Artist",
+                        reason || "Does not meet our design guidelines."
+                    ).catch(err => console.error(`[Email] Failed to send rejection email to ${design.artist?.email}:`, err));
                 }
             }
         } else {

@@ -29,6 +29,7 @@ interface AuthContextType {
     ) => Promise<{ isUpgrade: boolean } | void>;
     signIn: (data: SignInSchema & { loginAsArtist?: boolean }) => Promise<void>;
     verifyOtp: (email: string, otpCode: string, isUpgradingToArtist?: boolean) => Promise<void>;
+    resendOtp: (email: string) => Promise<void>;
     googleAuth: (token: string, isArtist?: boolean) => Promise<void>;
     signOut: () => void;
 }
@@ -81,6 +82,10 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         setUser(userResponse.data.data.user);
     };
 
+    const resendOtp = async (email: string) => {
+        await api.post("/api/auth/resend-otp", { email });
+    };
+
     const googleAuth = async (token: string, isArtist?: boolean) => {
         await api.post("/api/auth/google", { token, isArtist });
         const userResponse = await api.get<{ data: { user: User } }>(
@@ -101,6 +106,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         signUp,
         signIn,
         verifyOtp,
+        resendOtp,
         googleAuth,
         signOut,
     };

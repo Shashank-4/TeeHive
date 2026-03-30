@@ -5,6 +5,22 @@ const api = axios.create({
     withCredentials: true,
 });
 
+/** 401 from these routes means bad credentials / OTP, not "session expired" — do not try refresh. */
+function isPublicAuthFailureUrl(url: string | undefined): boolean {
+    if (!url) return false;
+    const path = url.replace(/^https?:\/\/[^/]+/, "");
+    const paths = [
+        "/api/auth/signin",
+        "/api/auth/signup",
+        "/api/auth/verify-otp",
+        "/api/auth/resend-otp",
+        "/api/auth/google",
+        "/api/auth/forgot-password",
+        "/api/auth/reset-password",
+    ];
+    return paths.some((p) => path.includes(p));
+}
+
 api.interceptors.response.use(
     // The first function is for SUCCESSFUL responses
     (response) => response,
@@ -16,6 +32,7 @@ api.interceptors.response.use(
         if (
             error.response?.status === 401 &&
             originalRequest.url !== "/api/auth/refresh" &&
+            !isPublicAuthFailureUrl(originalRequest.url) &&
             !originalRequest._retry
         ) {
             // Mark this request as having been retried.

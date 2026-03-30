@@ -4,6 +4,7 @@ import {
     updateArtistProfileService,
     submitForVerificationService,
 } from "../services/artistProfile.service";
+import { sendArtistApprovalEmail } from "../services/email.service";
 
 /**
  * GET /api/artist/profile — Get the current artist's profile

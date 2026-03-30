@@ -4,7 +4,7 @@ import { signUpSchema, type SignUpSchema } from "../../lib/validationSchemas";
 import { Mail, Lock, Eye, EyeOff, UserIcon, ShieldCheck, ArrowRight } from "lucide-react";
 import { useAuth } from "../../context/AuthContext";
 import { useNavigate } from "react-router-dom";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { GoogleLogin } from "@react-oauth/google";
 import { Input } from "../ui/Input";
 import { Button } from "../ui/Button";
@@ -15,7 +15,7 @@ interface SignUpFormProps {
 }
 
 const SignUpForm = ({ isArtist }: SignUpFormProps) => {
-    const { signUp, verifyOtp, googleAuth } = useAuth();
+    const { signUp, verifyOtp, resendOtp, googleAuth } = useAuth();
     const navigate = useNavigate();
     const [apiError, setApiError] = useState<string | null>(null);
     const [showPassword, setShowPassword] = useState(false);
@@ -26,6 +26,29 @@ const SignUpForm = ({ isArtist }: SignUpFormProps) => {
     const [otpCode, setOtpCode] = useState("");
     const [isVerifying, setIsVerifying] = useState(false);
     const [isUpgrading, setIsUpgrading] = useState(false);
+    const [countdown, setCountdown] = useState(60);
+    const [isResending, setIsResending] = useState(false);
+
+    useEffect(() => {
+        if (step !== 2 || countdown <= 0) return;
+        const id = window.setTimeout(() => setCountdown((c) => c - 1), 1000);
+        return () => window.clearTimeout(id);
+    }, [step, countdown]);
+
+    const handleResendOtp = async () => {
+        if (countdown > 0 || isResending) return;
+        setApiError(null);
+        setIsResending(true);
+        try {
+            const email = getValues("email");
+            await resendOtp(email);
+            setCountdown(60);
+        } catch (error: any) {
+            setApiError(error.response?.data?.message || "Failed to resend OTP");
+        } finally {
+            setIsResending(false);
+        }
+    };
 
     const {
         register,
@@ -63,6 +86,7 @@ const SignUpForm = ({ isArtist }: SignUpFormProps) => {
             if (res?.isUpgrade) {
                 setIsUpgrading(true);
             }
+            setCountdown(60);
             setStep(2); // Move to OTP step
         } catch (error: any) {
             setApiError(
@@ -75,7 +99,7 @@ const SignUpForm = ({ isArtist }: SignUpFormProps) => {
     const handleVerifyOtp = async (e: React.FormEvent) => {
         e.preventDefault();
         if (otpCode.length !== 6) {
-            setApiError("VALID_6_DIGIT_OTP_REQUIRED");
+            setApiError("Please enter the full 6-digit code.");
             return;
         }
         setApiError(null);
@@ -85,7 +109,7 @@ const SignUpForm = ({ isArtist }: SignUpFormProps) => {
             await verifyOtp(email, otpCode, isUpgrading ? true : undefined);
             await redirectUser();
         } catch (error: any) {
-            setApiError(error.response?.data?.message || "INVALID_DATA_PACKET");
+            setApiError(error.response?.data?.message || "Invalid or expired code. Please try again.");
         } finally {
             setIsVerifying(false);
         }
@@ -251,12 +275,22 @@ const SignUpForm = ({ isArtist }: SignUpFormProps) => {
                         <div className="w-16 h-16 bg-primary border-[2.5px] border-neutral-black rounded-[4px] flex items-center justify-center mx-auto mb-4 shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]">
                             <ShieldCheck className="w-8 h-8 text-neutral-black" />
                         </div>
-                        <h3 className="font-display text-[22px] font-black text-neutral-black uppercase tracking-tight italic">
-                            {isUpgrading ? "Upgrade_Node" : "Verify_Identity"}
+                        <h3 className="font-display text-[22px] font-black text-neutral-black tracking-tight">
+                            {isUpgrading ? "Confirm your upgrade" : "Verify your email"}
                         </h3>
-                        <p className="text-[11px] font-display font-bold text-neutral-black/40 uppercase tracking-[1px] mt-2">
-                            Code sent to <span className="text-neutral-black italic">{getValues("email")}</span>
+                        <p className="text-[13px] text-neutral-g4 mt-2 leading-relaxed">
+                            We sent a 6-digit code to{" "}
+                            <span className="font-semibold text-neutral-black">{getValues("email")}</span>.
+                            It may take a minute to arrive.
                         </p>
+                        {countdown > 0 ? (
+                            <p className="text-[13px] text-neutral-g4 mt-3">
+                                You can request a new code in{" "}
+                                <span className="tabular-nums font-semibold text-neutral-black">{countdown}</span> seconds.
+                            </p>
+                        ) : (
+                            <p className="text-[13px] text-neutral-g4 mt-3">You can resend the code if you didn&apos;t receive it.</p>
+                        )}
                     </div>
 
                     <div className="space-y-6">
@@ -276,17 +310,29 @@ const SignUpForm = ({ isArtist }: SignUpFormProps) => {
                         <Button
                             type="submit"
                             isLoading={isVerifying}
+                            size="lg"
                             disabled={isVerifying || otpCode.length !== 6}
                             className="w-full"
                         >
                             {isVerifying ? "SYNCHRONIZING..." : "INITIATE_SESSION"}
                         </Button>
+                        <div className="text-center">
+                            <button
+                                type="button"
+                                onClick={handleResendOtp}
+                                disabled={countdown > 0 || isResending}
+                                className="text-[13px] font-semibold text-primary hover:underline disabled:opacity-40 disabled:no-underline disabled:cursor-not-allowed disabled:text-neutral-g4"
+                            >
+                                {isResending ? "Sending…" : "Resend OTP"}
+                            </button>
+                        </div>
                         <button
                             type="button"
                             onClick={() => {
                                 setStep(1);
                                 setOtpCode("");
                                 setApiError(null);
+                                setCountdown(60);
                             }}
                             className="w-full py-2 text-[10px] font-display font-black text-neutral-black/30 hover:text-neutral-black uppercase tracking-[2px] transition-colors italic border-b border-transparent hover:border-neutral-black/10 inline-flex items-center justify-center gap-2"
                         >

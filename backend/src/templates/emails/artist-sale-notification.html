@@ -1,40 +1,100 @@
 <!DOCTYPE html>
 <html>
+
 <head>
     <meta charset="UTF-8">
     <style>
-        body { font-family: Arial, sans-serif; line-height: 1.6; color: #111827; margin: 0; padding: 0; }
-        .container { max-width: 600px; margin: 0 auto; border: 1px solid #e5e7eb; border-radius: 8px; overflow: hidden; }
-        .header { background-color: #000000; text-align: center; }
-        .header img { width: 100%; max-width: 600px; display: block; }
-        .content { padding: 32px 24px; }
-        .footer { padding: 24px; border-top: 1px solid #e5e7eb; text-align: center; color: #9ca3af; font-size: 12px; }
-        .otp-box { background-color: #f9fafb; border: 2px dashed #fbbf24; border-radius: 8px; padding: 24px; margin: 24px 0; text-align: center; font-size: 32px; font-weight: bold; letter-spacing: 4px; color: #111827; }
-        .button { display: inline-block; padding: 12px 24px; background-color: #fbbf24; color: #000000; text-decoration: none; border-radius: 4px; font-weight: bold; text-transform: uppercase; margin-top: 16px; }
+        body {
+            font-family: Arial, sans-serif;
+            line-height: 1.6;
+            color: #111827;
+            margin: 0;
+            padding: 0;
+        }
+
+        .container {
+            max-width: 600px;
+            margin: 0 auto;
+            border: 1px solid #e5e7eb;
+            border-radius: 8px;
+            overflow: hidden;
+        }
+
+        .header {
+            background-color: #000000;
+            text-align: center;
+        }
+
+        .header img {
+            width: 100%;
+            max-width: 600px;
+            display: block;
+        }
+
+        .content {
+            padding: 32px 24px;
+        }
+
+        .footer {
+            padding: 24px;
+            border-top: 1px solid #e5e7eb;
+            text-align: center;
+            color: #9ca3af;
+            font-size: 12px;
+        }
+
+        .otp-box {
+            background-color: #f9fafb;
+            border: 2px dashed #fbbf24;
+            border-radius: 8px;
+            padding: 24px;
+            margin: 24px 0;
+            text-align: center;
+            font-size: 32px;
+            font-weight: bold;
+            letter-spacing: 4px;
+            color: #111827;
+        }
+
+        .button {
+            display: inline-block;
+            padding: 12px 24px;
+            background-color: #fbbf24;
+            color: #000000;
+            text-decoration: none;
+            border-radius: 4px;
+            font-weight: bold;
+            text-transform: uppercase;
+            margin-top: 16px;
+        }
     </style>
 </head>
+
 <body>
     <div class="container">
         <div class="header">
-            <img src="https://pub-7f5de94304e647a1b6b59ba54680291a.r2.dev/site-assets/email-banner-1774510626168.png" alt="TeeHive">
+            <img src="{{BannerURL}}" alt="TeeHive">
         </div>
         <div class="content">
-            <h1 style="font-size: 24px; font-weight: 800; text-transform: uppercase; letter-spacing: 2px; margin-bottom: 24px; text-align: center;">Your design just sold 🐝</h1>
-            
-      <p>Hi {{ArtistName}},</p>
-      <p>One of your designs has been purchased.</p>
-      <p><strong>Product:</strong> {{ProductName}}</p>
-      <p>Your work is getting traction inside the Hive.</p>
-      <div style="text-align: center; margin: 32px 0;">
-        <a href="{{ArtistDashboard}}" class="button">Check Dashboard</a>
-      </div>
-      <p>Keep building. Momentum compounds.</p>
-      <p>– TeeHive</p>
-    
+            <h1
+                style="font-size: 24px; font-weight: 800; text-transform: uppercase; letter-spacing: 2px; margin-bottom: 24px; text-align: center;">
+                Your design just sold 🐝</h1>
+
+            <p>Hi {{ArtistName}},</p>
+            <p>One of your designs has been purchased.</p>
+            <p><strong>Product:</strong> {{ProductName}}</p>
+            <p>Your work is getting traction inside the Hive.</p>
+            <div style="text-align: center; margin: 32px 0;">
+                <a href="{{ArtistDashboard}}" class="button">Check Dashboard</a>
+            </div>
+            <p>Keep building. Momentum compounds.</p>
+            <p>– TeeHive</p>
+
         </div>
         <div class="footer">
             <p>© 2026 TeeHive. All rights reserved.</p>
         </div>
     </div>
 </body>
+
 </html>
