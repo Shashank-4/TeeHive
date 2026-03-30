@@ -1,7 +1,7 @@
 import { Router, Request, Response } from "express";
 import { PrismaClient } from "@prisma/client";
 import crypto from "crypto";
-import { sendOrderConfirmationEmail, sendAdminOrderNotification } from "../services/email.service";
+import { sendOrderConfirmationEmail, sendAdminOrderNotification, sendArtistSaleNotificationEmail } from "../services/email.service";
 
 const router = Router();
 const prisma = new PrismaClient();
@@ -45,7 +45,11 @@ router.post("/razorpay", async (req: Request, res: Response): Promise<any> => {
                 include: {
                     user: true,
                     items: {
-                        include: { product: true }
+                        include: { 
+                            product: {
+                                include: { artist: true }
+                            }
+                        }
                     }
                 }
             });
@@ -71,6 +75,27 @@ router.post("/razorpay", async (req: Request, res: Response): Promise<any> => {
                     customerName: updatedOrder.user.name || updatedOrder.user.displayName || "Customer",
                     total: updatedOrder.totalAmount.toFixed(2)
                 }).catch(err => console.error("Error sending admin notification:", err));
+
+                // Emails to Artists (send unique notifications)
+                const artistMap = new Map();
+                updatedOrder.items.forEach(item => {
+                    const artist = item.product?.artist;
+                    if (artist && artist.email && !artistMap.has(artist.id)) {
+                        artistMap.set(artist.id, {
+                            email: artist.email,
+                            name: artist.displayName || artist.name || "Artist",
+                            productName: item.product.name
+                        });
+                    }
+                });
+
+                artistMap.forEach(artistData => {
+                    sendArtistSaleNotificationEmail(
+                        artistData.email,
+                        artistData.name,
+                        artistData.productName
+                    ).catch(err => console.error(`[Email] Failed to send sale notification to ${artistData.email}:`, err));
+                });
             }
 
             // Update Payment Status

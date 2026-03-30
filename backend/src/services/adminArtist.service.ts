@@ -230,6 +230,9 @@ export const rejectDesignService = async (
             rejectionReason: reason,
             isRejected: true,
         },
+        include: {
+            artist: { select: { email: true, name: true, displayName: true } }
+        }
     });
 
     return updatedDesign;

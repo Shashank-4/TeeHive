@@ -1,5 +1,3 @@
-// backend/controllers/design.controller.ts (FIXED)
-
 import { Request, Response, NextFunction } from "express";
 import {
     createDesignService,

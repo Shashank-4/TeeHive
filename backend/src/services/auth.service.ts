@@ -12,6 +12,8 @@ interface CreateUserInput {
 
 const prisma = new PrismaClient();
 
+export const normalizeEmail = (email: string) => email.trim().toLowerCase();
+
 const getNextArtistNumber = async () => {
     const lastArtist = await prisma.user.findFirst({
         where: { artistNumber: { not: null } },
@@ -27,7 +29,7 @@ export const createUserService = async (input: CreateUserInput) => {
     const name: string = `${input.firstName} ${input.lastName}`;
 
     const existingUser = await prisma.user.findUnique({
-        where: { email: input.email },
+        where: { email: normalizeEmail(input.email) },
     });
     if (existingUser) {
         throw new Error("A user with this email already exists.");
@@ -42,7 +44,7 @@ export const createUserService = async (input: CreateUserInput) => {
 
     const user = await prisma.user.create({
         data: {
-            email: input.email.toLowerCase(),
+            email: normalizeEmail(input.email),
             password: hashedPassword,
             name,
             isArtist: input.isArtist || false,
@@ -57,7 +59,7 @@ export const createUserService = async (input: CreateUserInput) => {
 };
 
 export const findUserByEmail = async (email: string) => {
-    return await prisma.user.findUnique({ where: { email } });
+    return await prisma.user.findUnique({ where: { email: normalizeEmail(email) } });
 };
 
 export const signTokens = async (user: User) => {
@@ -106,23 +108,48 @@ export const upgradeUserToArtist = async (userId: string) => {
 };
 
 export const createOrUpdateGoogleUser = async (googleId: string, email: string, name: string, isArtist: boolean) => {
+    const normalizedEmail = normalizeEmail(email);
     let user = await prisma.user.findFirst({
         where: {
             OR: [
                 { googleId },
-                { email: email.toLowerCase() }
+                { email: normalizedEmail }
             ]
         }
     });
 
     if (user) {
+        let isUpgrade = false;
+        /** First time this account becomes verified (e.g. email signup abandoned, then Google links). */
+        let verifiedByGoogleLink = false;
+        const updateData: any = {};
+        const wasEmailVerified = user.isEmailVerified;
+
         if (!user.googleId) {
+            updateData.googleId = googleId;
+            updateData.authProvider = "GOOGLE";
+            updateData.isEmailVerified = true;
+            if (!wasEmailVerified) {
+                verifiedByGoogleLink = true;
+            }
+        }
+
+        if (isArtist && !user.isArtist) {
+            const artistNumber = await getNextArtistNumber();
+            updateData.isArtist = true;
+            updateData.artistNumber = artistNumber;
+            updateData.verificationStatus = "UNVERIFIED";
+            isUpgrade = true;
+        }
+
+        if (Object.keys(updateData).length > 0) {
             user = await prisma.user.update({
                 where: { id: user.id },
-                data: { googleId, authProvider: "GOOGLE", isEmailVerified: true }
+                data: updateData
             });
         }
-        return user;
+
+        return { user, isNew: false, isUpgrade, verifiedByGoogleLink };
     }
 
     let artistNumber = null;
@@ -130,9 +157,9 @@ export const createOrUpdateGoogleUser = async (googleId: string, email: string, 
         artistNumber = await getNextArtistNumber();
     }
 
-    return await prisma.user.create({
+    const newUser = await prisma.user.create({
         data: {
-            email: email.toLowerCase(),
+            email: normalizedEmail,
             name,
             googleId,
             authProvider: "GOOGLE",
@@ -142,6 +169,7 @@ export const createOrUpdateGoogleUser = async (googleId: string, email: string, 
             verificationStatus: "UNVERIFIED",
         }
     });
+    return { user: newUser, isNew: true, isUpgrade: false, verifiedByGoogleLink: false };
 };
 
 export const updateUserResetToken = async (userId: string, resetPasswordToken: string, resetPasswordExpires: Date) => {

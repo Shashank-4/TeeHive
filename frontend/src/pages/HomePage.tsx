@@ -529,7 +529,7 @@ function HomePage() {
                             {(artists.length > 0 ? artists.slice(0, 6) : Array.from({ length: 6 }, (_, i) => ({ id: String(i), name: `Node_${i + 1}`, styles: ["Art"], productCount: 0 }))).map((artist, idx) => (
                                 <Link
                                     key={artist.id}
-                                    to={`/artist/${artist.id}`}
+                                    to={`/artists/${artist.id}`}
                                     className={`bg-white/5 border-[2px] border-white/10 p-6 no-underline transition-all hover:bg-primary group rounded-[4px] flex flex-col justify-between aspect-square group ${idx % 2 === 0 ? 'translate-y-6' : '-translate-y-6'}`}
                                 >
                                     <div className="w-12 h-12 rounded-[4px] bg-white text-neutral-black flex items-center justify-center font-display text-[22px] font-black group-hover:bg-neutral-black group-hover:text-primary transition-all rotate-[-4deg] group-hover:rotate-0">

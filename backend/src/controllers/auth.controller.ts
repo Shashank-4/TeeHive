@@ -11,7 +11,7 @@ import {
 import bcrypt from "bcryptjs";
 import { verifyJwt, KeyType, signJwt } from "../util/jwt";
 import { findUserById } from "../services/user.service";
-import { sendOtpEmail, sendForgotPasswordEmail } from "../services/email.service";
+import { sendOtpEmail, sendForgotPasswordEmail, sendCustomerWelcomeEmail, sendArtistApprovalEmail } from "../services/email.service";
 import crypto from "crypto";
 import {
     updateUserResetToken,
@@ -76,7 +76,7 @@ export const signUpHandler = async (
         const otpExpiresAt = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes from now
 
         await updateUserOtp(user.id, otpCode, otpExpiresAt);
-        await sendOtpEmail({ to: user.email, otpCode });
+        await sendOtpEmail({ to: user.email, otpCode, isArtist: !!isArtist });
 
         res.status(201).json({
             status: "success",
@@ -120,7 +120,7 @@ export const signInHandler = async (
         const otpExpiresAt = new Date(Date.now() + 10 * 60 * 1000);
 
         await updateUserOtp(user.id, otpCode, otpExpiresAt);
-        await sendOtpEmail({ to: user.email, otpCode });
+        await sendOtpEmail({ to: user.email, otpCode, isArtist: !!loginAsArtist });
 
         res.status(200).json({
             status: "success",
@@ -144,7 +144,18 @@ export const verifyOtpHandler = async (
             return res.status(401).json({ status: "fail", message: "Invalid or expired OTP" });
         }
 
+        const wasEmailVerified = user.isEmailVerified;
         await clearUserOtp(user.id);
+
+        if (!wasEmailVerified) {
+            if (user.isArtist || isUpgradingToArtist) {
+                sendArtistApprovalEmail(user.email, user.name || "Artist").catch(err => console.error("Error sending artist welcome email", err));
+            } else {
+                sendCustomerWelcomeEmail(user.email, user.name || "Customer").catch(err => console.error("Error sending welcome email", err));
+            }
+        } else if (isUpgradingToArtist) {
+            sendArtistApprovalEmail(user.email, user.name || "Artist").catch(err => console.error("Error sending artist welcome email", err));
+        }
 
         if (isUpgradingToArtist && !user.isArtist) {
             // Import dynamically or explicitly run the update. We'll use the service below.
@@ -170,6 +181,35 @@ export const verifyOtpHandler = async (
     }
 };
 
+export const resendOtpHandler = async (
+    req: Request,
+    res: Response,
+    next: NextFunction
+) => {
+    try {
+        const { email } = req.body;
+        const user = await findUserByEmail(email);
+
+        if (!user) {
+            return res.status(404).json({ status: "fail", message: "User not found" });
+        }
+
+        // Generate new OTP
+        const otpCode = Math.floor(100000 + Math.random() * 900000).toString();
+        const otpExpiresAt = new Date(Date.now() + 10 * 60 * 1000);
+
+        await updateUserOtp(user.id, otpCode, otpExpiresAt);
+        await sendOtpEmail({ to: user.email, otpCode, isArtist: user.isArtist });
+
+        res.status(200).json({
+            status: "success",
+            message: "OTP resent successfully",
+        });
+    } catch (err) {
+        next(err);
+    }
+};
+
 export const googleAuthHandler = async (
     req: Request,
     res: Response,
@@ -187,14 +227,27 @@ export const googleAuthHandler = async (
             return res.status(401).json({ status: "fail", message: "Invalid Google token" });
         }
 
-        const user = await createOrUpdateGoogleUser(
+        const { user, isNew, isUpgrade, verifiedByGoogleLink } = await createOrUpdateGoogleUser(
             payload.sub,
             payload.email,
             payload.name || "Google User",
             isArtist || false
         );
 
-        const { accessToken, refreshToken } = await signTokens(user);
+        const shouldSendWelcome = isNew || isUpgrade || verifiedByGoogleLink;
+        if (shouldSendWelcome) {
+            if (user.isArtist) {
+                sendArtistApprovalEmail(user.email, user.name || "Artist").catch((err) =>
+                    console.error("Error sending artist welcome email", err)
+                );
+            } else {
+                sendCustomerWelcomeEmail(user.email, user.name || "Customer").catch((err) =>
+                    console.error("Error sending welcome email", err)
+                );
+            }
+        }
+
+        const { accessToken, refreshToken } = await signTokens(user as any);
 
         res.cookie("access_token", accessToken, accessTokenCookieOptions);
         res.cookie("refresh_token", refreshToken, refreshTokenCookieOptions);
@@ -223,7 +276,7 @@ export const refreshAccessTokenHandler = async (
         if (!refreshToken) {
             return res.status(401).json({
                 status: "fail",
-                message: "Could not refresh access token",
+                message: "Your session has expired. Please sign in again.",
             });
         }
 

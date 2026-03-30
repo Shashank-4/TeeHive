@@ -7,7 +7,8 @@ import {
     verifyOtpHandler,
     googleAuthHandler,
     forgotPasswordHandler,
-    resetPasswordHandler
+    resetPasswordHandler,
+    resendOtpHandler
 } from "../controllers/auth.controller";
 
 const router = Router();
@@ -15,6 +16,7 @@ const router = Router();
 router.post("/signup", signUpHandler);
 router.post("/signin", signInHandler);
 router.post("/verify-otp", verifyOtpHandler);
+router.post("/resend-otp", resendOtpHandler);
 router.post("/google", googleAuthHandler);
 router.get("/refresh", refreshAccessTokenHandler);
 router.get("/signout", signOutHandler);

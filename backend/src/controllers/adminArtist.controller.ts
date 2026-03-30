@@ -155,6 +155,14 @@ export const rejectDesignHandler = async (
 
         const design = await rejectDesignService(id, reason);
 
+        if (design.artist && design.artist.email) {
+            await sendArtistRejectionEmail(
+                design.artist.email, 
+                design.artist.displayName || design.artist.name, 
+                reason
+            ).catch(err => console.error("Error sending design rejection email:", err));
+        }
+
         res.status(200).json({
             status: "success",
             message: "Design has been rejected",

@@ -31,7 +31,10 @@ function getTemplate(templateName: string): HandlebarsTemplateDelegate {
 async function sendEmail(to: string, subject: string, templateName: string, data: any) {
     try {
         const template = getTemplate(templateName);
-        const htmlBody = template(data);
+        const htmlBody = template({
+            ...data,
+            BannerURL: process.env.EMAIL_BANNER_URL || "https://pub-7f5de94304e647a1b6b59ba54680291a.r2.dev/site-assets/email-banner-1774510626168.png"
+        });
 
         const response = await client.sendEmail({
             From: FROM_EMAIL,
@@ -52,13 +55,15 @@ async function sendEmail(to: string, subject: string, templateName: string, data
 interface OtpEmailOptions {
     to: string;
     otpCode: string;
+    isArtist?: boolean;
 }
 
 export const sendOtpEmail = async (options: OtpEmailOptions) => {
+    const templateName = options.isArtist ? "artist-login-otp" : "customer-login-otp";
     return sendEmail(
         options.to,
         "Your Hive Access Code 🐝",
-        "customer-login-otp",
+        templateName,
         { OTP: options.otpCode }
     );
 };
@@ -69,6 +74,16 @@ export const sendOrderConfirmationEmail = async (to: string, name: string, order
         "Order Confirmed – You supported a creator 🐝",
         "customer-order-confirmation",
         { Name: name, OrderID: orderData.orderId, ProductSummary: orderData.items, Amount: orderData.total }
+    );
+};
+
+export const sendCustomerWelcomeEmail = async (to: string, name: string) => {
+    const websiteLink = process.env.FRONTEND_URL || 'http://localhost:5173';
+    return sendEmail(
+        to,
+        "Welcome to the Hive 🐝",
+        "customer-welcome",
+        { Name: name, WebsiteLink: websiteLink }
     );
 };
 
@@ -102,6 +117,7 @@ export const sendArtistRejectionEmail = async (to: string, name: string, reason:
 
 export const sendForgotPasswordEmail = async (to: string, name: string, resetLink: string, isArtist: boolean) => {
     const templateName = isArtist ? "artist-forgot-password" : "customer-forgot-password";
+    // Both templates use different variable names: artist uses ArtistName, customer uses Name
     const data = isArtist ? { ArtistName: name, ResetLink: resetLink } : { Name: name, ResetLink: resetLink };
     return sendEmail(
         to,
@@ -118,6 +134,25 @@ export const sendFeedbackRequestEmail = async (to: string, name: string, orderId
         "Help the Hive grow 🐝",
         "customer-feedback",
         { Name: name, FeedbackLink: feedbackLink }
+    );
+};
+
+export const sendArtistSaleNotificationEmail = async (to: string, artistName: string, productName: string) => {
+    const artistDashboard = `${process.env.FRONTEND_URL || 'http://localhost:5173'}/artist/dashboard`;
+    return sendEmail(
+        to,
+        "Your design just sold 🐝",
+        "artist-sale-notification",
+        { ArtistName: artistName, ProductName: productName, ArtistDashboard: artistDashboard }
+    );
+};
+
+export const sendArtistPayoutEmail = async (to: string, artistName: string, amount: string, date: string) => {
+    return sendEmail(
+        to,
+        "Payout processed 💰",
+        "artist-payout-processed",
+        { ArtistName: artistName, Amount: amount, Date: date }
     );
 };
 
