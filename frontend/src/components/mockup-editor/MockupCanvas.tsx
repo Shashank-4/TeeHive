@@ -1,13 +1,13 @@
 /**
- * MockupCanvas.tsx — Realistic "Sandwich" Layering Mockup Editor
+ * MockupCanvas.tsx — Realistic Mockup Editor with Displacement & Shadow Blending
  *
  * 3-Layer Stack:
- *   Layer 0 (tshirt-base)   → High-res AI-generated color base image
- *   Layer 1 (user-design)   → Artist's transparent design (blur + reduced opacity)
- *   Layer 2 (shadow-overlay) → Grayscale shadow/highlight map (multiply/overlay blend)
+ *   Layer 0 (tshirt-base)    → Color base image (front or back, from global colors or fallback)
+ *   Layer 1 (user-design)    → Artist's design with pixel-level displacement warp applied
+ *   Layer 2 (shadow-overlay) → Shadow/highlight map with multiply blend for fold realism
  *
- * The shadow overlay sits on top of the design so folds appear "over" the print,
- * creating a realistic "printed into the fabric" look.
+ * Displacement: Offscreen canvas pixel manipulation warps the design to follow fabric folds.
+ * Shadow: globalCompositeOperation="multiply" at configurable intensity.
  */
 
 import { useState, useEffect, useRef, useImperativeHandle, forwardRef } from "react";
@@ -17,6 +17,7 @@ import {
     CANVAS_HEIGHT,
     PRINT_AREA_FRONT,
     PRINT_AREA_BACK,
+    DEFAULT_SHADOW_INTENSITY,
 } from "../../constants";
 import { Loader2 } from "lucide-react";
 
@@ -47,15 +48,20 @@ interface MockupCanvasProps {
     frontDesignUrl: string | null;
     backDesignUrl: string | null;
     currentView: ViewType;
-    /** URL to the color base mockup (AI-generated blank t-shirt photo) */
+    /** URL to the FRONT color base mockup */
     colorBaseUrl?: string | null;
-    /** URL to the shadow/highlight map PNG for sandwich overlay */
+    /** URL to the BACK color base mockup */
+    colorBackBaseUrl?: string | null;
+    /** URL to the shadow/highlight map PNG */
     shadowMapUrl?: string | null;
+    /** URL to the displacement map PNG */
+    displacementMapUrl?: string | null;
+    /** Shadow overlay intensity (0–1) */
+    shadowIntensity?: number;
 }
 
 export interface MockupCanvasHandle {
     exportView: (view: ViewType) => Promise<Blob>;
-    /** Return the current design transform for backend rendering */
     getDesignTransform: (view: ViewType) => DesignTransform | null;
 }
 
@@ -64,7 +70,6 @@ export interface MockupCanvasHandle {
 const PROXY_BASE = () =>
     `${import.meta.env.VITE_API_URL || "http://localhost:3000"}/api/proxy/image?url=`;
 
-/** Determine if a hex color is "dark" (for shadow blend mode selection) */
 function isDarkColor(hex: string): boolean {
     const c = hex.replace("#", "");
     const r = parseInt(c.substring(0, 2), 16);
@@ -72,6 +77,104 @@ function isDarkColor(hex: string): boolean {
     const b = parseInt(c.substring(4, 6), 16);
     const luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
     return luminance < 0.5;
+}
+
+/** Load an image as HTMLImageElement (for offscreen pixel manipulation) */
+function loadImageElement(url: string): Promise<HTMLImageElement> {
+    return new Promise((resolve, reject) => {
+        const img = new Image();
+        img.crossOrigin = "anonymous";
+        img.onload = () => resolve(img);
+        img.onerror = () => reject(new Error(`Failed to load image: ${url}`));
+        img.src = url;
+    });
+}
+
+/**
+ * Apply pixel-level displacement to a design image.
+ *
+ * For each output pixel, we sample the displacement map to determine how much
+ * to shift the source pixel. 128 = no shift, 0 = shift left/up, 255 = shift right/down.
+ * This creates the effect of the design "following" fabric folds.
+ */
+function applyPixelDisplacement(
+    designImg: HTMLImageElement,
+    dispImg: HTMLImageElement,
+    strength: number,
+    printArea: { x: number; y: number; width: number; height: number },
+    targetWidth: number,
+    targetHeight: number
+): HTMLCanvasElement {
+    // 1. Draw displacement map at the same scale/position as the base t-shirt
+    const dispCanvas = document.createElement("canvas");
+    dispCanvas.width = CANVAS_WIDTH;
+    dispCanvas.height = CANVAS_HEIGHT;
+    const dispCtx = dispCanvas.getContext("2d")!;
+
+    const padding = 20;
+    const maxW = CANVAS_WIDTH - padding * 2;
+    const maxH = CANVAS_HEIGHT - padding * 2;
+    const dScale = Math.min(maxW / dispImg.width, maxH / dispImg.height);
+    const dw = dispImg.width * dScale;
+    const dh = dispImg.height * dScale;
+    dispCtx.drawImage(dispImg, (CANVAS_WIDTH - dw) / 2, (CANVAS_HEIGHT - dh) / 2, dw, dh);
+
+    // 2. Extract the print area region from the displacement map
+    const dispData = dispCtx.getImageData(printArea.x, printArea.y, printArea.width, printArea.height);
+
+    // 3. Draw design at target dimensions (print area size)
+    const designCanvas = document.createElement("canvas");
+    designCanvas.width = targetWidth;
+    designCanvas.height = targetHeight;
+    const designCtx = designCanvas.getContext("2d")!;
+    designCtx.drawImage(designImg, 0, 0, targetWidth, targetHeight);
+    const designData = designCtx.getImageData(0, 0, targetWidth, targetHeight);
+
+    // 4. Scale displacement data to match target dimensions
+    const dispScaleCanvas = document.createElement("canvas");
+    dispScaleCanvas.width = targetWidth;
+    dispScaleCanvas.height = targetHeight;
+    const dispScaleCtx = dispScaleCanvas.getContext("2d")!;
+    dispScaleCtx.putImageData(dispData, 0, 0);
+    // Re-draw at target size if dimensions differ
+    if (targetWidth !== printArea.width || targetHeight !== printArea.height) {
+        const tempCanvas = document.createElement("canvas");
+        tempCanvas.width = printArea.width;
+        tempCanvas.height = printArea.height;
+        tempCanvas.getContext("2d")!.putImageData(dispData, 0, 0);
+        dispScaleCtx.clearRect(0, 0, targetWidth, targetHeight);
+        dispScaleCtx.drawImage(tempCanvas, 0, 0, targetWidth, targetHeight);
+    }
+    const scaledDispData = dispScaleCtx.getImageData(0, 0, targetWidth, targetHeight);
+
+    // 5. Apply displacement: for each pixel, sample design at offset position
+    const output = designCtx.createImageData(targetWidth, targetHeight);
+
+    for (let y = 0; y < targetHeight; y++) {
+        for (let x = 0; x < targetWidth; x++) {
+            const idx = (y * targetWidth + x) * 4;
+            const dispValue = scaledDispData.data[idx]; // R channel (grayscale)
+
+            // Map 0–255 → displacement offset: 128 = 0, 0 = -strength, 255 = +strength
+            const offsetX = Math.round(((dispValue - 128) / 128) * strength);
+            const offsetY = Math.round(((dispValue - 128) / 128) * strength * 0.5);
+
+            const srcX = Math.min(Math.max(x - offsetX, 0), targetWidth - 1);
+            const srcY = Math.min(Math.max(y - offsetY, 0), targetHeight - 1);
+            const srcIdx = (srcY * targetWidth + srcX) * 4;
+
+            output.data[idx] = designData.data[srcIdx];         // R
+            output.data[idx + 1] = designData.data[srcIdx + 1]; // G
+            output.data[idx + 2] = designData.data[srcIdx + 2]; // B
+            output.data[idx + 3] = designData.data[srcIdx + 3]; // A
+        }
+    }
+
+    const resultCanvas = document.createElement("canvas");
+    resultCanvas.width = targetWidth;
+    resultCanvas.height = targetHeight;
+    resultCanvas.getContext("2d")!.putImageData(output, 0, 0);
+    return resultCanvas;
 }
 
 // ── Component ──
@@ -85,7 +188,10 @@ const MockupCanvas = forwardRef<MockupCanvasHandle, MockupCanvasProps>((
         backDesignUrl,
         currentView,
         colorBaseUrl,
+        colorBackBaseUrl,
         shadowMapUrl,
+        displacementMapUrl,
+        shadowIntensity = DEFAULT_SHADOW_INTENSITY,
     },
     ref
 ) => {
@@ -101,11 +207,20 @@ const MockupCanvas = forwardRef<MockupCanvasHandle, MockupCanvasProps>((
     // Track props in refs for stable closures
     const tshirtColorRef = useRef(tshirtColor);
     const colorBaseUrlRef = useRef(colorBaseUrl);
+    const colorBackBaseUrlRef = useRef(colorBackBaseUrl);
     const shadowMapUrlRef = useRef(shadowMapUrl);
+    const displacementMapUrlRef = useRef(displacementMapUrl);
+    const shadowIntensityRef = useRef(shadowIntensity);
+
+    // Cache loaded displacement map element
+    const dispImgCacheRef = useRef<{ url: string; img: HTMLImageElement } | null>(null);
 
     useEffect(() => { tshirtColorRef.current = tshirtColor; }, [tshirtColor]);
     useEffect(() => { colorBaseUrlRef.current = colorBaseUrl; }, [colorBaseUrl]);
+    useEffect(() => { colorBackBaseUrlRef.current = colorBackBaseUrl; }, [colorBackBaseUrl]);
     useEffect(() => { shadowMapUrlRef.current = shadowMapUrl; }, [shadowMapUrl]);
+    useEffect(() => { displacementMapUrlRef.current = displacementMapUrl; }, [displacementMapUrl]);
+    useEffect(() => { shadowIntensityRef.current = shadowIntensity; }, [shadowIntensity]);
 
     const currentDesignUrl = currentView === "front" ? frontDesignUrl : backDesignUrl;
     const currentPrintArea = currentView === "front" ? PRINT_AREA_FRONT : PRINT_AREA_BACK;
@@ -220,7 +335,6 @@ const MockupCanvas = forwardRef<MockupCanvasHandle, MockupCanvasProps>((
         canvas.on("object:rotating", (e) => { if (e.target) { enforceConstraints(e.target); saveTransform(e.target); } });
         canvas.on("object:modified", (e) => { if (e.target) { saveTransform(e.target); } });
 
-        // Load initial scene
         loadFullScene(canvas, currentView);
 
         return () => {
@@ -229,7 +343,7 @@ const MockupCanvas = forwardRef<MockupCanvasHandle, MockupCanvasProps>((
         };
     }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-    // ── View / color change ──
+    // ── View / color / realism change ──
     useEffect(() => {
         const canvas = fabricRef.current;
         if (!canvas) return;
@@ -242,14 +356,14 @@ const MockupCanvas = forwardRef<MockupCanvasHandle, MockupCanvasProps>((
                 setIsLoading(false);
             });
         }, 0);
-    }, [currentView, tshirtColor, colorBaseUrl, shadowMapUrl]); // eslint-disable-line react-hooks/exhaustive-deps
+    }, [currentView, tshirtColor, colorBaseUrl, colorBackBaseUrl, shadowMapUrl, displacementMapUrl, shadowIntensity]); // eslint-disable-line react-hooks/exhaustive-deps
 
     // ── Design changes ──
     useEffect(() => {
         const canvas = fabricRef.current;
-        if (!canvas || isLoading) return;
+        if (!canvas) return;
+        if (isLoading) return;
 
-        // Remove old design + shadow
         removeById(canvas, "user-design");
         removeById(canvas, "shadow-overlay");
 
@@ -259,10 +373,9 @@ const MockupCanvas = forwardRef<MockupCanvasHandle, MockupCanvasProps>((
         }
 
         loadDesignLayer(canvas, currentDesignUrl, currentView, currentPrintArea).then(() => {
-            // Re-add shadow on top of new design
             loadShadowOverlay(canvas);
         });
-    }, [currentDesignUrl, isLoading, currentView]); // eslint-disable-line react-hooks/exhaustive-deps
+    }, [currentDesignUrl, currentView]); // eslint-disable-line react-hooks/exhaustive-deps
 
     // ── Guides ──
     useEffect(() => {
@@ -275,54 +388,51 @@ const MockupCanvas = forwardRef<MockupCanvasHandle, MockupCanvasProps>((
     // LAYER MANAGEMENT FUNCTIONS
     // ─────────────────────────────────────────────────────────
 
-    /** Clear all managed layers from canvas */
     function clearCanvas(canvas: fabric.Canvas) {
         const ids = ["tshirt-base", "user-design", "shadow-overlay", "print-guide"];
         ids.forEach((id) => removeById(canvas, id));
     }
 
-    /** Remove all objects with a specific id */
     function removeById(canvas: fabric.Canvas, id: string) {
         canvas.getObjects().filter((o) => (o as any).id === id).forEach((o) => canvas.remove(o));
     }
 
-    /** Load the full 3-layer scene */
     async function loadFullScene(canvas: fabric.Canvas, view: ViewType) {
-        // Layer 0: Base
         await loadBaseLayer(canvas, view);
-
-        // Layer 1: Design (if exists)
         const designUrl = view === "front" ? frontDesignUrl : backDesignUrl;
         const printArea = view === "front" ? PRINT_AREA_FRONT : PRINT_AREA_BACK;
         if (designUrl) {
             await loadDesignLayer(canvas, designUrl, view, printArea);
         }
-
-        // Layer 2: Shadow overlay
         await loadShadowOverlay(canvas);
-
-        // Guides on top
         updateGuides(canvas, showGuides, printArea);
     }
 
     /**
      * LAYER 0: Load the base t-shirt image.
-     *
-     * If a colorBaseUrl is provided (from global colors), use it directly.
-     * Otherwise fall back to the local white mockup with a BlendColor filter.
+     * Uses colorBackBaseUrl for back view, colorBaseUrl for front view.
+     * Falls back to local white mockups with BlendColor filter.
      */
     async function loadBaseLayer(canvas: fabric.Canvas, view: ViewType) {
         removeById(canvas, "tshirt-base");
 
         let imageUrl: string;
         let useColorFilter = false;
-        const currentColorBaseUrl = colorBaseUrlRef.current;
+        const currentFrontUrl = colorBaseUrlRef.current;
+        const currentBackUrl = colorBackBaseUrlRef.current;
 
-        if (currentColorBaseUrl) {
-            // Use the admin-configured AI-generated base image
-            imageUrl = `${PROXY_BASE()}${encodeURIComponent(currentColorBaseUrl)}`;
+        if (view === "front" && currentFrontUrl) {
+            imageUrl = `${PROXY_BASE()}${encodeURIComponent(currentFrontUrl)}`;
+        } else if (view === "back" && currentBackUrl) {
+            imageUrl = `${PROXY_BASE()}${encodeURIComponent(currentBackUrl)}`;
+        } else if (view === "back" && currentFrontUrl && !currentBackUrl) {
+            // Fallback: if there's a front URL but no back URL, use local back with color filter
+            imageUrl = "/mockups/white-back.png";
+            useColorFilter = true;
+        } else if (!currentFrontUrl && !currentBackUrl) {
+            imageUrl = view === "front" ? "/mockups/white-front.png" : "/mockups/white-back.png";
+            useColorFilter = true;
         } else {
-            // Fallback to local static mockup
             imageUrl = view === "front" ? "/mockups/white-front.png" : "/mockups/white-back.png";
             useColorFilter = true;
         }
@@ -340,7 +450,7 @@ const MockupCanvas = forwardRef<MockupCanvasHandle, MockupCanvasProps>((
                 scaleX: scale,
                 scaleY: scale,
                 left: CANVAS_WIDTH / 2,
-                top: CANVAS_HEIGHT / 2,
+                top: CANVAS_HEIGHT / 2 - 25,
                 originX: "center",
                 originY: "center",
                 selectable: false,
@@ -348,7 +458,6 @@ const MockupCanvas = forwardRef<MockupCanvasHandle, MockupCanvasProps>((
                 hoverCursor: "default",
             });
 
-            // Only apply color filter for fallback local images
             if (useColorFilter) {
                 const blendFilter = new fabric.filters.BlendColor({
                     color: tshirtColorRef.current,
@@ -368,10 +477,35 @@ const MockupCanvas = forwardRef<MockupCanvasHandle, MockupCanvasProps>((
     }
 
     /**
-     * LAYER 1: Load the artist's design with realism tweaks.
+     * Load and cache the displacement map as an HTMLImageElement.
+     */
+    async function getDisplacementImage(): Promise<HTMLImageElement | null> {
+        // Determine URL: per-color override or local fallback
+        const url = displacementMapUrlRef.current || "/mockups/tshirt-displacement.png";
+
+        // Check cache
+        if (dispImgCacheRef.current && dispImgCacheRef.current.url === url) {
+            return dispImgCacheRef.current.img;
+        }
+
+        try {
+            const resolvedUrl = url.startsWith("/") ? url : `${PROXY_BASE()}${encodeURIComponent(url)}`;
+            const img = await loadImageElement(resolvedUrl);
+            dispImgCacheRef.current = { url, img };
+            return img;
+        } catch (err) {
+            console.error("[Displacement] Failed to load displacement map:", err);
+            return null;
+        }
+    }
+
+    /**
+     * LAYER 1: Load the artist's design with displacement warp.
      *
-     * - 0.5px Gaussian blur
-     * - 95% opacity to allow texture bleed-through
+     * 1. Load raw design as HTMLImageElement
+     * 2. If displacement map available, warp pixels via offscreen canvas
+     * 3. Create fabric.Image from the processed result
+     * 4. Apply blur + configurable opacity for "printed" look
      */
     async function loadDesignLayer(
         canvas: fabric.Canvas,
@@ -383,18 +517,44 @@ const MockupCanvas = forwardRef<MockupCanvasHandle, MockupCanvasProps>((
 
         const savedTransform = view === "front" ? frontTransformRef.current : backTransformRef.current;
         const proxyUrl = `${PROXY_BASE()}${encodeURIComponent(designUrl)}`;
+        const strength = 10;
+        const opacity = 0.92;
 
         try {
-            const img = await fabric.FabricImage.fromURL(proxyUrl, { crossOrigin: "anonymous" });
-            if (!img) return;
+            // Load raw design image for displacement processing
+            const rawDesignImg = await loadImageElement(proxyUrl);
 
-            // Apply realism filters: subtle blur for "printed" look
-            const blurFilter = new fabric.filters.Blur({ blur: 0.01 }); // ~0.5px at canvas scale
-            img.filters = [blurFilter];
-            img.applyFilters();
+            let fabricImg: fabric.FabricImage;
+
+            // Apply displacement if strength > 0
+            if (strength > 0) {
+                const dispImg = await getDisplacementImage();
+                if (dispImg) {
+                    // Process at a reasonable resolution for the print area
+                    const targetW = printArea.width * 2; // 2x for quality
+                    const targetH = printArea.height * 2;
+                    const displacedCanvas = applyPixelDisplacement(
+                        rawDesignImg, dispImg, strength, printArea, targetW, targetH
+                    );
+                    const dataUrl = displacedCanvas.toDataURL("image/png");
+                    fabricImg = await fabric.FabricImage.fromURL(dataUrl, { crossOrigin: "anonymous" });
+                } else {
+                    // Fallback: no displacement map available
+                    fabricImg = await fabric.FabricImage.fromURL(proxyUrl, { crossOrigin: "anonymous" });
+                }
+            } else {
+                fabricImg = await fabric.FabricImage.fromURL(proxyUrl, { crossOrigin: "anonymous" });
+            }
+
+            if (!fabricImg) return;
+
+            // Apply subtle blur for "printed on fabric" look
+            const blurFilter = new fabric.filters.Blur({ blur: 0.01 });
+            fabricImg.filters = [blurFilter];
+            fabricImg.applyFilters();
 
             if (savedTransform) {
-                img.set({
+                fabricImg.set({
                     left: savedTransform.left,
                     top: savedTransform.top,
                     scaleX: savedTransform.scaleX,
@@ -402,7 +562,7 @@ const MockupCanvas = forwardRef<MockupCanvasHandle, MockupCanvasProps>((
                     angle: savedTransform.angle,
                     originX: "center",
                     originY: "center",
-                    opacity: 0.95, // Allow underlying texture bleed-through
+                    opacity: opacity,
                     cornerColor: "white",
                     cornerStrokeColor: "#3b82f6",
                     borderColor: "#3b82f6",
@@ -413,17 +573,17 @@ const MockupCanvas = forwardRef<MockupCanvasHandle, MockupCanvasProps>((
                 });
             } else {
                 const scale = Math.min(
-                    (printArea.width * 0.8) / (img.width || 1),
-                    (printArea.height * 0.8) / (img.height || 1)
+                    (printArea.width * 0.8) / (fabricImg.width || 1),
+                    (printArea.height * 0.8) / (fabricImg.height || 1)
                 );
-                img.set({
+                fabricImg.set({
                     scaleX: scale,
                     scaleY: scale,
                     left: printArea.x + printArea.width / 2,
                     top: printArea.y + printArea.height / 2,
                     originX: "center",
                     originY: "center",
-                    opacity: 0.95,
+                    opacity: opacity,
                     cornerColor: "white",
                     cornerStrokeColor: "#3b82f6",
                     borderColor: "#3b82f6",
@@ -431,26 +591,25 @@ const MockupCanvas = forwardRef<MockupCanvasHandle, MockupCanvasProps>((
                     transparentCorners: false,
                 });
 
-                // Save initial transform
                 const initialTransform: DesignTransform = {
-                    left: img.left ?? 0,
-                    top: img.top ?? 0,
-                    scaleX: img.scaleX ?? 1,
-                    scaleY: img.scaleY ?? 1,
-                    angle: img.angle ?? 0,
+                    left: fabricImg.left ?? 0,
+                    top: fabricImg.top ?? 0,
+                    scaleX: fabricImg.scaleX ?? 1,
+                    scaleY: fabricImg.scaleY ?? 1,
+                    angle: fabricImg.angle ?? 0,
                 };
                 if (view === "front") frontTransformRef.current = initialTransform;
                 else backTransformRef.current = initialTransform;
             }
 
-            // Hide middle-edge controls (only allow corner scale + rotate)
+            // Hide middle-edge controls (only corner scale + rotate)
             ["ml", "mr", "mt", "mb", "tl", "tr", "bl", "mtr"].forEach((c) =>
-                img.setControlVisible(c, false)
+                fabricImg.setControlVisible(c, false)
             );
 
-            (img as any).id = "user-design";
-            canvas.add(img);
-            canvas.setActiveObject(img);
+            (fabricImg as any).id = "user-design";
+            canvas.add(fabricImg);
+            canvas.setActiveObject(fabricImg);
             canvas.requestRenderAll();
         } catch (err) {
             console.error("[Design] Error loading:", err);
@@ -458,24 +617,26 @@ const MockupCanvas = forwardRef<MockupCanvasHandle, MockupCanvasProps>((
     }
 
     /**
-     * LAYER 2: Shadow/Highlight overlay.
+     * LAYER 2: Shadow/Highlight overlay with multiply blend.
      *
-     * This sits on top of the design. The composite operation is set to
-     * 'multiply' for light shirts (darkens folds) or a custom approach for
-     * dark shirts so highlights appear correctly.
-     *
-     * It's non-interactive so the artist can still move the design underneath.
+     * Uses configurable intensity. Falls back to local shadow map
+     * if no per-color shadow URL is provided.
      */
     async function loadShadowOverlay(canvas: fabric.Canvas) {
         removeById(canvas, "shadow-overlay");
 
-        const currentShadowUrl = shadowMapUrlRef.current;
-        if (!currentShadowUrl) return;
+        // Use per-color shadow URL or fall back to local universal shadow
+        const currentShadowUrl = shadowMapUrlRef.current || "/mockups/tshirt-shading.png";
+        const intensity = shadowIntensityRef.current;
 
-        const proxyUrl = `${PROXY_BASE()}${encodeURIComponent(currentShadowUrl)}`;
+        if (intensity <= 0) return; // Shadow disabled
+
+        const resolvedUrl = currentShadowUrl.startsWith("/")
+            ? currentShadowUrl
+            : `${PROXY_BASE()}${encodeURIComponent(currentShadowUrl)}`;
 
         try {
-            const img = await fabric.FabricImage.fromURL(proxyUrl, { crossOrigin: "anonymous" });
+            const img = await fabric.FabricImage.fromURL(resolvedUrl, { crossOrigin: "anonymous" });
             if (!img) return;
 
             const padding = 20;
@@ -487,16 +648,16 @@ const MockupCanvas = forwardRef<MockupCanvasHandle, MockupCanvasProps>((
                 scaleX: scale,
                 scaleY: scale,
                 left: CANVAS_WIDTH / 2,
-                top: CANVAS_HEIGHT / 2,
+                top: CANVAS_HEIGHT / 2 - 25,
                 originX: "center",
                 originY: "center",
                 selectable: false,
                 evented: false,
                 hoverCursor: "default",
-                opacity: 0.6, // Subtle effect, not overpowering
+                opacity: intensity,
             });
 
-            // Apply multiply blend via globalCompositeOperation
+            // Apply multiply blend — darkens fold areas over design + base
             const dark = isDarkColor(tshirtColorRef.current);
             (img as any).globalCompositeOperation = dark ? "overlay" : "multiply";
 
@@ -560,7 +721,6 @@ const MockupCanvas = forwardRef<MockupCanvasHandle, MockupCanvasProps>((
                 await loadFullScene(canvas, view);
             }
 
-            // Hide guide for export
             const guide = canvas.getObjects().find((o) => (o as any).id === "print-guide");
             const guideWasVisible = guide?.visible;
             if (guide) {
@@ -574,7 +734,6 @@ const MockupCanvas = forwardRef<MockupCanvasHandle, MockupCanvasProps>((
                 multiplier: 2,
             });
 
-            // Restore
             if (originalView !== view) {
                 clearCanvas(canvas);
                 await loadFullScene(canvas, originalView);

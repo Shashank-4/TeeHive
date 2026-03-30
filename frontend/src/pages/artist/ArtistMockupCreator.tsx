@@ -9,8 +9,12 @@ import {
     FileText,
     AlertTriangle,
     Maximize2,
-    MousePointer2
+    MousePointer2,
+    SlidersHorizontal
 } from "lucide-react";
+import {
+    DEFAULT_SHADOW_INTENSITY,
+} from "../../constants";
 import { useNavigate } from "react-router-dom";
 import MockupCanvas, {
     TShirtColor,
@@ -57,7 +61,10 @@ export default function ArtistMockupCreator() {
     const [categories, setCategories] = useState<Category[]>([]);
     const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
     const [pricingProtocols, setPricingProtocols] = useState<PricingProtocol[]>([]);
-    const [globalColors, setGlobalColors] = useState<{ name: string; hex: string; mockupUrl: string; shadowMapUrl?: string; displacementMapUrl?: string }[]>([]);
+    const [globalColors, setGlobalColors] = useState<{ name: string; hex: string; mockupUrl: string; backMockupUrl?: string; shadowMapUrl?: string; displacementMapUrl?: string }[]>([]);
+
+    // Realism Engine sliders
+    const [shadowIntensity, setShadowIntensity] = useState(DEFAULT_SHADOW_INTENSITY);
 
     useEffect(() => {
         const fetchCategories = async () => {
@@ -81,10 +88,14 @@ export default function ArtistMockupCreator() {
         const fetchColors = async () => {
             try {
                 const res = await api.get("/api/colors");
-                setGlobalColors(res.data.data.colors);
-                if (res.data.data.colors.length > 0) {
-                    // Only set if not already set, or just let users select.
-                    // We'll leave primary selection intact
+                const colors = res.data.data.colors;
+                setGlobalColors(colors);
+                // Auto-select first global color as default
+                if (colors.length > 0) {
+                    const firstHex = colors[0].hex as TShirtColor;
+                    setPreviewColor(firstHex);
+                    setSelectedColors([firstHex]);
+                    setPrimaryColor(firstHex);
                 }
             } catch (err) {
                 console.error("Failed to load global colors", err);
@@ -244,7 +255,10 @@ export default function ArtistMockupCreator() {
                                     currentView={currentView}
                                     onCanvasReady={() => { }}
                                     colorBaseUrl={globalColors.find(c => c.hex.toLowerCase() === previewColor.toLowerCase())?.mockupUrl || null}
+                                    colorBackBaseUrl={globalColors.find(c => c.hex.toLowerCase() === previewColor.toLowerCase())?.backMockupUrl || null}
                                     shadowMapUrl={globalColors.find(c => c.hex.toLowerCase() === previewColor.toLowerCase())?.shadowMapUrl || null}
+                                    displacementMapUrl={globalColors.find(c => c.hex.toLowerCase() === previewColor.toLowerCase())?.displacementMapUrl || null}
+                                    shadowIntensity={shadowIntensity}
                                 />
                                 {!frontDesign && !backDesign && (
                                     <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none opacity-20">
@@ -409,6 +423,42 @@ export default function ArtistMockupCreator() {
                                         ))}
                                     </div>
                                 </div>
+                            </div>
+                        </div>
+
+                        {/* 4. Realism Engine */}
+                        <div className="bg-white border-[2px] border-neutral-black rounded-[6px] p-6 shadow-[8px_8px_0px_0px_rgba(0,0,0,1)]">
+                            <h3 className="font-display text-[14px] font-black uppercase tracking-[1px] mb-6 flex items-center gap-2">
+                                <SlidersHorizontal className="w-4 h-4 text-primary" /> Realism Engine
+                            </h3>
+                            <div className="space-y-5">
+                                {/* Shadow Depth */}
+                                <div className="space-y-2">
+                                    <div className="flex items-center justify-between">
+                                        <label className="font-display text-[10px] font-black uppercase tracking-[2px] text-neutral-g4">Shadow Depth</label>
+                                        <span className="font-display text-[11px] font-black text-neutral-black bg-neutral-g1 px-2 py-0.5 rounded-[2px] border border-neutral-black/10">{(shadowIntensity * 100).toFixed(0)}%</span>
+                                    </div>
+                                    <input
+                                        type="range"
+                                        min="0"
+                                        max="100"
+                                        step="5"
+                                        value={shadowIntensity * 100}
+                                        onChange={(e) => setShadowIntensity(Number(e.target.value) / 100)}
+                                        className="w-full h-2 bg-neutral-g2 rounded-full appearance-none cursor-pointer accent-primary"
+                                    />
+                                    <p className="font-display text-[8px] font-bold text-neutral-g3 uppercase">Multiply blend strength of fold shadow map</p>
+                                </div>
+
+                                {/* Reset button */}
+                                <button
+                                    onClick={() => {
+                                        setShadowIntensity(DEFAULT_SHADOW_INTENSITY);
+                                    }}
+                                    className="w-full py-2 bg-neutral-g1 border-[2px] border-neutral-black/20 rounded-[4px] font-display text-[10px] font-black uppercase tracking-[1px] text-neutral-g4 hover:bg-white hover:border-neutral-black hover:text-neutral-black transition-all"
+                                >
+                                    Reset to Defaults
+                                </button>
                             </div>
                         </div>
                     </div>
