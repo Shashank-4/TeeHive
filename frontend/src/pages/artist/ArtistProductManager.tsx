@@ -9,7 +9,7 @@ import {
     Package,
 } from "lucide-react";
 import Loader from "../../components/shared/Loader";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import api from "../../api/axios";
 import StockStatusPill from "../../components/shared/StockStatusPill";
 
@@ -26,12 +26,20 @@ interface Product {
     stock: number;
     status: "DRAFT" | "PUBLISHED" | "ARCHIVED";
     mockupImageUrl: string;
+    backMockupImageUrl?: string | null;
+    primaryView?: string | null;
     design: {
         id: string;
         title: string;
         imageUrl: string;
     };
     createdAt: string;
+}
+
+/** Match storefront / PDP: hero listing image follows primary landing view. */
+function cardListingImageUrl(p: Product): string {
+    if (p.primaryView === "back" && p.backMockupImageUrl) return p.backMockupImageUrl;
+    return p.mockupImageUrl;
 }
 
 const statusPillClass: Record<string, string> = {
@@ -41,6 +49,7 @@ const statusPillClass: Record<string, string> = {
 };
 
 export default function ArtistProductManager() {
+    const navigate = useNavigate();
     const [products, setProducts] = useState<Product[]>([]);
     const [isLoading, setIsLoading] = useState(true);
     const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
@@ -90,6 +99,10 @@ export default function ArtistProductManager() {
         }
     };
 
+    const handleEdit = (productId: string) => {
+        navigate(`/artist/create-mockup?productId=${productId}`);
+    };
+
     const filteredProducts = products.filter((p) => p.name.toLowerCase().includes(searchQuery.toLowerCase()));
 
     return (
@@ -97,18 +110,6 @@ export default function ArtistProductManager() {
             <div className="flex-1 px-4 sm:px-8 pb-12 w-full">
                 {/* Header Section */}
                 <div className="flex flex-col md:flex-row md:items-end justify-between mb-10 gap-6">
-                    <div className="space-y-2">
-                        <div className="inline-flex items-center gap-2 bg-neutral-black text-white px-3 py-1 rounded-[4px] font-display text-[10px] font-black uppercase tracking-[2px]">
-                            <Package className="w-3 h-3 text-primary" /> Stock Inventory
-                        </div>
-                        <h1 className="font-display text-[ clamp(32px,5vw,48px) ] font-black text-neutral-black leading-none uppercase tracking-tight">
-                            Product <span className="text-primary italic">Vault</span>
-                        </h1>
-                        <p className="font-display text-[14px] font-bold text-neutral-g4 uppercase tracking-wider">
-                            Manage your live catalog and manifest new drops.
-                        </p>
-                    </div>
-
                     <Link
                         to="/artist/create-mockup"
                         className="flex items-center gap-3 px-8 py-4 bg-primary border-[2px] border-neutral-black rounded-[4px] font-display text-[14px] font-black uppercase tracking-[1px] shadow-[6px_6px_0px_0px_rgba(0,0,0,1)] hover:translate-x-[2px] hover:translate-y-[2px] hover:shadow-none transition-all"
@@ -189,7 +190,7 @@ export default function ArtistProductManager() {
                             >
                                 <div className="aspect-square overflow-hidden relative bg-neutral-g1 border-b-[2px] border-neutral-black">
                                     <img
-                                        src={product.mockupImageUrl}
+                                        src={cardListingImageUrl(product)}
                                         alt={product.name}
                                         className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700"
                                     />
@@ -215,11 +216,19 @@ export default function ArtistProductManager() {
                                         </div>
                                         <div className="text-right">
                                             <p className="text-[10px] font-bold text-neutral-g4 uppercase">Status</p>
-                                            <StockStatusPill stock={(product as any).stockStatus === 'OUT_OF_STOCK' ? 0 : ((product as any).stockStatus === 'LOW_STOCK' ? 5 : 100)} />
+                                            <StockStatusPill stockStatus={(product as any).stockStatus} />
                                         </div>
                                     </div>
 
                                     <div className="flex gap-2">
+                                        {product.status === "DRAFT" && (
+                                            <button
+                                                onClick={() => handleEdit(product.id)}
+                                                className="flex-1 py-2.5 bg-white border-[1.5px] border-neutral-black rounded-[2px] font-display text-[9px] font-black uppercase tracking-[1px] text-neutral-black shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:translate-x-[1px] hover:translate-y-[1px] hover:shadow-none transition-all font-display"
+                                            >
+                                                Edit Draft
+                                            </button>
+                                        )}
                                         {product.status === "DRAFT" && (
                                             <button
                                                 onClick={() => handlePublish(product.id)}
@@ -262,14 +271,16 @@ export default function ArtistProductManager() {
                                         <td className="py-5 px-6">
                                             <div className="flex items-center gap-4">
                                                 <div className="w-12 h-12 bg-neutral-g1 border-[1px] border-neutral-black rounded-[2px] overflow-hidden">
-                                                    <img src={product.mockupImageUrl} alt={product.name} className="w-full h-full object-cover" />
+                                                    <img src={cardListingImageUrl(product)} alt={product.name} className="w-full h-full object-cover" />
                                                 </div>
                                                 <span className="font-display text-[14px] font-black text-neutral-black uppercase">{product.name}</span>
                                             </div>
                                         </td>
                                         <td className="py-5 px-6 font-display text-[11px] font-bold text-neutral-g4 uppercase">{product.design.title}</td>
                                         <td className="py-5 px-6 font-display text-[14px] font-black text-neutral-black italic tracking-tight">₹{product.price}</td>
-                                        <td className="py-5 px-6 font-display text-[13px] font-bold text-neutral-g4">{product.stock} units</td>
+                                        <td className="py-5 px-6 font-display text-[11px] font-bold text-neutral-g4 uppercase">
+                                            {(product as any).stockStatus?.replaceAll("_", " ") || "IN STOCK"}
+                                        </td>
                                         <td className="py-5 px-6">
                                             <span className={`px-2 py-1 rounded-[2px] border-[1px] border-neutral-black font-display text-[9px] font-black uppercase tracking-[1px] shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] ${statusPillClass[product.status]}`}>
                                                 {product.status}
@@ -277,6 +288,14 @@ export default function ArtistProductManager() {
                                         </td>
                                         <td className="py-5 px-6">
                                             <div className="flex gap-2">
+                                                {product.status === "DRAFT" && (
+                                                    <button
+                                                        onClick={() => handleEdit(product.id)}
+                                                        className="px-4 py-2 bg-white text-neutral-black border-[1px] border-neutral-black rounded-[2px] font-display text-[9px] font-black uppercase tracking-[1px] hover:translate-x-[1px] hover:translate-y-[1px] transition-all"
+                                                    >
+                                                        Edit
+                                                    </button>
+                                                )}
                                                 {product.status === "DRAFT" && (
                                                     <button
                                                         onClick={() => handlePublish(product.id)}

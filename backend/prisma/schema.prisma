@@ -8,30 +8,30 @@ datasource db {
 }
 
 model User {
-  id                      String             @id @default(uuid())
-  email                   String             @unique
+  id                      String               @id @default(uuid())
+  email                   String               @unique
   name                    String
   password                String?
-  tokenVersion            Int                @default(0)
-  createdAt               DateTime           @default(now())
-  updatedAt               DateTime           @updatedAt
+  tokenVersion            Int                  @default(0)
+  createdAt               DateTime             @default(now())
+  updatedAt               DateTime             @updatedAt
   payoutDetails           Json?
-  artistNumber            Int?               @unique
-  authProvider            String             @default("LOCAL")
+  artistNumber            Int?                 @unique
+  authProvider            String               @default("LOCAL")
   behanceUrl              String?
   bio                     String?
-  canResubmitVerification Boolean            @default(false)
+  canResubmitVerification Boolean              @default(false)
   coverPhotoKey           String?
   coverPhotoUrl           String?
   displayName             String?
   displayPhotoKey         String?
   displayPhotoUrl         String?
   dribbbleUrl             String?
-  googleId                String?            @unique
+  googleId                String?              @unique
   instagramUrl            String?
-  isAdmin                 Boolean            @default(false)
-  isArtist                Boolean            @default(false)
-  isEmailVerified         Boolean            @default(false)
+  isAdmin                 Boolean              @default(false)
+  isArtist                Boolean              @default(false)
+  isEmailVerified         Boolean              @default(false)
   otpCode                 String?
   otpExpiresAt            DateTime?
   portfolioUrl            String?
@@ -39,15 +39,23 @@ model User {
   resetPasswordToken      String?
   twitterUrl              String?
   verificationNote        String?
-  verificationStatus      VerificationStatus @default(UNVERIFIED)
+  verificationStatus      VerificationStatus   @default(UNVERIFIED)
   verifiedAt              DateTime?
-  artistRating            Float              @default(0.0)
-  reviewCount             Int                @default(0)
+  artistRating            Float                @default(0.0)
+  reviewCount             Int                  @default(0)
   designs                 Design[]
   orders                  Order[]
   products                Product[]
-  customerReviews         Review[]           @relation("CustomerReviews")
-  artistReviews           Review[]           @relation("ArtistReviews")
+  artistOrderItems        OrderItem[]          @relation("ArtistOrderItems")
+  payoutMethods           ArtistPayoutMethod[] @relation("ArtistPayoutMethods")
+  payoutMethodReviews     ArtistPayoutReview[] @relation("ArtistPayoutMethodReviews")
+  payoutReviewsPerformed  ArtistPayoutReview[] @relation("PayoutMethodReviewedBy")
+  artistSettlements       ArtistSettlement[]   @relation("ArtistSettlements")
+  settlementsProcessed    ArtistSettlement[]   @relation("ArtistSettlementProcessedBy")
+  customerReviews         Review[]             @relation("CustomerReviews")
+  artistReviews           Review[]             @relation("ArtistReviews")
+  returnClaims            OrderReturnClaim[]   @relation("CustomerReturnClaims")
+  reviewedReturnClaims    OrderReturnClaim[]   @relation("ReturnClaimReviewedBy")
 }
 
 model Design {
@@ -68,9 +76,11 @@ model Design {
 }
 
 model Category {
-  id       String  @id @default(uuid())
-  name     String  @unique
-  imageUrl String?
+  id        String  @id @default(uuid())
+  name      String  @unique
+  imageUrl  String?
+  /// Display order when site category_sort_mode is "custom" (lower first).
+  sortOrder Int     @default(0)
 }
 
 model SiteConfig {
@@ -103,6 +113,12 @@ model Product {
   backMockupFileKey  String?
   categories         String[]
   globalColors       GlobalColor[]
+  /// Per-fabric hex → { front, back? } mockup URLs (JSON). Fallback: mockupImageUrl / backMockupImageUrl.
+  colorMockups       Json?
+  /// Curated “latest drops” on home / shop (max 10 published); toggled by admin.
+  isLatestDrop       Boolean          @default(false)
+  /// Persisted artist-side mockup editor state used to reopen draft products.
+  draftEditorState   Json?
   stockStatus        StockStatus      @default(IN_STOCK)
   orderItems         OrderItem[]
   reviews            Review[]
@@ -124,20 +140,32 @@ model ProductVariant {
 }
 
 model Order {
-  id              String           @id @default(uuid())
-  userId          String
-  totalAmount     Float
-  status          OrderStatus      @default(PENDING)
-  paymentIntentId String?          @unique
-  createdAt       DateTime         @default(now())
-  updatedAt       DateTime         @updatedAt
-  couponCode      String?
-  discountAmount  Float            @default(0)
-  user            User             @relation(fields: [userId], references: [id])
-  items           OrderItem[]
-  reviews         Review[]
-  payment         Payment?
-  shippingAddress ShippingAddress?
+  id                    String                @id @default(uuid())
+  userId                String
+  subtotalAmount        Float                 @default(0)
+  shippingAmount        Float                 @default(0)
+  totalAmount           Float
+  currency              String                @default("inr")
+  status                OrderStatus           @default(PENDING)
+  paymentStatusSnapshot PaymentStatus?
+  paymentIntentId       String?               @unique
+  createdAt             DateTime              @default(now())
+  updatedAt             DateTime              @updatedAt
+  couponCode            String?
+  discountAmount        Float                 @default(0)
+  pricingVersion        Int                   @default(1)
+  pricingSnapshot       Json?
+  paymentVerifiedAt     DateTime?
+  paidAt                DateTime?
+  cancelledAt           DateTime?
+  cancelReason          String?
+  user                  User                  @relation(fields: [userId], references: [id])
+  items                 OrderItem[]
+  reviews               Review[]
+  payment               Payment?
+  webhookEvents         PaymentWebhookEvent[]
+  shippingAddress       ShippingAddress?
+  returnClaim           OrderReturnClaim?
 }
 
 model Coupon {
@@ -161,15 +189,20 @@ model SpecialOffer {
 }
 
 model OrderItem {
-  id        String  @id @default(uuid())
-  orderId   String
-  quantity  Int
-  price     Float
-  size      String
-  color     String
-  productId String
-  order     Order   @relation(fields: [orderId], references: [id])
-  product   Product @relation(fields: [productId], references: [id])
+  id                String  @id @default(uuid())
+  orderId           String
+  quantity          Int
+  price             Float
+  size              String
+  color             String
+  productId         String
+  artistId          String?
+  artistShareAmount Float   @default(0)
+  platformFeeAmount Float   @default(0)
+  pricingSnapshot   Json?
+  artist            User?   @relation("ArtistOrderItems", fields: [artistId], references: [id])
+  order             Order   @relation(fields: [orderId], references: [id])
+  product           Product @relation(fields: [productId], references: [id])
 }
 
 model ShippingAddress {
@@ -182,20 +215,161 @@ model ShippingAddress {
   state      String
   postalCode String
   country    String
+  phone      String?
   order      Order   @relation(fields: [orderId], references: [id])
 }
 
 model Payment {
-  id              String          @id @default(uuid())
-  orderId         String          @unique
-  amount          Float
-  currency        String          @default("inr")
-  status          PaymentStatus   @default(PENDING)
-  provider        PaymentProvider @default(RAZORPAY)
-  paymentIntentId String          @unique
-  createdAt       DateTime        @default(now())
-  updatedAt       DateTime        @updatedAt
-  order           Order           @relation(fields: [orderId], references: [id])
+  id                 String                @id @default(uuid())
+  orderId            String                @unique
+  amount             Float
+  currency           String                @default("inr")
+  status             PaymentStatus         @default(PENDING)
+  provider           PaymentProvider       @default(RAZORPAY)
+  paymentIntentId    String                @unique
+  gatewayOrderId     String?               @unique
+  gatewayPaymentId   String?               @unique
+  gatewaySignature   String?
+  paymentMethod      String?
+  failureCode        String?
+  failureDescription String?
+  verifiedAt         DateTime?
+  capturedAt         DateTime?
+  refundedAmount     Float                 @default(0)
+  refundReference    String?
+  gatewayPayload     Json?
+  createdAt          DateTime              @default(now())
+  updatedAt          DateTime              @updatedAt
+  order              Order                 @relation(fields: [orderId], references: [id])
+  webhookEvents      PaymentWebhookEvent[]
+}
+
+model PaymentWebhookEvent {
+  id              String                  @id @default(uuid())
+  provider        PaymentProvider         @default(RAZORPAY)
+  providerEventId String
+  eventType       String
+  signature       String?
+  payload         Json
+  payloadHash     String?
+  status          WebhookProcessingStatus @default(RECEIVED)
+  errorMessage    String?
+  receivedAt      DateTime                @default(now())
+  processedAt     DateTime?
+  orderId         String?
+  paymentId       String?
+  order           Order?                  @relation(fields: [orderId], references: [id])
+  payment         Payment?                @relation(fields: [paymentId], references: [id])
+
+  @@unique([provider, providerEventId])
+  @@index([orderId])
+  @@index([paymentId])
+  @@index([eventType, status])
+}
+
+model OrderReturnClaim {
+  id                String            @id @default(uuid())
+  orderId           String            @unique
+  customerId        String
+  reason            ReturnClaimReason
+  status            ReturnClaimStatus @default(OPEN)
+  description       String
+  evidenceUrls      Json?
+  evidenceKeys      Json?
+  requestedAt       DateTime          @default(now())
+  reviewedAt        DateTime?
+  reviewNote        String?
+  reviewedByAdminId String?
+  createdAt         DateTime          @default(now())
+  updatedAt         DateTime          @updatedAt
+  order             Order             @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  customer          User              @relation("CustomerReturnClaims", fields: [customerId], references: [id])
+  reviewedByAdmin   User?             @relation("ReturnClaimReviewedBy", fields: [reviewedByAdminId], references: [id])
+
+  @@index([customerId, status])
+  @@index([status, requestedAt])
+}
+
+model ArtistPayoutMethod {
+  id                         String                   @id @default(uuid())
+  artistId                   String
+  methodType                 PayoutMethodType
+  verificationStatus         PayoutVerificationStatus @default(DRAFT)
+  upiId                      String?
+  upiName                    String?
+  bankAccountName            String?
+  bankAccountNumberEncrypted String?
+  bankAccountNumberLast4     String?
+  bankIfsc                   String?
+  bankName                   String?
+  methodFingerprint          String?
+  isDefault                  Boolean                  @default(false)
+  isActive                   Boolean                  @default(true)
+  submittedAt                DateTime?
+  verifiedAt                 DateTime?
+  rejectedAt                 DateTime?
+  rejectionReason            String?
+  verificationNotes          String?
+  providerValidationId       String?
+  providerValidationStatus   String?
+  providerValidationMode     String?
+  providerValidationReference String?
+  providerContactId          String?
+  providerFundAccountId      String?
+  providerRegisteredName     String?
+  providerNameMatchScore     Int?
+  providerValidationReason   String?
+  providerValidationPayload  Json?
+  providerValidatedAt        DateTime?
+  providerUtr               String?
+  createdAt                  DateTime                 @default(now())
+  updatedAt                  DateTime                 @updatedAt
+  artist                     User                     @relation("ArtistPayoutMethods", fields: [artistId], references: [id])
+  reviews                    ArtistPayoutReview[]
+  settlements                ArtistSettlement[]
+
+  @@unique([artistId, methodFingerprint])
+  @@unique([providerValidationId])
+  @@index([artistId, verificationStatus])
+}
+
+model ArtistPayoutReview {
+  id              String             @id @default(uuid())
+  payoutMethodId  String
+  artistId        String
+  reviewerAdminId String
+  action          PayoutReviewAction
+  note            String?
+  createdAt       DateTime           @default(now())
+  payoutMethod    ArtistPayoutMethod @relation(fields: [payoutMethodId], references: [id], onDelete: Cascade)
+  artist          User               @relation("ArtistPayoutMethodReviews", fields: [artistId], references: [id])
+  reviewerAdmin   User               @relation("PayoutMethodReviewedBy", fields: [reviewerAdminId], references: [id])
+
+  @@index([payoutMethodId])
+  @@index([artistId, createdAt])
+}
+
+model ArtistSettlement {
+  id                 String                 @id @default(uuid())
+  artistId           String
+  payoutMethodId     String?
+  amount             Float
+  currency           String                 @default("inr")
+  status             ArtistSettlementStatus @default(PENDING)
+  periodStart        DateTime
+  periodEnd          DateTime
+  bankReference      String?
+  notes              String?
+  processedByAdminId String?
+  processedAt        DateTime?
+  createdAt          DateTime               @default(now())
+  updatedAt          DateTime               @updatedAt
+  artist             User                   @relation("ArtistSettlements", fields: [artistId], references: [id])
+  payoutMethod       ArtistPayoutMethod?    @relation(fields: [payoutMethodId], references: [id])
+  processedByAdmin   User?                  @relation("ArtistSettlementProcessedBy", fields: [processedByAdminId], references: [id])
+
+  @@index([artistId, status])
+  @@index([payoutMethodId])
 }
 
 enum VerificationStatus {
@@ -250,6 +424,59 @@ enum PaymentStatus {
 enum PaymentProvider {
   STRIPE
   RAZORPAY
+}
+
+enum WebhookProcessingStatus {
+  RECEIVED
+  PROCESSED
+  IGNORED
+  FAILED
+}
+
+enum PayoutMethodType {
+  UPI
+  BANK_ACCOUNT
+}
+
+enum PayoutVerificationStatus {
+  DRAFT
+  PENDING_PROVIDER
+  PENDING_REVIEW
+  VERIFIED
+  REJECTED
+  REQUIRES_RESUBMISSION
+  DISABLED
+}
+
+enum PayoutReviewAction {
+  APPROVED
+  REJECTED
+  REQUIRES_RESUBMISSION
+}
+
+enum ArtistSettlementStatus {
+  PENDING
+  APPROVED
+  PROCESSING
+  PAID
+  FAILED
+  CANCELLED
+}
+
+enum ReturnClaimReason {
+  DAMAGED_GOODS
+  WRONG_PRODUCT
+  WRONG_SIZE
+  WRONG_COLOR
+  OTHER_ELIGIBLE_ISSUE
+}
+
+enum ReturnClaimStatus {
+  OPEN
+  UNDER_REVIEW
+  APPROVED
+  REJECTED
+  REFUNDED
 }
 
 model GlobalColor {

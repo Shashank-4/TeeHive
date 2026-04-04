@@ -5,6 +5,15 @@ import { calculateProductPrice, getActiveSpecialOffer } from "../utils/productUt
 
 const prisma = new PrismaClient();
 
+/** Units assigned to new products when the artist does not send a stock value. Configured in admin (inventory_defaults). */
+export async function getDefaultProductStock(): Promise<number> {
+    const row = await prisma.siteConfig.findUnique({ where: { key: "inventory_defaults" } });
+    const v = row?.value as { defaultProductStock?: number } | null;
+    const n = v?.defaultProductStock;
+    if (typeof n === "number" && Number.isFinite(n) && n >= 0) return Math.floor(n);
+    return 100;
+}
+
 const s3 = new S3Client({
     region: "auto",
     endpoint: `https://${process.env.CLOUDFLARE_ACCOUNT_ID}.r2.cloudflarestorage.com`,
@@ -38,11 +47,12 @@ export const uploadMockupToR2 = async (
     };
 };
 
-// ---------- Upload site asset to R2 ----------
-export const uploadSiteAssetToR2 = async (
-    file: Express.Multer.File
+// ---------- Upload generic asset to R2 ----------
+export const uploadAssetToR2 = async (
+    file: Express.Multer.File,
+    prefix = "assets"
 ): Promise<{ assetUrl: string; assetKey: string }> => {
-    const fileKey = `assets/${crypto.randomUUID()}-${file.originalname}`;
+    const fileKey = `${prefix}/${crypto.randomUUID()}-${file.originalname}`;
 
     await s3.send(
         new PutObjectCommand({
@@ -57,6 +67,13 @@ export const uploadSiteAssetToR2 = async (
         assetUrl: `${PUBLIC_URL}/${fileKey}`,
         assetKey: fileKey,
     };
+};
+
+// ---------- Upload site asset to R2 ----------
+export const uploadSiteAssetToR2 = async (
+    file: Express.Multer.File
+): Promise<{ assetUrl: string; assetKey: string }> => {
+    return uploadAssetToR2(file, "assets");
 };
 
 // ---------- Delete file from R2 ----------
@@ -91,6 +108,8 @@ interface CreateProductInput {
     mockupFileKey?: string;
     backMockupImageUrl?: string;
     backMockupFileKey?: string;
+    colorMockups?: Record<string, { front: string; back?: string }>;
+    draftEditorState?: Prisma.InputJsonValue;
     designId: string;
     artistId: string;
 }
@@ -103,6 +122,11 @@ export const createProductService = async (data: CreateProductInput) => {
 
     if (!design) {
         throw new Error("Design not found or does not belong to you");
+    }
+
+    // Enforce: only APPROVED designs can be used to create products.
+    if (design.status !== "APPROVED") {
+        throw new Error("Only approved designs can be used to create products.");
     }
 
     // --- NEW: Block Design Reuse ---
@@ -140,6 +164,8 @@ export const createProductService = async (data: CreateProductInput) => {
             mockupFileKey: data.mockupFileKey,
             backMockupImageUrl: data.backMockupImageUrl,
             backMockupFileKey: data.backMockupFileKey,
+            colorMockups: data.colorMockups && Object.keys(data.colorMockups).length > 0 ? data.colorMockups : undefined,
+            draftEditorState: data.draftEditorState,
             design: { connect: { id: data.designId } },
             artist: { connect: { id: data.artistId } },
         },
@@ -157,6 +183,15 @@ export const getProductByIdService = async (id: string) => {
             include: {
                 design: { select: { id: true, title: true, imageUrl: true } },
                 artist: { select: { id: true, name: true, email: true, artistRating: true, reviewCount: true, displayName: true } },
+                variants: {
+                    select: {
+                        id: true,
+                        color: true,
+                        size: true,
+                        stock: true,
+                        stockStatus: true,
+                    },
+                },
             },
         }),
         getActiveSpecialOffer()
@@ -184,6 +219,8 @@ interface ProductFilters {
     page?: number;
     limit?: number;
     search?: string;
+    /** When true, only products marked as latest drops (admin); still PUBLISHED only. */
+    latestDrops?: boolean;
 }
 
 export const getPublishedProductsService = async (filters: ProductFilters) => {
@@ -195,14 +232,20 @@ export const getPublishedProductsService = async (filters: ProductFilters) => {
         status: "PUBLISHED",
     };
 
+    if (filters.latestDrops) {
+        where.isLatestDrop = true;
+    }
+
     if (filters.category && filters.category !== "all") {
         where.categories = { has: filters.category };
     }
 
     if (filters.search) {
+        const normalizedSearch = filters.search.trim().toLowerCase();
         where.OR = [
-            { name: { contains: filters.search, mode: "insensitive" } },
-            { artist: { name: { contains: filters.search, mode: "insensitive" } } },
+            { name: { contains: normalizedSearch, mode: "insensitive" } },
+            { artist: { name: { contains: normalizedSearch, mode: "insensitive" } } },
+            { tags: { has: normalizedSearch } },
         ];
     }
 
@@ -294,6 +337,21 @@ export const getProductsByArtistService = async (
     });
 };
 
+export const getArtistDraftProductByIdService = async (id: string, artistId: string) => {
+    const product = await prisma.product.findFirst({
+        where: { id, artistId },
+        include: {
+            design: { select: { id: true, title: true, imageUrl: true } },
+        },
+    });
+
+    if (!product) {
+        throw new Error("Product not found or does not belong to you");
+    }
+
+    return product;
+};
+
 // ---------- Update product ----------
 interface UpdateProductInput {
     name?: string;
@@ -303,6 +361,19 @@ interface UpdateProductInput {
     category?: string;
     tshirtColor?: string;
     stock?: number;
+    categories?: string[];
+    availableColors?: string[];
+    primaryColor?: string;
+    primaryView?: string;
+    tags?: string[];
+    status?: ProductStatus;
+    mockupImageUrl?: string;
+    mockupFileKey?: string;
+    backMockupImageUrl?: string | null;
+    backMockupFileKey?: string | null;
+    colorMockups?: Record<string, { front: string; back?: string }>;
+    draftEditorState?: Prisma.InputJsonValue;
+    designId?: string;
 }
 
 export const updateProductService = async (
@@ -322,9 +393,14 @@ export const updateProductService = async (
         throw new Error("Published products cannot be edited. Please archive and create a new one if needed.");
     }
 
+    const { designId, ...rest } = data;
+
     return prisma.product.update({
         where: { id },
-        data,
+        data: {
+            ...rest,
+            ...(designId ? { design: { connect: { id: designId } } } : {}),
+        },
         include: {
             design: { select: { id: true, title: true, imageUrl: true } },
         },

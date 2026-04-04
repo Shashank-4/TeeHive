@@ -7,13 +7,13 @@ interface ProductVariantsModalProps {
     onClose: () => void;
     productId: string | null;
     productTitle: string;
-    onSaveSuccess: (newTotalStock: number) => void;
+    onSaveSuccess: (newStockStatus: "IN_STOCK" | "LOW_STOCK" | "OUT_OF_STOCK") => void;
 }
 
 interface Variant {
     color: string;
     size: string;
-    stock: number;
+    stockStatus: "IN_STOCK" | "LOW_STOCK" | "OUT_OF_STOCK";
 }
 
 const SIZES = ["S", "M", "L", "XL", "2XL"];
@@ -49,7 +49,7 @@ export default function ProductVariantsModal({ isOpen, onClose, productId, produ
                     grid.push({
                         color,
                         size,
-                        stock: match ? match.stock : 0
+                        stockStatus: match?.stockStatus || "OUT_OF_STOCK"
                     });
                 }
             }
@@ -63,8 +63,13 @@ export default function ProductVariantsModal({ isOpen, onClose, productId, produ
     };
 
     const handleStockChange = (color: string, size: string, value: string) => {
-        const val = parseInt(value) || 0;
-        setVariants(variants.map(v => (v.color === color && v.size === size) ? { ...v, stock: Math.max(0, val) } : v));
+        setVariants(
+            variants.map((v) =>
+                v.color === color && v.size === size
+                    ? { ...v, stockStatus: value as Variant["stockStatus"] }
+                    : v
+            )
+        );
     };
 
     const handleSave = async () => {
@@ -73,8 +78,8 @@ export default function ProductVariantsModal({ isOpen, onClose, productId, produ
         setError(null);
         try {
             const res = await api.patch(`/api/admin/products/${productId}/variants`, { variants });
-            const totalStock = res.data.data?.totalStock || 0;
-            onSaveSuccess(totalStock);
+            const stockStatus = res.data.data?.stockStatus || "OUT_OF_STOCK";
+            onSaveSuccess(stockStatus);
             onClose();
         } catch (err) {
             console.error("Failed to save variants", err);
@@ -124,7 +129,13 @@ export default function ProductVariantsModal({ isOpen, onClose, productId, produ
                             <tbody>
                                 {availableColors.map((color, idx) => {
                                     const rowVariants = variants.filter(v => v.color === color);
-                                    const rowTotal = rowVariants.reduce((sum, v) => sum + v.stock, 0);
+                                    const rowHasInStock = rowVariants.some((v) => v.stockStatus === "IN_STOCK");
+                                    const rowHasLowStock = rowVariants.some((v) => v.stockStatus === "LOW_STOCK");
+                                    const rowLabel = rowHasInStock
+                                        ? "In Stock"
+                                        : rowHasLowStock
+                                          ? "Low Stock"
+                                          : "Out";
                                     return (
                                         <tr key={color} className={`bg-white ${idx !== availableColors.length - 1 ? 'border-b-[2px] border-neutral-g2' : ''}`}>
                                             <td className="p-3 font-display text-[11px] font-black uppercase border-r-[2px] border-neutral-g2">
@@ -139,18 +150,26 @@ export default function ProductVariantsModal({ isOpen, onClose, productId, produ
                                                 return (
                                                     <td key={size} className="p-3 border-r-[2px] border-neutral-g2">
                                                         <div className="flex justify-center">
-                                                            <input 
-                                                                type="number" 
-                                                                min="0"
-                                                                value={v?.stock || 0}
+                                                            <select
+                                                                value={v?.stockStatus || "OUT_OF_STOCK"}
                                                                 onChange={(e) => handleStockChange(color, size, e.target.value)}
-                                                                className={`w-16 px-2 py-1.5 bg-neutral-g1 border-[2px] border-neutral-g3 rounded-[2px] font-display text-[11px] font-black text-center outline-none focus:border-neutral-black focus:bg-white transition-all ${v?.stock === 0 ? 'opacity-50' : 'bg-primary-light border-primary'}`}
-                                                            />
+                                                                className={`w-28 px-2 py-1.5 border-[2px] rounded-[2px] font-display text-[10px] font-black text-center uppercase outline-none focus:border-neutral-black transition-all ${
+                                                                    v?.stockStatus === "IN_STOCK"
+                                                                        ? "bg-success/10 border-success/30 text-success"
+                                                                        : v?.stockStatus === "LOW_STOCK"
+                                                                          ? "bg-primary/10 border-primary/40 text-neutral-black"
+                                                                          : "bg-neutral-g1 border-neutral-g3 text-neutral-g4"
+                                                                }`}
+                                                            >
+                                                                <option value="IN_STOCK">In Stock</option>
+                                                                <option value="LOW_STOCK">Low Stock</option>
+                                                                <option value="OUT_OF_STOCK">Out</option>
+                                                            </select>
                                                         </div>
                                                     </td>
                                                 );
                                             })}
-                                            <td className="p-3 text-right font-display text-[13px] font-black">{rowTotal}</td>
+                                            <td className="p-3 text-right font-display text-[11px] font-black uppercase">{rowLabel}</td>
                                         </tr>
                                     );
                                 })}
@@ -159,11 +178,16 @@ export default function ProductVariantsModal({ isOpen, onClose, productId, produ
                                 <tr>
                                     <td className="p-3 font-display text-[11px] font-black uppercase border-r-[2px] border-neutral-black border-t-[2px]">Totals</td>
                                     {SIZES.map(size => {
-                                        const colTotal = variants.filter(v => v.size === size).reduce((sum, v) => sum + v.stock, 0);
-                                        return <td key={size} className="p-3 text-center border-r-[2px] border-neutral-black border-t-[2px] font-display text-[13px] font-black">{colTotal}</td>
+                                        const column = variants.filter(v => v.size === size);
+                                        const label = column.some(v => v.stockStatus === "IN_STOCK")
+                                            ? "In"
+                                            : column.some(v => v.stockStatus === "LOW_STOCK")
+                                              ? "Low"
+                                              : "Out";
+                                        return <td key={size} className="p-3 text-center border-r-[2px] border-neutral-black border-t-[2px] font-display text-[11px] font-black uppercase">{label}</td>
                                     })}
-                                    <td className="p-3 text-right border-t-[2px] border-neutral-black font-display text-[14px] font-black text-primary-dark">
-                                        {variants.reduce((sum, v) => sum + v.stock, 0)}
+                                    <td className="p-3 text-right border-t-[2px] border-neutral-black font-display text-[11px] font-black text-primary-dark uppercase">
+                                        Status
                                     </td>
                                 </tr>
                             </tfoot>

@@ -7,6 +7,8 @@ import {
     updateCategoryHandler,
     deleteCategoryHandler,
     getCategoriesHandler,
+    updateCategorySortModeHandler,
+    reorderCategoriesHandler,
 } from "../controllers/category.controller";
 
 const upload = multer({
@@ -21,7 +23,15 @@ const router = Router();
 // Public route to fetch all categories
 router.get("/", getCategoriesHandler);
 
-// Admin routes to manage categories
+// Admin routes to manage categories (specific paths before /:id)
+router.patch(
+    "/sort-mode",
+    requireUser,
+    requireRole("admin"),
+    updateCategorySortModeHandler
+);
+router.patch("/reorder", requireUser, requireRole("admin"), reorderCategoriesHandler);
+
 router.post("/", requireUser, requireRole("admin"), upload.single("image"), createCategoryHandler);
 router.patch("/:id", requireUser, requireRole("admin"), upload.single("image"), updateCategoryHandler);
 router.delete("/:id", requireUser, requireRole("admin"), deleteCategoryHandler);

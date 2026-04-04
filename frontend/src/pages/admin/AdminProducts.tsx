@@ -11,7 +11,8 @@ import {
     TrendingUp,
     Filter,
     Database,
-    Layers
+    Layers,
+    Star,
 } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
 import api from "../../api/axios";
@@ -32,6 +33,7 @@ interface AdminProduct {
     rating: number;
     status: string;
     image: string;
+    isLatestDrop?: boolean;
 }
 
 interface PaginationData {
@@ -59,10 +61,16 @@ export default function AdminProducts() {
 
     const [variantModalOpen, setVariantModalOpen] = useState(false);
     const [selectedProductForVariants, setSelectedProductForVariants] = useState<{ id: string, title: string } | null>(null);
+    const [latestDropCount, setLatestDropCount] = useState(0);
+    const [latestDropMax, setLatestDropMax] = useState(10);
 
-    const handleVariantSaveSuccess = (newTotalStock: number) => {
+    const handleVariantSaveSuccess = (newStockStatus: "IN_STOCK" | "LOW_STOCK" | "OUT_OF_STOCK") => {
         if (selectedProductForVariants) {
-            setProducts(products.map(p => p.id === selectedProductForVariants.id ? { ...p, stock: newTotalStock } : p));
+            setProducts(
+                products.map((p) =>
+                    p.id === selectedProductForVariants.id ? { ...p, stockStatus: newStockStatus } : p
+                )
+            );
         }
     };
 
@@ -72,6 +80,8 @@ export default function AdminProducts() {
             const res = await api.get(`/api/admin/products`, { params: { page, limit: 10, search, status: statusType } });
             setProducts(res.data.data.products);
             setPagination(res.data.data.pagination);
+            if (typeof res.data.data.latestDropCount === "number") setLatestDropCount(res.data.data.latestDropCount);
+            if (typeof res.data.data.latestDropMax === "number") setLatestDropMax(res.data.data.latestDropMax);
             setError(null);
         } catch (err) {
             console.error("Failed to load products", err);
@@ -90,12 +100,47 @@ export default function AdminProducts() {
         setActionLoading({ ...actionLoading, [productId]: true });
         try {
             await api.patch(`/api/admin/products/${productId}/status`, { status: newStatus });
-            setProducts(products.map(p => p.id === productId ? { ...p, status: newStatus } : p));
+            setProducts(
+                products.map((p) =>
+                    p.id === productId
+                        ? { ...p, status: newStatus, isLatestDrop: newStatus === "PUBLISHED" ? p.isLatestDrop : false }
+                        : p
+                )
+            );
+            if (newStatus !== "PUBLISHED") {
+                const removed = products.find((p) => p.id === productId)?.isLatestDrop;
+                if (removed) setLatestDropCount((c) => Math.max(0, c - 1));
+            }
         } catch (err) {
             console.error("Failed to update status", err);
             alert("Failed to update product status");
         } finally {
             setActionLoading({ ...actionLoading, [productId]: false });
+        }
+    };
+
+    const handleLatestDropToggle = async (product: AdminProduct) => {
+        if (product.status !== "PUBLISHED") {
+            alert("Only published products can be marked as latest drops.");
+            return;
+        }
+        const next = !product.isLatestDrop;
+        if (next && latestDropCount >= latestDropMax) {
+            alert(`You can mark at most ${latestDropMax} products as latest drops.`);
+            return;
+        }
+        setActionLoading({ ...actionLoading, [product.id]: true });
+        try {
+            const res = await api.patch(`/api/admin/products/${product.id}/latest-drop`, { isLatestDrop: next });
+            setProducts((prev) => prev.map((p) => (p.id === product.id ? { ...p, isLatestDrop: next } : p)));
+            if (typeof res.data?.data?.latestDropCount === "number") {
+                setLatestDropCount(res.data.data.latestDropCount);
+            }
+        } catch (err: any) {
+            const msg = err?.response?.data?.message || "Failed to update latest drop";
+            alert(msg);
+        } finally {
+            setActionLoading({ ...actionLoading, [product.id]: false });
         }
     };
 
@@ -127,6 +172,10 @@ export default function AdminProducts() {
                         <p className="font-display text-[14px] font-bold text-neutral-g4 uppercase tracking-wider">
                             Real-time monitoring of SKU performance, stock levels, and publication status.
                         </p>
+                        <div className="inline-flex items-center gap-2 mt-3 px-3 py-1.5 bg-white border-[2px] border-neutral-black rounded-[4px] font-display text-[10px] font-black uppercase tracking-[1px]">
+                            <Star className="w-3.5 h-3.5 fill-primary text-neutral-black" />
+                            Latest drops: {latestDropCount}/{latestDropMax} (shop + home)
+                        </div>
                     </div>
                 </div>
 
@@ -185,7 +234,7 @@ export default function AdminProducts() {
                         <table className="w-full border-collapse">
                             <thead>
                                 <tr className="bg-neutral-black text-white">
-                                    {["Asset Node", "Personnel", "Credit Value", "Buffer Level", "Data Metrics", "Logic State", "Actions"].map(h => (
+                                    {["Asset Node", "Personnel", "Credit Value", "Buffer Level", "Data Metrics", "Logic State", "Spotlight", "Actions"].map(h => (
                                         <th key={h} className="font-display text-[10px] font-black tracking-[2px] uppercase py-5 px-6 text-left whitespace-nowrap">
                                             {h}
                                         </th>
@@ -194,14 +243,14 @@ export default function AdminProducts() {
                             </thead>
                             <tbody className="divide-y-[1px] divide-neutral-black/10">
                                 {loading && products.length === 0 ? (
-                                    <tr><td colSpan={7} className="py-24 text-center">
+                                    <tr><td colSpan={8} className="py-24 text-center">
                                         <div className="flex flex-col items-center gap-4">
                                             <Loader2 className="w-12 h-12 text-primary animate-spin" />
                                             <p className="font-display text-[10px] font-black uppercase tracking-[2px]">Syncing Buffer Feeds...</p>
                                         </div>
                                     </td></tr>
                                 ) : products.length === 0 ? (
-                                    <tr><td colSpan={7} className="py-24 text-center">
+                                    <tr><td colSpan={8} className="py-24 text-center">
                                         <div className="flex flex-col items-center gap-4 opacity-30">
                                             <Database className="w-16 h-16" />
                                             <p className="font-display text-[12px] font-black uppercase tracking-[2px]">Inventory Zero Detected</p>
@@ -256,7 +305,7 @@ export default function AdminProducts() {
                                                             <option value="LOW_STOCK">Low Stock</option>
                                                             <option value="OUT_OF_STOCK">Out of Stock</option>
                                                         </select>
-                                                        <StockStatusPill stock={(product as any).stockStatus === 'OUT_OF_STOCK' ? 0 : ((product as any).stockStatus === 'LOW_STOCK' ? 5 : 100)} />
+                                                        <StockStatusPill stockStatus={(product as any).stockStatus} />
                                                     </div>
                                                 </div>
                                             </td>
@@ -283,6 +332,35 @@ export default function AdminProducts() {
                                                     <option value="DRAFT">Registry Only</option>
                                                     <option value="ARCHIVED">Archived</option>
                                                 </select>
+                                            </td>
+                                            <td className="py-5 px-6">
+                                                <button
+                                                    type="button"
+                                                    title={
+                                                        product.status !== "PUBLISHED"
+                                                            ? "Publish the product first"
+                                                            : product.isLatestDrop
+                                                              ? "Remove from latest drops"
+                                                              : latestDropCount >= latestDropMax
+                                                                ? `Maximum ${latestDropMax} latest drops`
+                                                                : "Add to latest drops (home + shop)"
+                                                    }
+                                                    disabled={
+                                                        actionLoading[product.id] ||
+                                                        product.status !== "PUBLISHED" ||
+                                                        (!product.isLatestDrop && latestDropCount >= latestDropMax)
+                                                    }
+                                                    onClick={() => handleLatestDropToggle(product)}
+                                                    className={`p-3 rounded-[4px] border-[2px] border-neutral-black transition-all shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] disabled:opacity-40 disabled:cursor-not-allowed disabled:shadow-none ${
+                                                        product.isLatestDrop
+                                                            ? "bg-primary text-neutral-black hover:translate-x-[1px] hover:translate-y-[1px]"
+                                                            : "bg-white text-neutral-g4 hover:bg-neutral-black hover:text-primary"
+                                                    }`}
+                                                >
+                                                    <Star
+                                                        className={`w-4 h-4 ${product.isLatestDrop ? "fill-neutral-black text-neutral-black" : ""}`}
+                                                    />
+                                                </button>
                                             </td>
                                             <td className="py-5 px-6 text-right">
                                                 <div className="flex justify-end gap-3">

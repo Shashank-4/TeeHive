@@ -1,5 +1,6 @@
 import { Outlet, NavLink, useNavigate, useLocation } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
+import api from "../../api/axios";
 import {
     LayoutDashboard,
     Palette,
@@ -7,12 +8,10 @@ import {
     Package,
     UserCircle,
     LogOut,
-    Menu,
     X,
     ChevronLeft,
     Crown,
     ShieldCheck,
-    Bell,
     ClipboardList,
     Star,
 } from "lucide-react";
@@ -30,28 +29,13 @@ const artistNavItems = [
     { to: "/artist/profile", icon: UserCircle, label: "Profile", requiresVerified: false },
 ];
 
-// Map route paths to topbar titles/subtitles
-const pageTitles: Record<string, { title: string; subtitle: string }> = {
-    "/artist/dashboard": { title: "ARTIST DASHBOARD", subtitle: "Your creative store is live — keep uploading, keep earning" },
-    "/artist/orders": { title: "MY ORDERS", subtitle: "All customer orders for your products" },
-    "/artist/manage-designs": { title: "MY DESIGNS", subtitle: "Upload and manage your design collection" },
-    "/artist/create-mockup": { title: "MOCKUP CREATOR", subtitle: "Design your product mockups" },
-    "/artist/manage-products": { title: "MY PRODUCTS", subtitle: "Manage your published products" },
-    "/artist/payout": { title: "PAYOUT DETAILS", subtitle: "Where TeeHive sends your earnings every month" },
-    "/artist/earnings": { title: "EARNINGS & PAYOUTS", subtitle: "Track your income — you earn 25% on every sale" },
-    "/artist/reviews": { title: "CUSTOMER REVIEWS", subtitle: "See what customers are saying about your products" },
-    "/artist/profile": { title: "PROFILE", subtitle: "View and edit your artist profile" },
-    "/artist/edit-profile": { title: "EDIT PROFILE", subtitle: "Update your storefront details and portfolio" },
-    "/artist/setup-profile": { title: "SETUP PROFILE", subtitle: "Complete your artist profile to get started" },
-    "/artist/verification-status": { title: "VERIFICATION", subtitle: "Track your verification status" },
-};
-
 export default function ArtistSidebarLayout() {
     const { user, signOut } = useAuth();
     const navigate = useNavigate();
     const location = useLocation();
     const [sidebarOpen, setSidebarOpen] = useState(true);
     const [mobileOpen, setMobileOpen] = useState(false);
+    const [headerLogo, setHeaderLogo] = useState("");
 
     const isVerified = user?.verificationStatus === "VERIFIED";
     const isPending = user?.verificationStatus === "PENDING_VERIFICATION";
@@ -66,12 +50,23 @@ export default function ArtistSidebarLayout() {
         }
     }, [user, navigate, location.pathname, isVerified]);
 
+    useEffect(() => {
+        const fetchHeaderLogo = async () => {
+            try {
+                const res = await api.get("/api/config/site_banners");
+                const logo = res.data?.data?.config?.headerLogo;
+                if (typeof logo === "string") setHeaderLogo(logo);
+            } catch {
+                // Keep current fallback logo treatment.
+            }
+        };
+        fetchHeaderLogo();
+    }, []);
+
     const handleSignOut = async () => {
         await signOut();
         navigate("/login");
     };
-
-    const currentPage = pageTitles[location.pathname] || { title: "ARTIST", subtitle: "" };
 
     const StatusBadge = () => {
         if (isVerified) return (
@@ -108,13 +103,23 @@ export default function ArtistSidebarLayout() {
                     className="flex items-center gap-2 cursor-pointer"
                     onClick={() => navigate("/artist/dashboard")}
                 >
-                    <div className="w-8 h-8 bg-primary rounded-[4px] flex items-center justify-center shrink-0">
-                        <Crown className="w-4 h-4 text-neutral-black" />
-                    </div>
-                    {sidebarOpen && (
-                        <span className="font-display text-[21px] font-black tracking-[2px] text-neutral-black whitespace-nowrap transition-opacity duration-200">
-                            TEEHIVE
-                        </span>
+                    {headerLogo ? (
+                        <img
+                            src={headerLogo}
+                            alt="TeeHive"
+                            className={`${sidebarOpen ? "h-8 w-auto max-w-[140px]" : "h-8 w-8"} object-contain shrink-0`}
+                        />
+                    ) : (
+                        <>
+                            <div className="w-8 h-8 bg-primary rounded-[4px] flex items-center justify-center shrink-0">
+                                <Crown className="w-4 h-4 text-neutral-black" />
+                            </div>
+                            {sidebarOpen && (
+                                <span className="font-display text-[21px] font-black tracking-[2px] text-neutral-black whitespace-nowrap transition-opacity duration-200">
+                                    TEEHIVE
+                                </span>
+                            )}
+                        </>
                     )}
                 </div>
                 {/* Desktop toggle */}
@@ -228,52 +233,7 @@ export default function ArtistSidebarLayout() {
             </aside>
 
             {/* Main content area */}
-            <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
-                {/* Topbar */}
-                <div className="bg-white border-b-[1.5px] border-neutral-black h-[60px] flex items-center justify-between px-7 sticky top-0 z-[100] shrink-0">
-                    {/* Left: mobile hamburger + title */}
-                    <div className="flex items-center gap-3">
-                        <button
-                            onClick={() => setMobileOpen(true)}
-                            className="lg:hidden flex items-center justify-center w-9 h-9 border-[1.5px] border-neutral-g2 rounded-[4px] bg-white hover:border-neutral-black transition-colors"
-                        >
-                            <Menu className="w-[17px] h-[17px] stroke-neutral-black stroke-[1.8]" />
-                        </button>
-                        <div>
-                            <div className="font-display text-[20px] font-black tracking-[1px] text-neutral-black leading-tight">
-                                {currentPage.title}
-                            </div>
-                            {currentPage.subtitle && (
-                                <div className="text-[11px] text-neutral-g4 mt-[1px] hidden sm:block">
-                                    {currentPage.subtitle}
-                                </div>
-                            )}
-                        </div>
-                    </div>
-
-                    {/* Right: notifications + profile */}
-                    <div className="flex items-center gap-[6px]">
-                        <button className="w-9 h-9 border-[1.5px] border-neutral-g2 rounded-[4px] bg-white hover:border-neutral-black transition-colors flex items-center justify-center relative">
-                            <Bell className="w-[17px] h-[17px] stroke-neutral-black stroke-[1.8]" />
-                            <span className="absolute top-[5px] right-[5px] w-[7px] h-[7px] bg-danger rounded-full border-[1.5px] border-white"></span>
-                        </button>
-                        <div
-                            onClick={() => navigate("/artist/profile")}
-                            className="hidden sm:flex items-center gap-2 py-[5px] px-[10px] border-[1.5px] border-neutral-g2 rounded-[4px] cursor-pointer hover:border-primary hover:bg-primary-light transition-all"
-                        >
-                            <div className="w-7 h-7 rounded-[3px] bg-primary flex items-center justify-center font-display text-[13px] font-black text-neutral-black">
-                                {(user?.displayName || user?.name || "A").charAt(0).toUpperCase()}
-                            </div>
-                            <div>
-                                <div className="font-display text-[12px] font-bold text-neutral-black leading-tight">
-                                    {user?.displayName || user?.name}
-                                </div>
-                                <div className="text-[10px] text-neutral-g4">Artist Account</div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
+            <div className="flex-1 flex flex-col min-w-0 overflow-hidden">                
                 {/* Page content */}
                 <main className="flex-1 overflow-y-auto">
                     <Outlet />

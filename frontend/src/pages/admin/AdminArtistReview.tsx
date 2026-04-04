@@ -15,6 +15,9 @@ import {
     MessageSquare,
     UserCheck,
     ImageIcon,
+    CreditCard,
+    Smartphone,
+    AlertCircle,
 } from "lucide-react";
 
 interface Design {
@@ -47,6 +50,43 @@ interface ArtistDetail {
     _count: { products: number };
 }
 
+interface PayoutReview {
+    id: string;
+    action: string;
+    note?: string | null;
+    createdAt: string;
+    reviewerAdmin?: {
+        id: string;
+        name: string;
+        email: string;
+    } | null;
+}
+
+interface PayoutMethod {
+    id: string;
+    methodType: "UPI" | "BANK_ACCOUNT";
+    verificationStatus: string;
+    isDefault: boolean;
+    upiIdMasked?: string;
+    upiName?: string;
+    bankAccountName?: string;
+    bankAccountNumberMasked?: string;
+    bankIfsc?: string;
+    bankName?: string;
+    verificationNotes?: string | null;
+    rejectionReason?: string | null;
+    providerValidation?: {
+        validationStatus?: string | null;
+        validationMode?: string | null;
+        registeredName?: string | null;
+        nameMatchScore?: number | null;
+        reason?: string | null;
+        validatedAt?: string | null;
+        utr?: string | null;
+    };
+    reviews?: PayoutReview[];
+}
+
 export default function AdminArtistReview() {
     const { id } = useParams();
     const navigate = useNavigate();
@@ -59,9 +99,17 @@ export default function AdminArtistReview() {
     const [canResubmit, setCanResubmit] = useState<boolean>(false);
     const [actionLoading, setActionLoading] = useState(false);
     const [selectedImage, setSelectedImage] = useState<string | null>(null);
+    const [payoutMethods, setPayoutMethods] = useState<PayoutMethod[]>([]);
+    const [payoutLoading, setPayoutLoading] = useState(false);
+    const [payoutError, setPayoutError] = useState<string | null>(null);
+    const [payoutNotes, setPayoutNotes] = useState<Record<string, string>>({});
+    const [payoutActionLoading, setPayoutActionLoading] = useState<Record<string, boolean>>({});
 
     useEffect(() => {
-        if (id) fetchArtist();
+        if (id) {
+            fetchArtist();
+            fetchPayoutMethods();
+        }
     }, [id]);
 
     const fetchArtist = async () => {
@@ -73,6 +121,20 @@ export default function AdminArtistReview() {
             setError(err.response?.data?.message || "Failed to load artist detail.");
         } finally {
             setLoading(false);
+        }
+    };
+
+    const fetchPayoutMethods = async () => {
+        if (!id) return;
+        setPayoutLoading(true);
+        setPayoutError(null);
+        try {
+            const res = await api.get(`/api/admin/artists/${id}/payout-methods`);
+            setPayoutMethods(res.data.data?.methods || []);
+        } catch (err: any) {
+            setPayoutError(err.response?.data?.message || "Failed to load payout methods.");
+        } finally {
+            setPayoutLoading(false);
         }
     };
 
@@ -105,6 +167,37 @@ export default function AdminArtistReview() {
         } finally {
             setActionLoading(false);
         }
+    };
+
+    const handlePayoutReview = async (
+        payoutMethodId: string,
+        reviewAction: "APPROVED" | "REJECTED" | "REQUIRES_RESUBMISSION"
+    ) => {
+        if (!artist) return;
+        if (reviewAction !== "APPROVED" && !payoutNotes[payoutMethodId]?.trim()) return;
+        setPayoutActionLoading((prev) => ({ ...prev, [payoutMethodId]: true }));
+        setPayoutError(null);
+        try {
+            await api.patch(`/api/admin/artists/${artist.id}/payout-methods/${payoutMethodId}/review`, {
+                action: reviewAction,
+                note: payoutNotes[payoutMethodId]?.trim() || undefined,
+            });
+            await fetchPayoutMethods();
+            setPayoutNotes((prev) => ({ ...prev, [payoutMethodId]: "" }));
+        } catch (err: any) {
+            setPayoutError(err.response?.data?.message || "Failed to review payout method.");
+        } finally {
+            setPayoutActionLoading((prev) => ({ ...prev, [payoutMethodId]: false }));
+        }
+    };
+
+    const payoutStatusClass = (status: string) => {
+        if (status === "VERIFIED") return "bg-success/10 text-success border-success/30";
+        if (status === "PENDING_PROVIDER") return "bg-blue-500/10 text-blue-500 border-blue-500/30";
+        if (status === "PENDING_REVIEW") return "bg-primary/10 text-neutral-black border-primary/40";
+        if (status === "REQUIRES_RESUBMISSION") return "bg-amber-500/10 text-amber-600 border-amber-500/30";
+        if (status === "REJECTED") return "bg-danger/10 text-danger border-danger/30";
+        return "bg-white/10 text-white border-white/20";
     };
 
     if (loading) {
@@ -311,6 +404,10 @@ export default function AdminArtistReview() {
 
                                 <div className="space-y-4">
                                     <div className="flex justify-between items-center text-left">
+                                        <span className="text-[11px] font-black text-white/40 uppercase">Royalty Cycle</span>
+                                        <span className="text-[12px] font-black uppercase">10TH OF MONTH</span>
+                                    </div>
+                                    <div className="flex justify-between items-center text-left">
                                         <span className="text-[11px] font-black text-white/40 uppercase">Drop Volume</span>
                                         <span className="text-[18px] font-black italic">{artist._count.products} NODES</span>
                                     </div>
@@ -320,6 +417,127 @@ export default function AdminArtistReview() {
                                     </div>
                                 </div>
                             </div>
+                        </div>
+
+                        <div className="bg-white border-[3px] border-neutral-black p-8 rounded-[8px] shadow-[8px_8px_0px_0px_rgba(0,0,0,1)]">
+                            <h3 className="font-display text-[12px] font-black uppercase tracking-[2px] text-primary mb-6 border-b-[1px] border-neutral-black/10 pb-4">
+                                Payout Method Review
+                            </h3>
+                            {payoutLoading ? (
+                                <div className="flex items-center gap-3 font-display text-[11px] font-black uppercase text-neutral-g4">
+                                    <Loader2 className="w-4 h-4 animate-spin" /> Loading payout registry...
+                                </div>
+                            ) : payoutError ? (
+                                <div className="border-[2px] border-danger bg-danger/5 text-danger p-4 rounded-[4px] font-display text-[10px] font-black uppercase tracking-[1px] flex items-center gap-3">
+                                    <AlertCircle className="w-4 h-4 shrink-0" />
+                                    <span>{payoutError}</span>
+                                </div>
+                            ) : payoutMethods.length === 0 ? (
+                                <div className="border-[2px] border-dashed border-neutral-g2 p-5 rounded-[4px] font-display text-[10px] font-black uppercase text-neutral-g4">
+                                    No payout method submitted yet.
+                                </div>
+                            ) : (
+                                <div className="space-y-6">
+                                    {payoutMethods.map((method) => (
+                                        <div key={method.id} className="border-[2px] border-neutral-black rounded-[6px] p-5 bg-neutral-g1/40">
+                                            <div className="flex items-start justify-between gap-4">
+                                                <div className="space-y-2">
+                                                    <div className="flex items-center gap-3">
+                                                        <div className="w-10 h-10 border-[2px] border-neutral-black rounded-[4px] bg-white flex items-center justify-center">
+                                                            {method.methodType === "UPI" ? (
+                                                                <Smartphone className="w-5 h-5 text-primary" />
+                                                            ) : (
+                                                                <CreditCard className="w-5 h-5 text-primary" />
+                                                            )}
+                                                        </div>
+                                                        <div>
+                                                            <div className="font-display text-[13px] font-black uppercase">
+                                                                {method.methodType === "UPI" ? "UPI" : "Bank Account"}
+                                                                {method.isDefault ? " • Default" : ""}
+                                                            </div>
+                                                            <div className="font-display text-[10px] font-bold uppercase text-neutral-g4">
+                                                                {method.methodType === "UPI"
+                                                                    ? `${method.upiIdMasked || ""} • ${method.upiName || ""}`
+                                                                    : `${method.bankAccountName || ""} • ${method.bankAccountNumberMasked || ""} • ${method.bankIfsc || ""}`}
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                    <div className={`inline-flex items-center px-3 py-1 rounded-[4px] border font-display text-[9px] font-black uppercase tracking-[1px] ${payoutStatusClass(method.verificationStatus)}`}>
+                                                        {method.verificationStatus.replaceAll("_", " ")}
+                                                    </div>
+                                                </div>
+                                            </div>
+
+                                            <div className="mt-4 space-y-2 font-display text-[10px] font-bold uppercase text-neutral-g4">
+                                                {method.providerValidation?.validationMode && (
+                                                    <div>Provider mode: {method.providerValidation.validationMode.replaceAll("_", " ")}</div>
+                                                )}
+                                                {method.providerValidation?.registeredName && (
+                                                    <div>Registered name: {method.providerValidation.registeredName}</div>
+                                                )}
+                                                {typeof method.providerValidation?.nameMatchScore === "number" && (
+                                                    <div>Name match score: {method.providerValidation.nameMatchScore}</div>
+                                                )}
+                                                {(method.providerValidation?.reason || method.verificationNotes || method.rejectionReason) && (
+                                                    <div className="text-neutral-black">
+                                                        {method.providerValidation?.reason || method.verificationNotes || method.rejectionReason}
+                                                    </div>
+                                                )}
+                                            </div>
+
+                                            {method.reviews?.length ? (
+                                                <div className="mt-4 border-t border-neutral-black/10 pt-4 space-y-2">
+                                                    {method.reviews.slice(0, 2).map((review) => (
+                                                        <div key={review.id} className="font-display text-[10px] font-bold uppercase text-neutral-g4">
+                                                            {review.action.replaceAll("_", " ")} • {new Date(review.createdAt).toLocaleDateString("en-GB")}
+                                                            {review.note ? ` • ${review.note}` : ""}
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            ) : null}
+
+                                            {["PENDING_REVIEW", "REQUIRES_RESUBMISSION", "REJECTED"].includes(method.verificationStatus) && (
+                                                <div className="mt-5 border-t border-neutral-black/10 pt-5 space-y-4">
+                                                    <textarea
+                                                        value={payoutNotes[method.id] || ""}
+                                                        onChange={(e) =>
+                                                            setPayoutNotes((prev) => ({
+                                                                ...prev,
+                                                                [method.id]: e.target.value,
+                                                            }))
+                                                        }
+                                                        placeholder="Add finance note for rejection or resubmission..."
+                                                        className="w-full min-h-[96px] bg-white border-[2px] border-neutral-black rounded-[4px] p-4 font-display text-[11px] font-black uppercase outline-none"
+                                                    />
+                                                    <div className="grid grid-cols-1 gap-3">
+                                                        <button
+                                                            onClick={() => handlePayoutReview(method.id, "APPROVED")}
+                                                            disabled={payoutActionLoading[method.id]}
+                                                            className="w-full py-3 bg-success border-[2px] border-neutral-black text-white rounded-[4px] font-display text-[10px] font-black uppercase shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]"
+                                                        >
+                                                            Approve Verified Method
+                                                        </button>
+                                                        <button
+                                                            onClick={() => handlePayoutReview(method.id, "REQUIRES_RESUBMISSION")}
+                                                            disabled={payoutActionLoading[method.id] || !payoutNotes[method.id]?.trim()}
+                                                            className="w-full py-3 bg-primary border-[2px] border-neutral-black text-neutral-black rounded-[4px] font-display text-[10px] font-black uppercase shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] disabled:opacity-40"
+                                                        >
+                                                            Request Resubmission
+                                                        </button>
+                                                        <button
+                                                            onClick={() => handlePayoutReview(method.id, "REJECTED")}
+                                                            disabled={payoutActionLoading[method.id] || !payoutNotes[method.id]?.trim()}
+                                                            className="w-full py-3 bg-danger border-[2px] border-neutral-black text-white rounded-[4px] font-display text-[10px] font-black uppercase shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] disabled:opacity-40"
+                                                        >
+                                                            Reject Method
+                                                        </button>
+                                                    </div>
+                                                </div>
+                                            )}
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
                         </div>
 
                         {/* Rejection Panel */}

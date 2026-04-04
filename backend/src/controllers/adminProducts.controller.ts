@@ -4,6 +4,14 @@ import { calculateProductPrice, getActiveSpecialOffer } from "../utils/productUt
 
 const prisma = new PrismaClient();
 
+const MAX_LATEST_DROP_PRODUCTS = 10;
+
+function aggregateStatuses(statuses: StockStatus[]): StockStatus {
+    if (statuses.includes("IN_STOCK")) return "IN_STOCK";
+    if (statuses.includes("LOW_STOCK")) return "LOW_STOCK";
+    return "OUT_OF_STOCK";
+}
+
 export const listProductsHandler = async (req: Request, res: Response) => {
     try {
         const page = parseInt(req.query.page as string) || 1;
@@ -20,7 +28,7 @@ export const listProductsHandler = async (req: Request, res: Response) => {
             where.name = { contains: search, mode: "insensitive" };
         }
 
-        const [productsRaw, total, activeOffer] = await Promise.all([
+        const [productsRaw, total, activeOffer, latestDropCount] = await Promise.all([
             prisma.product.findMany({
                 where,
                 skip,
@@ -36,7 +44,8 @@ export const listProductsHandler = async (req: Request, res: Response) => {
                 }
             }),
             prisma.product.count({ where }),
-            getActiveSpecialOffer()
+            getActiveSpecialOffer(),
+            prisma.product.count({ where: { isLatestDrop: true } }),
         ]);
 
         const formattedProducts = productsRaw.map((product) => {
@@ -56,6 +65,7 @@ export const listProductsHandler = async (req: Request, res: Response) => {
                 rating: 4.8, // Placeholder
                 status: product.status,
                 image: product.mockupImageUrl,
+                isLatestDrop: product.isLatestDrop,
             };
         });
 
@@ -63,6 +73,8 @@ export const listProductsHandler = async (req: Request, res: Response) => {
             status: "success",
             data: {
                 products: formattedProducts,
+                latestDropCount,
+                latestDropMax: MAX_LATEST_DROP_PRODUCTS,
                 pagination: {
                     page,
                     limit,
@@ -80,6 +92,54 @@ export const listProductsHandler = async (req: Request, res: Response) => {
     }
 };
 
+export const patchProductLatestDropHandler = async (req: Request, res: Response) => {
+    try {
+        const { id } = req.params;
+        const { isLatestDrop } = req.body as { isLatestDrop?: boolean };
+
+        if (typeof isLatestDrop !== "boolean") {
+            return res.status(400).json({ status: "error", message: "isLatestDrop (boolean) is required" });
+        }
+
+        const existing = await prisma.product.findUnique({ where: { id } });
+        if (!existing) {
+            return res.status(404).json({ status: "error", message: "Product not found" });
+        }
+
+        if (isLatestDrop && existing.status !== "PUBLISHED") {
+            return res.status(400).json({
+                status: "error",
+                message: "Only published products can be marked as latest drops",
+            });
+        }
+
+        if (isLatestDrop && !existing.isLatestDrop) {
+            const count = await prisma.product.count({ where: { isLatestDrop: true } });
+            if (count >= MAX_LATEST_DROP_PRODUCTS) {
+                return res.status(400).json({
+                    status: "error",
+                    message: `You can mark at most ${MAX_LATEST_DROP_PRODUCTS} products as latest drops`,
+                });
+            }
+        }
+
+        await prisma.product.update({
+            where: { id },
+            data: { isLatestDrop },
+        });
+
+        const latestDropCount = await prisma.product.count({ where: { isLatestDrop: true } });
+
+        res.status(200).json({
+            status: "success",
+            data: { isLatestDrop, latestDropCount, latestDropMax: MAX_LATEST_DROP_PRODUCTS },
+        });
+    } catch (error: any) {
+        console.error("Patch latest drop Error:", error);
+        res.status(500).json({ status: "error", message: "Failed to update latest drop flag" });
+    }
+};
+
 export const updateProductStatusHandler = async (req: Request, res: Response) => {
     try {
         const { id } = req.params;
@@ -91,7 +151,10 @@ export const updateProductStatusHandler = async (req: Request, res: Response) =>
 
         const product = await prisma.product.update({
             where: { id },
-            data: { status: status as ProductStatus },
+            data: {
+                status: status as ProductStatus,
+                ...(status !== "PUBLISHED" ? { isLatestDrop: false } : {}),
+            },
         });
 
         res.status(200).json({
@@ -110,27 +173,17 @@ export const updateProductStatusHandler = async (req: Request, res: Response) =>
 export const updateProductStockHandler = async (req: Request, res: Response, next: NextFunction) => {
     try {
         const { id } = req.params;
-        const { stock } = req.body;
+        const stockStatus = req.body.stockStatus ?? req.body.stock;
 
-        const isStockStatus = Object.values(StockStatus).includes(stock as StockStatus);
-        
-        if (!isStockStatus && (stock === undefined || typeof stock !== 'number' || stock < 0)) {
-            return res.status(400).json({ status: "error", message: "Valid status or stock value is required" });
-        }
-
-        const updateData: any = {};
-        if (isStockStatus) {
-            updateData.stockStatus = stock as StockStatus;
-            // map status to some default numeric values for compatibility
-            updateData.stock = stock === 'OUT_OF_STOCK' ? 0 : (stock === 'LOW_STOCK' ? 5 : 100);
-        } else {
-            updateData.stock = stock;
-            updateData.stockStatus = stock > 10 ? 'IN_STOCK' : (stock > 0 ? 'LOW_STOCK' : 'OUT_OF_STOCK');
+        if (!Object.values(StockStatus).includes(stockStatus as StockStatus)) {
+            return res.status(400).json({ status: "error", message: "A valid stockStatus is required" });
         }
 
         const product = await prisma.product.update({
             where: { id },
-            data: updateData,
+            data: {
+                stockStatus: stockStatus as StockStatus,
+            },
         });
 
         res.status(200).json({
@@ -169,27 +222,41 @@ export const updateProductVariantsHandler = async (req: Request, res: Response, 
             return res.status(400).json({ message: "Invalid variants format" });
         }
 
-        // Upsert variants sequentially or via Promise.all
-        // Using upsert in a loop or Promise.all avoids missing variants
-        await Promise.all(variants.map(v => 
-            prisma.productVariant.upsert({
+        await Promise.all(variants.map(v => {
+            const stockStatus = String(v.stockStatus || "").toUpperCase();
+            if (!Object.values(StockStatus).includes(stockStatus as StockStatus)) {
+                throw new Error("Invalid variant stock status");
+            }
+
+            return prisma.productVariant.upsert({
                 where: { productId_color_size: { productId: id, color: String(v.color), size: String(v.size) } },
-                create: { productId: id, color: String(v.color), size: String(v.size), stock: parseInt(v.stock) || 0 },
-                update: { stock: parseInt(v.stock) || 0 }
-            })
-        ));
+                create: {
+                    productId: id,
+                    color: String(v.color),
+                    size: String(v.size),
+                    stockStatus: stockStatus as StockStatus,
+                },
+                update: { stockStatus: stockStatus as StockStatus }
+            });
+        }));
         
-        // Update global product stock
-        const totalStock = await prisma.productVariant.aggregate({
+        const allVariants = await prisma.productVariant.findMany({
             where: { productId: id },
-            _sum: { stock: true }
+            select: { stockStatus: true },
         });
-        const finalStock = totalStock._sum.stock || 0;
+        const productStockStatus = allVariants.length
+            ? aggregateStatuses(allVariants.map((variant) => variant.stockStatus))
+            : "OUT_OF_STOCK";
+
         await prisma.product.update({ 
             where: { id }, 
-            data: { stock: finalStock } 
+            data: { stockStatus: productStockStatus } 
         });
 
-        res.status(200).json({ status: "success", message: "Variants updated globally", data: { totalStock: finalStock } });
+        res.status(200).json({
+            status: "success",
+            message: "Variants updated globally",
+            data: { stockStatus: productStockStatus },
+        });
     } catch(err) { next(err); }
 };

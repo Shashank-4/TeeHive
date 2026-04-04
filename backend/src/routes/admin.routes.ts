@@ -8,10 +8,15 @@ import {
     toggleResubmissionHandler,
     rejectDesignHandler,
 } from "../controllers/adminArtist.controller";
+import {
+    getAdminArtistPayoutMethodsHandler,
+    reviewArtistPayoutMethodHandler,
+} from "../controllers/artistPayout.controller";
 import { getDashboardStatsHandler } from "../controllers/adminStats.controller";
 import { listUsersHandler, updateUserRoleHandler } from "../controllers/adminUsers.controller";
 import { 
     listProductsHandler, 
+    patchProductLatestDropHandler,
     updateProductStatusHandler, 
     updateProductStockHandler,
     getProductVariantsHandler,
@@ -21,7 +26,8 @@ import {
     listOrdersHandler, 
     updateOrderStatusHandler,
     updatePaymentStatusHandler,
-    getOrderByIdHandler
+    getOrderByIdHandler,
+    updateReturnClaimStatusHandler,
 } from "../controllers/adminOrders.controller";
 import { listDesignsHandler, bulkFlagDesignsHandler, bulkDownloadDesignsHandler } from "../controllers/adminDesigns.controller";
 import { memoryRateLimit } from "../middleware/rateLimit";
@@ -37,8 +43,10 @@ router.get("/dashboard/stats", getDashboardStatsHandler);
 // ── Artist Management ──
 router.get("/artists", listArtistsHandler);
 router.get("/artists/:id", getArtistDetailHandler);
+router.get("/artists/:id/payout-methods", getAdminArtistPayoutMethodsHandler);
 router.patch("/artists/:id/verify", verifyArtistHandler);
 router.patch("/artists/:id/resubmit", toggleResubmissionHandler);
+router.patch("/artists/:id/payout-methods/:payoutMethodId/review", reviewArtistPayoutMethodHandler);
 router.patch("/designs/:id/reject", rejectDesignHandler);
 
 // ── User Management ──
@@ -47,6 +55,7 @@ router.patch("/users/:id/role", updateUserRoleHandler);
 
 // ── Product Management ──
 router.get("/products", listProductsHandler);
+router.patch("/products/:id/latest-drop", patchProductLatestDropHandler);
 router.patch("/products/:id/status", updateProductStatusHandler);
 router.patch("/products/:id/stock", updateProductStockHandler);
 router.get("/products/:id/variants", getProductVariantsHandler);
@@ -57,6 +66,7 @@ router.get("/orders", listOrdersHandler);
 router.get("/orders/:id", getOrderByIdHandler);
 router.patch("/orders/:id/status", updateOrderStatusHandler);
 router.patch("/orders/:id/payment", updatePaymentStatusHandler);
+router.patch("/orders/:id/return-claim", updateReturnClaimStatusHandler);
 
 // ── Design Management ──
 router.get("/designs", listDesignsHandler);

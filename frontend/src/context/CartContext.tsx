@@ -15,6 +15,8 @@ export interface CartItem {
     color: string;
     image: string;
     artistName: string;
+    /** Shown in cart for variant changes; falls back to [color] if missing */
+    availableColors?: string[];
 }
 
 interface CartContextType {
@@ -22,6 +24,13 @@ interface CartContextType {
     addItem: (item: CartItem) => void;
     removeItem: (productId: string, size: string, color: string) => void;
     updateQuantity: (productId: string, size: string, color: string, quantity: number) => void;
+    updateItemVariant: (
+        productId: string,
+        oldSize: string,
+        oldColor: string,
+        newSize: string,
+        newColor: string
+    ) => void;
     clearCart: () => void;
     itemCount: number;
     subtotal: number;
@@ -104,6 +113,41 @@ export const CartProvider = ({ children }: { children: ReactNode }) => {
         );
     };
 
+    const updateItemVariant = (
+        productId: string,
+        oldSize: string,
+        oldColor: string,
+        newSize: string,
+        newColor: string
+    ) => {
+        const oldK = itemKey(productId, oldSize, oldColor);
+        const newK = itemKey(productId, newSize, newColor);
+        if (oldK === newK) return;
+        setItems((prev) => {
+            const item = prev.find(
+                (i) => itemKey(i.productId, i.size, i.color) === oldK
+            );
+            if (!item) return prev;
+            const without = prev.filter(
+                (i) => itemKey(i.productId, i.size, i.color) !== oldK
+            );
+            const mergeTarget = without.find(
+                (i) => itemKey(i.productId, i.size, i.color) === newK
+            );
+            if (mergeTarget) {
+                return without.map((i) =>
+                    itemKey(i.productId, i.size, i.color) === newK
+                        ? { ...i, quantity: i.quantity + item.quantity }
+                        : i
+                );
+            }
+            return [
+                ...without,
+                { ...item, size: newSize, color: newColor },
+            ];
+        });
+    };
+
     const clearCart = () => setItems([]);
 
     const itemCount = items.reduce((s, i) => s + i.quantity, 0);
@@ -116,6 +160,7 @@ export const CartProvider = ({ children }: { children: ReactNode }) => {
                 addItem,
                 removeItem,
                 updateQuantity,
+                updateItemVariant,
                 clearCart,
                 itemCount,
                 subtotal,

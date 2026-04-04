@@ -1,7 +1,8 @@
 import { Request, Response, NextFunction } from "express";
-import { PrismaClient } from "@prisma/client";
+import { PrismaClient, Prisma } from "@prisma/client";
 import {
     createProductService,
+    getArtistDraftProductByIdService,
     getProductByIdService,
     getPublishedProductsService,
     getProductsByArtistService,
@@ -11,12 +12,182 @@ import {
     getArtistStatsService,
     getArtistOrdersService,
     uploadMockupToR2,
+    getDefaultProductStock,
 } from "../services/product.service";
 import { renderProductionMockup } from "../services/mockup.service";
 import { S3Client, PutObjectCommand } from "@aws-sdk/client-s3";
 import crypto from "crypto";
 
 const prisma = new PrismaClient();
+
+function hexKeyFromUploadSlug(slug: string): string {
+    const s = String(slug || "")
+        .trim()
+        .replace(/^#/, "")
+        .toLowerCase()
+        .replace(/[^0-9a-f]/g, "");
+    return s ? `#${s}` : "#";
+}
+
+function parseStringArrayField(value: unknown, fallback: string[] = []): string[] {
+    if (!value) return fallback;
+    try {
+        const parsed = typeof value === "string" ? JSON.parse(value) : value;
+        return Array.isArray(parsed) ? parsed.map((item) => String(item || "").trim()).filter(Boolean) : fallback;
+    } catch {
+        return fallback;
+    }
+}
+
+function parseTagsField(value: unknown): string[] {
+    return Array.from(
+        new Set(
+            parseStringArrayField(value, [])
+                .map((tag) => tag.toLowerCase())
+                .filter(Boolean)
+        )
+    );
+}
+
+function parseDraftEditorState(value: unknown): Prisma.InputJsonValue | undefined {
+    if (!value) return undefined;
+    try {
+        const parsed = typeof value === "string" ? JSON.parse(value) : value;
+        if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+            return undefined;
+        }
+        return JSON.parse(JSON.stringify(parsed)) as Prisma.InputJsonValue;
+    } catch {
+        return undefined;
+    }
+}
+
+async function buildCreatorProductInput(
+    body: Record<string, any>,
+    fileList: Express.Multer.File[],
+    existingStock?: number
+) {
+    const pick = (field: string) => fileList.find((file) => file.fieldname === field);
+    const mockupFile = pick("mockupImage");
+    const backMockupFile = pick("backMockupImage");
+
+    if (!mockupFile) {
+        throw new Error("Front mockup image is required");
+    }
+
+    const {
+        name,
+        description,
+        price,
+        compareAtPrice,
+        categories,
+        tshirtColor,
+        availableColors,
+        primaryColor,
+        primaryView,
+        stock,
+        status,
+        designId,
+        tags,
+        draftEditorState,
+    } = body;
+
+    if (!name || !price || !tshirtColor || !designId) {
+        throw new Error("name, price, tshirtColor, and designId are required");
+    }
+
+    const parsedTags = parseTagsField(tags);
+    if (parsedTags.length > 5) {
+        throw new Error("A maximum of 5 tags is allowed per product");
+    }
+
+    const parsedCategories = parseStringArrayField(categories, []);
+    const parsedAvailableColors = parseStringArrayField(availableColors, [tshirtColor]);
+    const finalStatus = status === "PUBLISHED" ? "PUBLISHED" : "DRAFT";
+
+    const { mockupImageUrl, mockupFileKey } = await uploadMockupToR2(mockupFile);
+
+    let backMockupImageUrl: string | undefined;
+    let backMockupFileKey: string | undefined;
+    if (backMockupFile) {
+        const uploadedBack = await uploadMockupToR2(backMockupFile);
+        backMockupImageUrl = uploadedBack.mockupImageUrl;
+        backMockupFileKey = uploadedBack.mockupFileKey;
+    }
+
+    const hadPerColorUploads = fileList.some((file) => /^c(front|back)_/.test(file.fieldname));
+    const colorMockups: Record<string, { front?: string; back?: string }> = {};
+    const allowedHex = new Set(parsedAvailableColors.map((hex) => hexKeyFromUploadSlug(String(hex))));
+
+    for (const file of fileList) {
+        const frontMatch = /^cfront_(.+)$/.exec(file.fieldname);
+        const backMatch = /^cback_(.+)$/.exec(file.fieldname);
+        if (frontMatch) {
+            const key = hexKeyFromUploadSlug(frontMatch[1]);
+            if (!allowedHex.has(key)) continue;
+            const { mockupImageUrl: url } = await uploadMockupToR2(file);
+            colorMockups[key] = { ...colorMockups[key], front: url };
+        } else if (backMatch) {
+            const key = hexKeyFromUploadSlug(backMatch[1]);
+            if (!allowedHex.has(key)) continue;
+            const { mockupImageUrl: url } = await uploadMockupToR2(file);
+            colorMockups[key] = { ...colorMockups[key], back: url };
+        }
+    }
+
+    const primaryHex = hexKeyFromUploadSlug(String(primaryColor || tshirtColor));
+    if (!colorMockups[primaryHex]?.front) {
+        colorMockups[primaryHex] = {
+            ...colorMockups[primaryHex],
+            front: mockupImageUrl,
+            ...(backMockupImageUrl ? { back: backMockupImageUrl } : {}),
+        };
+    }
+
+    const colorMockupsFinal: Record<string, { front: string; back?: string }> = {};
+    for (const hex of allowedHex) {
+        const entry = colorMockups[hex];
+        if (entry?.front) {
+            colorMockupsFinal[hex] = {
+                front: entry.front,
+                ...(entry.back ? { back: entry.back } : {}),
+            };
+        }
+    }
+
+    let stockNum =
+        stock !== undefined && String(stock).trim() !== ""
+            ? parseInt(String(stock), 10)
+            : NaN;
+    if (!Number.isFinite(stockNum) || stockNum < 0) {
+        stockNum = typeof existingStock === "number" ? existingStock : await getDefaultProductStock();
+    }
+
+    return {
+        name,
+        description,
+        price: parseFloat(price),
+        compareAtPrice: compareAtPrice ? parseFloat(compareAtPrice) : undefined,
+        categories: parsedCategories,
+        tshirtColor,
+        availableColors: parsedAvailableColors,
+        primaryColor: primaryColor || tshirtColor,
+        primaryView: primaryView || "front",
+        tags: parsedTags,
+        stock: stockNum,
+        status: finalStatus as any,
+        mockupImageUrl,
+        mockupFileKey,
+        backMockupImageUrl,
+        backMockupFileKey,
+        colorMockups:
+            hadPerColorUploads && Object.keys(colorMockupsFinal).length > 0
+                ? colorMockupsFinal
+                : undefined,
+        draftEditorState: parseDraftEditorState(draftEditorState),
+        designId,
+    };
+}
 
 const r2 = new S3Client({
     region: "auto",
@@ -35,99 +206,31 @@ export const createProductHandler = async (
 ) => {
     try {
         const user = res.locals.user;
-        const files = req.files as { [fieldname: string]: Express.Multer.File[] };
-        const mockupFile = files?.['mockupImage']?.[0];
-        const backMockupFile = files?.['backMockupImage']?.[0];
+        const fileList: Express.Multer.File[] = Array.isArray(req.files)
+            ? (req.files as Express.Multer.File[])
+            : [];
+        const creatorInput = await buildCreatorProductInput(req.body || {}, fileList);
 
-        if (!mockupFile) {
-            return res
-                .status(400)
-                .json({ status: "fail", message: "Front mockup image is required" });
-        }
-        console.log('user, mockupFile', user, mockupFile)
-        const { name, description, price, compareAtPrice, categories, tshirtColor, availableColors, primaryColor, primaryView, stock, status, designId, tags } = req.body;
-        console.log('mockupFile', mockupFile, name, description, price, compareAtPrice, categories, tshirtColor, availableColors, primaryColor, primaryView, stock, status, designId, tags);
-        if (!name || !price || !tshirtColor || !designId) {
-            return res.status(400).json({
-                status: "fail",
-                message: "name, price, tshirtColor, and designId are required",
-            });
-        }
-
-        // Parse tags from JSON string (FormData sends it as string)
-        let parsedTags: string[] = [];
-        if (tags) {
-            try {
-                parsedTags = typeof tags === "string" ? JSON.parse(tags) : tags;
-            } catch {
-                parsedTags = [];
-            }
-        }
-
-        let parsedCategories: string[] = [];
-        if (categories) {
-            try {
-                parsedCategories = typeof categories === "string" ? JSON.parse(categories) : categories;
-            } catch {
-                parsedCategories = [];
-            }
-        }
-
-        let parsedAvailableColors: string[] = [];
-        if (availableColors) {
-            try {
-                parsedAvailableColors = typeof availableColors === "string" ? JSON.parse(availableColors) : availableColors;
-            } catch {
-                parsedAvailableColors = [tshirtColor];
-            }
-        } else {
-            parsedAvailableColors = [tshirtColor];
-        }
-
-        const isVerified = user.verificationStatus === "VERIFIED";
-        const finalStatus = isVerified ? "PUBLISHED" : (status || "DRAFT");
-
-        // Upload front mockup image to R2
-        const { mockupImageUrl, mockupFileKey } = await uploadMockupToR2(mockupFile);
-
-        // Upload back mockup image to R2 if exists
-        let backMockupImageUrl: string | undefined;
-        let backMockupFileKey: string | undefined;
-        if (backMockupFile) {
-            const uploadedBack = await uploadMockupToR2(backMockupFile);
-            backMockupImageUrl = uploadedBack.mockupImageUrl;
-            backMockupFileKey = uploadedBack.mockupFileKey;
-        }
         const product = await createProductService({
-            name,
-            description,
-            price: parseFloat(price),
-            compareAtPrice: compareAtPrice ? parseFloat(compareAtPrice) : undefined,
-            categories: parsedCategories,
-            tshirtColor,
-            availableColors: parsedAvailableColors,
-            primaryColor: primaryColor || tshirtColor,
-            primaryView: primaryView || "front",
-            tags: parsedTags,
-            stock: stock ? parseInt(stock, 10) : 0,
-            status: finalStatus as any,
-            mockupImageUrl,
-            mockupFileKey,
-            backMockupImageUrl,
-            backMockupFileKey,
-            designId,
+            ...creatorInput,
             artistId: user.id,
         });
 
         res.status(201).json({ status: "success", data: { product } });
 
         // ── Background: Render production-quality mockup using Sharp engine ──
-        // This runs asynchronously after the response so the artist isn't blocked.
+        // Disabled by default because it re-composites the design using a fixed
+        // print-area (ignoring the artist's exact placement on the editor),
+        // which causes the "design moves after reload" issue.
+        const ENABLE_PRODUCTION_RENDER =
+            process.env.ENABLE_PRODUCTION_RENDER === "true";
+
+        if (ENABLE_PRODUCTION_RENDER) {
         (async () => {
             try {
                 // Find the global color matching the primary color
                 const globalColor = await prisma.globalColor.findFirst({
-                    where: { hex: { equals: primaryColor || tshirtColor, mode: "insensitive" } },
+                    where: { hex: { equals: creatorInput.primaryColor || creatorInput.tshirtColor, mode: "insensitive" } },
                 });
 
                 if (!globalColor) {
@@ -136,7 +239,7 @@ export const createProductHandler = async (
                 }
 
                 // Find the design image URL
-                const design = await prisma.design.findUnique({ where: { id: designId } });
+                const design = await prisma.design.findUnique({ where: { id: creatorInput.designId } });
                 if (!design) return;
 
                 // Determine if shirt is dark for shadow blend mode
@@ -184,6 +287,7 @@ export const createProductHandler = async (
                 // Non-fatal — the canvas screenshot is still saved as fallback
             }
         })();
+        }
     } catch (error: any) {
         console.error("Create product error:", error);
         if (error.message?.includes("not found") || error.message?.includes("does not belong")) {
@@ -200,7 +304,10 @@ export const getProductsHandler = async (
     next: NextFunction
 ) => {
     try {
-        const { category, sort, page, limit, search } = req.query;
+        const { category, sort, page, limit, search, latestDrops: latestDropsQ } = req.query;
+        const latestDropsRaw = Array.isArray(latestDropsQ) ? latestDropsQ[0] : latestDropsQ;
+        const latestDrops =
+            latestDropsRaw === "true" || latestDropsRaw === "1" || latestDropsRaw === "yes";
 
         const result = await getPublishedProductsService({
             category: category as string,
@@ -208,6 +315,7 @@ export const getProductsHandler = async (
             page: page ? parseInt(page as string, 10) : undefined,
             limit: limit ? parseInt(limit as string, 10) : undefined,
             search: search as string,
+            latestDrops,
         });
 
         res.status(200).json({ status: "success", data: result });
@@ -256,6 +364,32 @@ export const getMyProductsHandler = async (
     }
 };
 
+export const getArtistDraftProductHandler = async (
+    req: Request,
+    res: Response,
+    next: NextFunction
+) => {
+    try {
+        const user = res.locals.user;
+        const { id } = req.params;
+        const product = await getArtistDraftProductByIdService(id, user.id);
+
+        if (product.status !== "DRAFT") {
+            return res.status(400).json({
+                status: "fail",
+                message: "Only draft products can be reopened in the mockup editor.",
+            });
+        }
+
+        res.status(200).json({ status: "success", data: { product } });
+    } catch (error: any) {
+        if (error.message?.includes("not found") || error.message?.includes("does not belong")) {
+            return res.status(404).json({ status: "fail", message: error.message });
+        }
+        next(error);
+    }
+};
+
 // ---------- Artist: Update product ----------
 export const updateProductHandler = async (
     req: Request,
@@ -265,22 +399,40 @@ export const updateProductHandler = async (
     try {
         const user = res.locals.user;
         const { id } = req.params;
-        const { name, description, price, compareAtPrice, category, tshirtColor, stock } = req.body;
+        const existingProduct = await getArtistDraftProductByIdService(id, user.id);
 
-        const product = await updateProductService(id, user.id, {
-            name,
-            description,
-            price: price !== undefined ? parseFloat(price) : undefined,
-            compareAtPrice: compareAtPrice !== undefined ? parseFloat(compareAtPrice) : undefined,
-            category,
-            tshirtColor,
-            stock: stock !== undefined ? parseInt(stock, 10) : undefined,
-        });
+        let product;
+        const fileList: Express.Multer.File[] = Array.isArray(req.files)
+            ? (req.files as Express.Multer.File[])
+            : [];
+
+        if (fileList.length > 0 || req.body?.draftEditorState) {
+            const creatorInput = await buildCreatorProductInput(
+                req.body || {},
+                fileList,
+                existingProduct.stock
+            );
+            product = await updateProductService(id, user.id, creatorInput);
+        } else {
+            const { name, description, price, compareAtPrice, category, tshirtColor, stock } = req.body;
+            product = await updateProductService(id, user.id, {
+                name,
+                description,
+                price: price !== undefined ? parseFloat(price) : undefined,
+                compareAtPrice: compareAtPrice !== undefined ? parseFloat(compareAtPrice) : undefined,
+                category,
+                tshirtColor,
+                stock: stock !== undefined ? parseInt(stock, 10) : undefined,
+            });
+        }
 
         res.status(200).json({ status: "success", data: { product } });
     } catch (error: any) {
         if (error.message?.includes("not found") || error.message?.includes("does not belong")) {
             return res.status(404).json({ status: "fail", message: error.message });
+        }
+        if (error.message?.includes("required") || error.message?.includes("maximum")) {
+            return res.status(400).json({ status: "fail", message: error.message });
         }
         next(error);
     }

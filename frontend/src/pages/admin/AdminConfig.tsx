@@ -25,6 +25,7 @@ interface BannersConfig {
     hive50Banner: string;
     emailBanner: string;
     heroBgImage: string;
+    headerLogo: string;
 }
 
 
@@ -78,7 +79,8 @@ const DEFAULT_BANNERS_CONFIG: BannersConfig = {
     artistsListBanner: "/assets/banners/artists_list_banner.jpg",
     hive50Banner: "/assets/banners/hive50_banner.jpg",
     emailBanner: "https://pub-7f5de94304e647a1b6b59ba54680291a.r2.dev/site-assets/email-banner-1774510626168.png",
-    heroBgImage: ""
+    heroBgImage: "",
+    headerLogo: "",
 };
 
 const DEFAULT_PRICING_CONFIG: PricingConfig = {
@@ -476,7 +478,8 @@ export default function AdminConfig() {
                                         { key: "artistsListBanner", label: "Personnel Directory Banner" },
                                         { key: "hive50Banner", label: "Hive-50 Loyalty Banner" },
                                         { key: "emailBanner", label: "Email Template Banner" },
-                                        { key: "heroBgImage", label: "Hero Background Decoration (Honeycomb)" }
+                                        { key: "heroBgImage", label: "Hero Background Decoration (Honeycomb)" },
+                                        { key: "headerLogo", label: "Global Header Logo (Navbar + Artist Sidebar)" }
                                     ].map((b) => (
                                         <div key={b.key} className="space-y-3 p-6 border-[2px] border-neutral-black rounded-[4px] bg-neutral-g1 hover:bg-white transition-all group relative">
                                             <label className="block font-display text-[11px] font-black uppercase tracking-[1px] text-neutral-black">{b.label}</label>

@@ -31,6 +31,7 @@ interface GlobalStock {
 
 export default function AdminInventoryMatrix() {
     const [matrix, setMatrix] = useState<GlobalStock>({});
+    const [defaultProductStock, setDefaultProductStock] = useState(100);
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
     const [message, setMessage] = useState<{ type: 'success' | 'error', text: string } | null>(null);
@@ -38,9 +39,18 @@ export default function AdminInventoryMatrix() {
     const fetchGlobalInventory = useCallback(async () => {
         setLoading(true);
         try {
-            const res = await api.get("/api/config/global_inventory");
-            if (res.data.data?.config) {
-                setMatrix(res.data.data.config);
+            const [invRes, defRes] = await Promise.all([
+                api.get("/api/config/global_inventory"),
+                api.get("/api/config/inventory_defaults").catch(() => null),
+            ]);
+
+            if (defRes?.data?.data?.config?.defaultProductStock != null) {
+                const n = Number(defRes.data.data.config.defaultProductStock);
+                if (Number.isFinite(n) && n >= 0) setDefaultProductStock(Math.floor(n));
+            }
+
+            if (invRes.data.data?.config) {
+                setMatrix(invRes.data.data.config);
             } else {
                 // Initialize default matrix
                 const initial: GlobalStock = {};
@@ -54,7 +64,6 @@ export default function AdminInventoryMatrix() {
             }
         } catch (err: any) {
             console.error("Failed to fetch global inventory:", err);
-            // If 404, it means config doesn't exist yet, initialize it
             const initial: GlobalStock = {};
             COLORS.forEach(c => {
                 initial[c.hex] = {};
@@ -85,7 +94,10 @@ export default function AdminInventoryMatrix() {
         setMessage(null);
         try {
             await api.put("/api/config/global_inventory", { value: matrix });
-            setMessage({ type: 'success', text: 'Global inventory matrix synchronized successfully!' });
+            await api.put("/api/config/inventory_defaults", {
+                value: { defaultProductStock: Math.max(0, Math.floor(Number(defaultProductStock) || 0)) },
+            });
+            setMessage({ type: 'success', text: 'Global inventory matrix and default stock synchronized.' });
             setTimeout(() => setMessage(null), 3000);
         } catch (err) {
             console.error("Failed to save global inventory:", err);
@@ -156,21 +168,38 @@ export default function AdminInventoryMatrix() {
                         </div>
                     )}
 
-                    <div className="p-6 bg-neutral-black text-white border-b-[3px] border-neutral-black flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                        <div className="flex items-center gap-4">
-                            <div className="w-10 h-10 bg-primary border-[2px] border-white rounded-[4px] flex items-center justify-center text-neutral-black">
-                                <Package className="w-5 h-5" />
+                    <div className="p-6 bg-neutral-black text-white border-b-[3px] border-neutral-black flex flex-col gap-6">
+                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                            <div className="flex items-center gap-4">
+                                <div className="w-10 h-10 bg-primary border-[2px] border-white rounded-[4px] flex items-center justify-center text-neutral-black">
+                                    <Package className="w-5 h-5" />
+                                </div>
+                                <div>
+                                    <h3 className="text-[16px] font-black uppercase tracking-tight">Base Inventory Grid</h3>
+                                    <p className="text-[10px] font-bold text-white/40 uppercase tracking-widest">Global Constraints Protocol</p>
+                                </div>
                             </div>
-                            <div>
-                                <h3 className="text-[16px] font-black uppercase tracking-tight">Base Inventory Grid</h3>
-                                <p className="text-[10px] font-bold text-white/40 uppercase tracking-widest">Global Constraints Protocol</p>
+                            <div className="flex items-center gap-6">
+                                <div className="flex items-center gap-2">
+                                    <div className="w-3 h-3 bg-success rounded-full border border-white" />
+                                    <span className="text-[10px] font-black uppercase tracking-tighter opacity-70 italic">Verified Stable</span>
+                                </div>
                             </div>
                         </div>
-                        <div className="flex items-center gap-6">
-                            <div className="flex items-center gap-2">
-                                <div className="w-3 h-3 bg-success rounded-full border border-white" />
-                                <span className="text-[10px] font-black uppercase tracking-tighter opacity-70 italic">Verified Stable</span>
-                            </div>
+                        <div className="flex flex-col sm:flex-row sm:items-end gap-3 sm:gap-8 border-t border-white/10 pt-4">
+                            <label className="flex flex-col gap-2 max-w-xs">
+                                <span className="text-[10px] font-black uppercase tracking-widest text-primary">Legacy compatibility value</span>
+                                <span className="text-[9px] font-bold text-white/50 uppercase leading-snug">
+                                    Vendor-driven stock status is the live source of truth. This legacy numeric value only exists for older internal fallbacks and is not used for storefront stock decisions.
+                                </span>
+                                <input
+                                    type="number"
+                                    min={0}
+                                    value={defaultProductStock}
+                                    onChange={(e) => setDefaultProductStock(parseInt(e.target.value, 10) || 0)}
+                                    className="mt-1 px-4 py-3 bg-white text-neutral-black border-[2px] border-white rounded-[4px] font-display text-[14px] font-black outline-none focus:border-primary"
+                                />
+                            </label>
                         </div>
                     </div>
 

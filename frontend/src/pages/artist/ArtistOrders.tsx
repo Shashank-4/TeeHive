@@ -75,18 +75,6 @@ export default function ArtistOrders() {
             <div className="flex-1 px-4 sm:px-8 pb-12 w-full">
                 {/* Header Section */}
                 <div className="flex flex-col md:flex-row md:items-end justify-between mb-10 gap-6">
-                    <div className="space-y-2">
-                        <div className="inline-flex items-center gap-2 bg-neutral-black text-white px-3 py-1 rounded-[4px] font-display text-[10px] font-black uppercase tracking-[2px]">
-                            <ShoppingCart className="w-3 h-3 text-primary" /> Logistics Hub
-                        </div>
-                        <h1 className="font-display text-[ clamp(32px,5vw,48px) ] font-black text-neutral-black leading-none uppercase tracking-tight">
-                            Order <span className="text-primary italic">Matrix</span>
-                        </h1>
-                        <p className="font-display text-[14px] font-bold text-neutral-g4 uppercase tracking-wider">
-                            Manage every drop, shipment, and customer across the globe.
-                        </p>
-                    </div>
-
                     <div className="relative w-full md:w-[320px]">
                         <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-neutral-black" />
                         <input

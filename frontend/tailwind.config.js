@@ -37,11 +37,19 @@ export default {
             },
             animation: {
                 marquee: 'marquee 40s linear infinite',
+                'carousel-center-bounce': 'carouselCenterBounce 0.62s cubic-bezier(0.34, 1.6, 0.64, 1) both',
             },
             keyframes: {
                 marquee: {
                     '0%': { transform: 'translateX(0%)' },
                     '100%': { transform: 'translateX(-100%)' },
+                },
+                carouselCenterBounce: {
+                    '0%': { transform: 'scale(1) translateY(0)' },
+                    '22%': { transform: 'scale(1.1) translateY(-12px)' },
+                    '42%': { transform: 'scale(0.96) translateY(6px)' },
+                    '65%': { transform: 'scale(1.05) translateY(-4px)' },
+                    '100%': { transform: 'scale(1) translateY(0)' },
                 },
             },
         },

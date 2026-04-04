@@ -1,13 +1,12 @@
 /**
- * MockupCanvas.tsx — Realistic Mockup Editor with Displacement & Shadow Blending
+ * MockupCanvas.tsx — Flat Mockup Editor (no displacement/shadow)
  *
- * 3-Layer Stack:
- *   Layer 0 (tshirt-base)    → Color base image (front or back, from global colors or fallback)
- *   Layer 1 (user-design)    → Artist's design with pixel-level displacement warp applied
- *   Layer 2 (shadow-overlay) → Shadow/highlight map with multiply blend for fold realism
+ * 2-Layer Stack:
+ *   Layer 0 (tshirt-base)  → Color base image (front or back, from global colors or fallback)
+ *   Layer 1 (user-design)  → Artist's design rendered as-is (no displacement warping)
  *
- * Displacement: Offscreen canvas pixel manipulation warps the design to follow fabric folds.
- * Shadow: globalCompositeOperation="multiply" at configurable intensity.
+ * Displacement + shadow overlay were disabled because they were causing visible artifacts
+ * while creating mockups.
  */
 
 import { useState, useEffect, useRef, useImperativeHandle, forwardRef } from "react";
@@ -33,7 +32,7 @@ export enum TShirtColor {
 
 type ViewType = "front" | "back";
 
-interface DesignTransform {
+export interface DesignTransform {
     left: number;
     top: number;
     scaleX: number;
@@ -58,11 +57,22 @@ interface MockupCanvasProps {
     displacementMapUrl?: string | null;
     /** Shadow overlay intensity (0–1) */
     shadowIntensity?: number;
+    initialFrontTransform?: DesignTransform | null;
+    initialBackTransform?: DesignTransform | null;
 }
 
 export interface MockupCanvasHandle {
     exportView: (view: ViewType) => Promise<Blob>;
     getDesignTransform: (view: ViewType) => DesignTransform | null;
+    /** Export one view using temporary fabric/color URLs, then restore the live canvas. */
+    exportViewWithAppearance: (opts: {
+        tshirtColor: string;
+        colorBaseUrl: string | null;
+        colorBackBaseUrl: string | null;
+        shadowMapUrl: string | null;
+        displacementMapUrl: string | null;
+        view: ViewType;
+    }) => Promise<Blob>;
 }
 
 // ── Helpers ──
@@ -117,7 +127,17 @@ function applyPixelDisplacement(
     const dScale = Math.min(maxW / dispImg.width, maxH / dispImg.height);
     const dw = dispImg.width * dScale;
     const dh = dispImg.height * dScale;
-    dispCtx.drawImage(dispImg, (CANVAS_WIDTH - dw) / 2, (CANVAS_HEIGHT - dh) / 2, dw, dh);
+    // Align displacement map with the shirt base layer.
+    // The base layer is positioned at (CANVAS_HEIGHT/2 - 25) in `loadBaseLayer`,
+    // so we shift the displacement map's vertical center by the same amount.
+    const BASE_TOP_Y_OFFSET_PX = -25;
+    dispCtx.drawImage(
+        dispImg,
+        (CANVAS_WIDTH - dw) / 2,
+        (CANVAS_HEIGHT - dh) / 2 + BASE_TOP_Y_OFFSET_PX,
+        dw,
+        dh
+    );
 
     // 2. Extract the print area region from the displacement map
     const dispData = dispCtx.getImageData(printArea.x, printArea.y, printArea.width, printArea.height);
@@ -192,6 +212,8 @@ const MockupCanvas = forwardRef<MockupCanvasHandle, MockupCanvasProps>((
         shadowMapUrl,
         displacementMapUrl,
         shadowIntensity = DEFAULT_SHADOW_INTENSITY,
+        initialFrontTransform = null,
+        initialBackTransform = null,
     },
     ref
 ) => {
@@ -221,6 +243,11 @@ const MockupCanvas = forwardRef<MockupCanvasHandle, MockupCanvasProps>((
     useEffect(() => { shadowMapUrlRef.current = shadowMapUrl; }, [shadowMapUrl]);
     useEffect(() => { displacementMapUrlRef.current = displacementMapUrl; }, [displacementMapUrl]);
     useEffect(() => { shadowIntensityRef.current = shadowIntensity; }, [shadowIntensity]);
+
+    useEffect(() => {
+        frontTransformRef.current = initialFrontTransform ?? null;
+        backTransformRef.current = initialBackTransform ?? null;
+    }, [initialFrontTransform, initialBackTransform]);
 
     const currentDesignUrl = currentView === "front" ? frontDesignUrl : backDesignUrl;
     const currentPrintArea = currentView === "front" ? PRINT_AREA_FRONT : PRINT_AREA_BACK;
@@ -372,9 +399,8 @@ const MockupCanvas = forwardRef<MockupCanvasHandle, MockupCanvasProps>((
             return;
         }
 
-        loadDesignLayer(canvas, currentDesignUrl, currentView, currentPrintArea).then(() => {
-            loadShadowOverlay(canvas);
-        });
+        // Flat mode: render design only (no displacement, no shadow overlay).
+        loadDesignLayer(canvas, currentDesignUrl, currentView, currentPrintArea);
     }, [currentDesignUrl, currentView]); // eslint-disable-line react-hooks/exhaustive-deps
 
     // ── Guides ──
@@ -404,7 +430,6 @@ const MockupCanvas = forwardRef<MockupCanvasHandle, MockupCanvasProps>((
         if (designUrl) {
             await loadDesignLayer(canvas, designUrl, view, printArea);
         }
-        await loadShadowOverlay(canvas);
         updateGuides(canvas, showGuides, printArea);
     }
 
@@ -517,34 +542,11 @@ const MockupCanvas = forwardRef<MockupCanvasHandle, MockupCanvasProps>((
 
         const savedTransform = view === "front" ? frontTransformRef.current : backTransformRef.current;
         const proxyUrl = `${PROXY_BASE()}${encodeURIComponent(designUrl)}`;
-        const strength = 10;
         const opacity = 0.92;
 
         try {
-            // Load raw design image for displacement processing
-            const rawDesignImg = await loadImageElement(proxyUrl);
-
-            let fabricImg: fabric.FabricImage;
-
-            // Apply displacement if strength > 0
-            if (strength > 0) {
-                const dispImg = await getDisplacementImage();
-                if (dispImg) {
-                    // Process at a reasonable resolution for the print area
-                    const targetW = printArea.width * 2; // 2x for quality
-                    const targetH = printArea.height * 2;
-                    const displacedCanvas = applyPixelDisplacement(
-                        rawDesignImg, dispImg, strength, printArea, targetW, targetH
-                    );
-                    const dataUrl = displacedCanvas.toDataURL("image/png");
-                    fabricImg = await fabric.FabricImage.fromURL(dataUrl, { crossOrigin: "anonymous" });
-                } else {
-                    // Fallback: no displacement map available
-                    fabricImg = await fabric.FabricImage.fromURL(proxyUrl, { crossOrigin: "anonymous" });
-                }
-            } else {
-                fabricImg = await fabric.FabricImage.fromURL(proxyUrl, { crossOrigin: "anonymous" });
-            }
+            // Flat mode: render the design without displacement warping.
+            const fabricImg = await fabric.FabricImage.fromURL(proxyUrl, { crossOrigin: "anonymous" });
 
             if (!fabricImg) return;
 
@@ -741,6 +743,55 @@ const MockupCanvas = forwardRef<MockupCanvasHandle, MockupCanvasProps>((
                 guide.visible = !!guideWasVisible;
                 canvas.requestRenderAll();
             }
+
+            const res = await fetch(dataUrl);
+            return res.blob();
+        },
+
+        exportViewWithAppearance: async (opts) => {
+            const canvas = fabricRef.current;
+            if (!canvas) throw new Error("Canvas not ready");
+
+            const backup = {
+                tshirt: tshirtColorRef.current,
+                cf: colorBaseUrlRef.current,
+                cb: colorBackBaseUrlRef.current,
+                sh: shadowMapUrlRef.current,
+                dp: displacementMapUrlRef.current,
+                v: currentViewRef.current,
+            };
+
+            tshirtColorRef.current = opts.tshirtColor;
+            colorBaseUrlRef.current = opts.colorBaseUrl;
+            colorBackBaseUrlRef.current = opts.colorBackBaseUrl;
+            shadowMapUrlRef.current = opts.shadowMapUrl;
+            displacementMapUrlRef.current = opts.displacementMapUrl;
+            currentViewRef.current = opts.view;
+
+            clearCanvas(canvas);
+            await loadFullScene(canvas, opts.view);
+
+            const guide = canvas.getObjects().find((o) => (o as any).id === "print-guide");
+            if (guide) {
+                guide.visible = false;
+                canvas.requestRenderAll();
+            }
+
+            const dataUrl = canvas.toDataURL({
+                format: "png",
+                quality: 1,
+                multiplier: 2,
+            });
+
+            tshirtColorRef.current = backup.tshirt;
+            colorBaseUrlRef.current = backup.cf;
+            colorBackBaseUrlRef.current = backup.cb;
+            shadowMapUrlRef.current = backup.sh;
+            displacementMapUrlRef.current = backup.dp;
+            currentViewRef.current = backup.v;
+
+            clearCanvas(canvas);
+            await loadFullScene(canvas, backup.v);
 
             const res = await fetch(dataUrl);
             return res.blob();

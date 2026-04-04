@@ -1,6 +1,7 @@
 import { useLocation, Link } from "react-router-dom";
-import { CheckCircle, Package, ArrowRight, ShoppingBag, Receipt, Zap, ShieldCheck } from "lucide-react";
+import { CheckCircle, Package, ArrowRight, ShoppingBag, Receipt, Zap, ShieldCheck, Clock3, AlertTriangle } from "lucide-react";
 import { Button } from "../../components/ui/Button";
+import ReturnPolicyNote from "../../components/shared/ReturnPolicyNote";
 
 export default function OrderConfirmation() {
     const location = useLocation();
@@ -9,7 +10,26 @@ export default function OrderConfirmation() {
         total?: number;
         items?: any[];
         shippingAddress?: any;
+        paymentStatus?: "success" | "pending" | "failed";
+        paymentId?: string;
     } | null;
+
+    const paymentStatus = state?.paymentStatus || "pending";
+    const isSuccess = paymentStatus === "success";
+    const titleAccent = isSuccess ? "SUCCESSFUL" : paymentStatus === "failed" ? "FAILED" : "PENDING";
+    const titleLead = isSuccess ? "PAYMENT" : paymentStatus === "failed" ? "PAYMENT" : "ORDER";
+    const statusIcon = isSuccess ? (
+        <CheckCircle className="w-14 h-14 text-neutral-black" />
+    ) : paymentStatus === "failed" ? (
+        <AlertTriangle className="w-14 h-14 text-neutral-black" />
+    ) : (
+        <Clock3 className="w-14 h-14 text-neutral-black" />
+    );
+    const helperCopy = isSuccess
+        ? "Payment verified. Your order is confirmed and queued for fulfillment."
+        : paymentStatus === "failed"
+          ? "Your payment did not complete. No fulfillment will start until a successful payment is recorded."
+          : "Your order reference was created. Payment confirmation may still be syncing.";
 
     return (
         <div className="min-h-screen bg-neutral-g1 flex items-center justify-center px-6 py-24 relative overflow-hidden">
@@ -20,7 +40,7 @@ export default function OrderConfirmation() {
                 {/* Success Tactical Area */}
                 <div className="relative inline-block mb-10 group">
                     <div className="w-28 h-28 bg-primary border-[3px] border-neutral-black rounded-[4px] flex items-center justify-center mx-auto shadow-[10px_10px_0px_0px_rgba(0,0,0,1)] relative z-10 transition-transform group-hover:rotate-[-4deg]">
-                        <CheckCircle className="w-14 h-14 text-neutral-black" />
+                        {statusIcon}
                     </div>
                     <div className="absolute -top-3 -right-3 w-10 h-10 bg-white border-[2.5px] border-neutral-black rounded-full flex items-center justify-center shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] z-20 animate-bounce">
                         <Zap className="w-5 h-5 text-primary" fill="currentColor" />
@@ -28,13 +48,13 @@ export default function OrderConfirmation() {
                 </div>
 
                 <h1 className="font-display text-[clamp(42px,6vw,72px)] font-black text-neutral-black leading-[0.85] uppercase tracking-tight mb-6">
-                    TRANSACTION <br />
-                    <span className="text-primary italic">SUCCESSFUL</span>
+                    {titleLead} <br />
+                    <span className="text-primary italic">{titleAccent}</span>
                 </h1>
 
                 <div className="max-w-[480px] mx-auto mb-16 space-y-4">
                     <p className="font-display text-[15px] font-bold text-neutral-black/60 uppercase tracking-[2px] leading-relaxed">
-                        Artifact synchronization initiated. Your unique design is being prepared for protocol-safe logistics.
+                        {helperCopy}
                     </p>
                     <div className="flex items-center justify-center gap-6 opacity-40">
                         <div className="flex items-center gap-2 font-display text-[9px] font-black uppercase tracking-[3px]">
@@ -71,6 +91,15 @@ export default function OrderConfirmation() {
                                 </span>
                             </div>
 
+                            {state.paymentId && (
+                                <div className="flex flex-col md:flex-row md:items-center justify-between gap-2">
+                                    <span className="font-display text-[11px] font-black text-neutral-black/20 uppercase tracking-[2px]">PAYMENT_REF:</span>
+                                    <span className="font-display text-[13px] font-black text-neutral-black tracking-[2px] uppercase bg-neutral-g1 border-[2px] border-neutral-black px-4 py-1.5 rounded-[2px]">
+                                        {state.paymentId}
+                                    </span>
+                                </div>
+                            )}
+
                             <div className="grid grid-cols-2 gap-8 pt-4 border-t-[1.5px] border-neutral-black/5">
                                 <div>
                                     <span className="font-display text-[11px] font-black text-neutral-black/20 uppercase tracking-[2px]">PAYMENT_TOTAL:</span>
@@ -86,7 +115,7 @@ export default function OrderConfirmation() {
                                 <div className="pt-6 border-t-[1.5px] border-neutral-black/5">
                                     <span className="font-display text-[11px] font-black text-neutral-black/20 uppercase tracking-[2px] block mb-3">DESTINATION_HUB:</span>
                                     <div className="font-display text-[13px] font-bold text-neutral-black uppercase leading-relaxed p-4 bg-neutral-g1/50 border-l-[4px] border-primary">
-                                        {state.shippingAddress.name}<br />
+                                        {state.shippingAddress.name || `${state.shippingAddress.firstName || ""} ${state.shippingAddress.lastName || ""}`.trim()}<br />
                                         {state.shippingAddress.city}, {state.shippingAddress.state} - INDIA
                                     </div>
                                 </div>
@@ -95,16 +124,18 @@ export default function OrderConfirmation() {
                     </div>
                 )}
 
+                <ReturnPolicyNote className="mb-12 text-left" />
+
                 {/* Tactical Actions */}
                 <div className="flex flex-col sm:flex-row gap-8 justify-center items-center">
                     <Link to="/orders" className="w-full sm:w-auto no-underline">
                         <Button variant="dark" size="lg" className="w-full">
-                            Track Shipment <ArrowRight className="w-5 h-5 ml-2" />
+                            {isSuccess ? "Track Order" : "View Orders"} <ArrowRight className="w-5 h-5 ml-2" />
                         </Button>
                     </Link>
                     <Link to="/products" className="w-full sm:w-auto no-underline">
                         <Button variant="outline" size="lg" className="w-full">
-                            Browse Gallery
+                            Continue Shopping
                         </Button>
                     </Link>
                 </div>

@@ -4,45 +4,37 @@ import {
     Save,
     Info,
     CreditCard,
-    DollarSign,
     Zap
 } from "lucide-react";
 import Loader from "../../components/shared/Loader";
 import api from "../../api/axios";
+import {
+    emptyPayoutForm,
+    payoutFormFromMethods,
+    type PayoutMethodRecord,
+} from "../../utils/payoutMethods";
 
 export default function ArtistPayout() {
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
     const [stats, setStats] = useState<any>(null);
-    const [formData, setFormData] = useState({
-        upiId: "",
-        upiName: "",
-        bankAccountName: "",
-        bankAccountNumber: "",
-        bankIfsc: "",
-        bankName: "",
-        preferredMethod: "UPI"
-    });
+    const [methods, setMethods] = useState<PayoutMethodRecord[]>([]);
+    const [message, setMessage] = useState<string | null>(null);
+    const [messageType, setMessageType] = useState<"success" | "error" | null>(null);
+    const [formData, setFormData] = useState(emptyPayoutForm);
 
     useEffect(() => {
         const fetchPayoutData = async () => {
             try {
                 setLoading(true);
-                const [profileRes, statsRes] = await Promise.all([
-                    api.get("/api/artist/profile"),
+                const [methodsRes, statsRes] = await Promise.all([
+                    api.get("/api/artist/payout-methods"),
                     api.get("/api/artist/stats")
                 ]);
 
-                const profile = profileRes.data.data.artist;
-                setFormData({
-                    upiId: profile.payoutDetails?.upiId || "",
-                    upiName: profile.payoutDetails?.upiName || "",
-                    bankAccountName: profile.payoutDetails?.bankAccountName || "",
-                    bankAccountNumber: profile.payoutDetails?.bankAccountNumber || "",
-                    bankIfsc: profile.payoutDetails?.bankIfsc || "",
-                    bankName: profile.payoutDetails?.bankName || "",
-                    preferredMethod: profile.payoutDetails?.preferredMethod || "UPI"
-                });
+                const fetchedMethods = methodsRes.data.data?.methods || [];
+                setMethods(fetchedMethods);
+                setFormData(payoutFormFromMethods(fetchedMethods));
                 setStats(statsRes.data.data.stats);
             } catch (error) {
                 console.error("Failed to fetch payout details:", error);
@@ -53,6 +45,25 @@ export default function ArtistPayout() {
         fetchPayoutData();
     }, []);
 
+    useEffect(() => {
+        if (!methods.some((method) => method.verificationStatus === "PENDING_PROVIDER")) {
+            return;
+        }
+
+        const timeout = window.setTimeout(async () => {
+            try {
+                const methodsRes = await api.get("/api/artist/payout-methods");
+                const fetchedMethods = methodsRes.data.data?.methods || [];
+                setMethods(fetchedMethods);
+                setFormData(payoutFormFromMethods(fetchedMethods));
+            } catch (error) {
+                console.error("Failed to refresh payout validation status:", error);
+            }
+        }, 4000);
+
+        return () => window.clearTimeout(timeout);
+    }, [methods]);
+
     const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
         const { id, value } = e.target;
         setFormData(prev => ({ ...prev, [id]: value }));
@@ -61,21 +72,48 @@ export default function ArtistPayout() {
     const handleSave = async () => {
         try {
             setSaving(true);
-            await api.patch("/api/artist/profile", {
-                payoutDetails: formData
-            });
-            alert("Payout details updated successfully!");
-        } catch (error) {
+            setMessage(null);
+            setMessageType(null);
+            const res = await api.put("/api/artist/payout-methods", formData);
+            const updatedMethods = res.data.data?.methods || [];
+            setMethods(updatedMethods);
+            setFormData(payoutFormFromMethods(updatedMethods));
+            setMessage("Payout details saved. Razorpay validation has been triggered.");
+            setMessageType("success");
+        } catch (error: any) {
             console.error("Failed to save payout details:", error);
-            alert("Failed to save changes. Please try again.");
+            setMessage(error.response?.data?.message || "Failed to save changes. Please try again.");
+            setMessageType("error");
         } finally {
             setSaving(false);
         }
     };
 
-    const currentEarnings = stats?.totalRevenue || 0;
-    const threshold = 500;
-    const progress = Math.min((currentEarnings / threshold) * 100, 100);
+    const currentEarnings = stats?.totalEarnings || 0;
+    const defaultMethod = methods.find((method) => method.isDefault) || methods[0] || null;
+    const defaultMethodLabel =
+        defaultMethod?.methodType === "BANK_ACCOUNT"
+            ? "Bank Account"
+            : defaultMethod?.methodType === "UPI"
+              ? "UPI"
+              : "Not Set";
+    const statusHeading =
+        defaultMethod?.verificationStatus === "VERIFIED"
+            ? "Razorpay Verified Payout Method"
+            : defaultMethod?.verificationStatus === "PENDING_PROVIDER"
+              ? "Razorpay Validation In Progress"
+            : defaultMethod?.verificationStatus === "REJECTED"
+              ? "Payout Review Rejected"
+              : defaultMethod?.verificationStatus === "REQUIRES_RESUBMISSION"
+                ? "Payout Method Needs Update"
+                : defaultMethod
+                  ? "Payout Method Under Review"
+                  : "Settlement Details On File";
+    const statusCopy =
+        defaultMethod?.rejectionReason ||
+        defaultMethod?.verificationNotes ||
+        defaultMethod?.providerValidation?.reason ||
+        "Artist commission: 25% gross • Finance reviews only exceptional payout validation cases before settlement";
 
     if (loading) {
         return (
@@ -90,25 +128,13 @@ export default function ArtistPayout() {
             <div className="flex-1 px-4 sm:px-8 pb-12 w-full">
                 {/* Header Section */}
                 <div className="flex flex-col md:flex-row md:items-end justify-between mb-10 gap-6">
-                    <div className="space-y-2">
-                        <div className="inline-flex items-center gap-2 bg-neutral-black text-white px-3 py-1 rounded-[4px] font-display text-[10px] font-black uppercase tracking-[2px]">
-                            <DollarSign className="w-3 h-3 text-primary" /> Financial Node
-                        </div>
-                        <h1 className="font-display text-[ clamp(32px,5vw,48px) ] font-black text-neutral-black leading-none uppercase tracking-tight">
-                            Payout <span className="text-primary italic">Control</span>
-                        </h1>
-                        <p className="font-display text-[14px] font-bold text-neutral-g4 uppercase tracking-wider">
-                            Configure your clearing house and monitor threshold progression.
-                        </p>
-                    </div>
-
                     <div className="bg-white border-[2px] border-neutral-black px-6 py-4 rounded-[4px] shadow-[4px_4px_0px_0px_rgba(255,222,0,1)] flex items-center gap-4">
                         <div className="w-10 h-10 bg-neutral-black rounded-full flex items-center justify-center text-primary text-[20px]">
                             💰
                         </div>
                         <div>
-                            <p className="font-display text-[10px] font-black uppercase text-neutral-g3">Cycle Status</p>
-                            <p className="font-display text-[14px] font-black text-neutral-black uppercase tracking-[1px]">1st of Month Clearance</p>
+                            <p className="font-display text-[10px] font-black uppercase text-neutral-g3">Payout Method</p>
+                            <p className="font-display text-[14px] font-black text-neutral-black uppercase tracking-[1px]">Manual Settlement Ready</p>
                         </div>
                     </div>
                 </div>
@@ -117,12 +143,22 @@ export default function ArtistPayout() {
                 <div className="bg-neutral-black border-[2px] border-neutral-black rounded-[6px] p-6 flex items-center gap-6 mb-10 shadow-[8px_8px_0px_0px_rgba(0,0,0,0.1)]">
                     <Zap className="w-8 h-8 text-primary animate-pulse" />
                     <div>
-                        <p className="font-display text-[16px] font-black text-white uppercase tracking-[1px]">Automated Clearing House Active</p>
+                        <p className="font-display text-[16px] font-black text-white uppercase tracking-[1px]">{statusHeading}</p>
                         <p className="font-display text-[11px] font-bold text-neutral-g2 uppercase tracking-wide opacity-60 mt-1">
-                            Min threshold: ₹500 &nbsp;•&nbsp; Artist Commission: 25% Gross &nbsp;•&nbsp; Rolling balance support enabled
+                            {statusCopy}
                         </p>
                     </div>
                 </div>
+
+                {message && (
+                    <div className={`mb-8 border-[2px] border-neutral-black rounded-[6px] px-5 py-4 font-display text-[11px] font-black uppercase tracking-[1px] ${
+                        messageType === "success"
+                            ? "bg-success/10 text-success"
+                            : "bg-danger/10 text-danger"
+                    }`}>
+                        {message}
+                    </div>
+                )}
 
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-10">
                     {/* UPI Section */}
@@ -224,7 +260,6 @@ export default function ArtistPayout() {
                     </div>
                 </div>
 
-                {/* Threshold Tracker */}
                 <div className="bg-white border-[2px] border-neutral-black rounded-[6px] p-8 mb-10 relative overflow-hidden shadow-[12px_12px_0px_0px_rgba(0,0,0,1)]">
                     <div className="absolute top-0 right-0 w-64 h-full bg-primary opacity-5 -skew-x-12 translate-x-24 pointer-events-none" />
 
@@ -232,34 +267,37 @@ export default function ArtistPayout() {
                         <div className="flex-1 space-y-4">
                             <div className="flex items-center gap-2">
                                 <Info className="w-5 h-5 text-primary" />
-                                <span className="font-display text-[12px] font-black uppercase tracking-[2px] text-neutral-g4">Accumulation Progress</span>
+                                <span className="font-display text-[12px] font-black uppercase tracking-[2px] text-neutral-g4">Eligible Earnings Snapshot</span>
                             </div>
                             <div className="font-display text-[48px] font-black text-neutral-black leading-none italic uppercase tracking-tighter">
                                 ₹{currentEarnings.toLocaleString('en-IN')}
                             </div>
-                            <div className="font-display text-[13px] font-bold text-neutral-g4 uppercase tracking-wide flex items-center gap-2">
-                                {currentEarnings >= threshold
-                                    ? <span className="text-success flex items-center gap-1 font-black">● Threshold Breakthrough Achieved</span>
-                                    : <span className="text-neutral-black">Target Deficit: ₹{(threshold - currentEarnings).toLocaleString('en-IN')}</span>}
+                            <div className="font-display text-[13px] font-bold text-neutral-black uppercase tracking-wide">
+                                Previous month royalties are settled manually on the 10th day of the current month after finance reconciliation and payout-method validation.
                             </div>
                         </div>
 
                         <div className="w-full md:w-[400px] space-y-4">
-                            <div className="flex items-center justify-between">
-                                <span className="font-display text-[11px] font-black text-neutral-black uppercase tracking-[2px]">Phase Completion</span>
-                                <span className="font-display text-[16px] font-black text-success italic">{Math.round(progress)}%</span>
-                            </div>
-                            <div className="w-full h-8 bg-neutral-g1 border-[2px] border-neutral-black rounded-full overflow-hidden p-[3px]">
-                                <div
-                                    className="h-full bg-success border-[1px] border-neutral-black rounded-full transition-all duration-1000 ease-out shadow-[inset_0px_0px_10px_rgba(0,0,0,0.1)]"
-                                    style={{ width: `${progress}%` }}
-                                >
-                                    {progress > 10 && <div className="w-full h-full bg-white/20 animate-pulse" />}
+                            <div className="bg-neutral-g1 border-[2px] border-neutral-black rounded-[6px] p-5 space-y-3">
+                                <div className="font-display text-[11px] font-black text-neutral-black uppercase tracking-[2px]">Current Method</div>
+                                <div className="font-display text-[20px] font-black text-neutral-black uppercase tracking-tight">
+                                    {defaultMethodLabel}
                                 </div>
-                            </div>
-                            <div className="flex justify-between font-display text-[10px] font-black text-neutral-g3 uppercase tracking-[2px]">
-                                <span className="bg-white border-[1px] border-neutral-black px-2 py-0.5 rounded-[2px]">₹0 Origin</span>
-                                <span className="bg-primary text-neutral-black border-[1px] border-neutral-black px-2 py-0.5 rounded-[2px] shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]">Threshold: ₹500</span>
+                                <div className="font-display text-[10px] font-bold text-neutral-g4 uppercase tracking-[1.5px]">
+                                    {defaultMethod
+                                        ? [
+                                              `Current status: ${defaultMethod.verificationStatus.replaceAll("_", " ")}`,
+                                              defaultMethod.providerValidation?.registeredName
+                                                  ? `Registered name: ${defaultMethod.providerValidation.registeredName}`
+                                                  : null,
+                                              typeof defaultMethod.providerValidation?.nameMatchScore === "number"
+                                                  ? `Name match score: ${defaultMethod.providerValidation.nameMatchScore}`
+                                                  : null,
+                                          ]
+                                              .filter(Boolean)
+                                              .join(" • ")
+                                        : "Keep one active method accurate so finance can settle previous-month royalties on the 10th without delays."}
+                                </div>
                             </div>
                         </div>
                     </div>

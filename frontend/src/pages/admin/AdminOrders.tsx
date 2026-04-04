@@ -13,6 +13,7 @@ import {
 import api from "../../api/axios";
 import Toast from "../../components/shared/Toast";
 import OrderDetailsModal from "../../components/modals/OrderDetailsModal";
+import ReturnPolicyNote from "../../components/shared/ReturnPolicyNote";
 
 interface AdminOrder {
     id: string;
@@ -156,6 +157,8 @@ export default function AdminOrders() {
                         </p>
                     </div>
                 </div>
+
+                <ReturnPolicyNote variant="admin" className="mb-8" />
 
                 {error && (
                     <div className="bg-red-50 border-[2px] border-red-500 p-6 rounded-[4px] mb-8 flex items-center gap-4 animate-bounce">

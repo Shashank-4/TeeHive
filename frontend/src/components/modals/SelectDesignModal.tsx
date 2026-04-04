@@ -7,6 +7,7 @@ interface Design {
     title: string;
     imageUrl: string;
     isManifested?: boolean;
+    status?: string;
 }
 
 type ViewType = "front" | "back";
@@ -47,6 +48,7 @@ const SelectDesignModal: React.FC<SelectDesignModalProps> = ({
 
     const handleSelect = (design: Design) => {
         if (design.isManifested && design.id !== (targetView === "front" ? currentFrontDesignId : currentBackDesignId)) return;
+        if (design.status !== "APPROVED") return;
         onDesignSelect(design, targetView);
         onClose();
     };
@@ -84,7 +86,9 @@ const SelectDesignModal: React.FC<SelectDesignModalProps> = ({
                             {designs.map((design) => {
                                 const isCurrent = currentDesignId === design.id;
                                 const isOther = targetView === "front" ? currentBackDesignId === design.id : currentFrontDesignId === design.id;
-                                const isDisabled = design.isManifested && !isCurrent && !isOther;
+                                const isApproved = design.status === "APPROVED";
+                                const isManifestedDisabled = design.isManifested && !isCurrent && !isOther;
+                                const isDisabled = !isApproved || isManifestedDisabled;
 
                                 return (
                                     <button
@@ -113,9 +117,16 @@ const SelectDesignModal: React.FC<SelectDesignModalProps> = ({
                                                     <CheckCircle2 size={14} className="text-neutral-black stroke-[3px]" />
                                                 </div>
                                             )}
-                                            {isDisabled && (
-                                                <div className="bg-neutral-r1 text-white text-[7px] font-black font-display uppercase px-2 py-1 rounded-[2px] shadow-sm border-[1px] border-neutral-black">
+                                            {isManifestedDisabled && (
+                                                <div className="bg-primary text-neutral-black text-[7px] font-black font-display uppercase px-2 py-1 rounded-[2px] shadow-sm border-[1px] border-neutral-black">
                                                     Manifested
+                                                </div>
+                                            )}
+                                            {!isApproved && !isManifestedDisabled && (
+                                                <div className="bg-neutral-black/90 text-white text-[7px] font-black font-display uppercase px-2 py-1 rounded-[2px] shadow-sm border-[1px] border-neutral-black">
+                                                    {design.status === "REJECTED"
+                                                        ? "Rejected"
+                                                        : "Pending"}
                                                 </div>
                                             )}
                                             {isOther && (
@@ -139,9 +150,14 @@ const SelectDesignModal: React.FC<SelectDesignModalProps> = ({
                 </div>
 
                 {/* Footer */}
-                <div className="p-6 bg-white border-t-[2px] border-neutral-black flex justify-center">
-                    <p className="font-display text-[10px] font-black uppercase text-neutral-g3 tracking-[2px] animate-pulse">
+                <div className="p-6 bg-white border-t-[2px] border-neutral-black flex flex-col items-center gap-3 text-center">
+                    <p className="font-display text-[10px] font-black uppercase text-neutral-g3 tracking-[2px]">
                         Select visual asset to initialize manifestation circuit
+                    </p>
+                    <p className="font-display text-[10px] font-bold text-neutral-black max-w-lg leading-relaxed">
+                        <span className="font-black uppercase tracking-wide">Note:</span> Designs labeled{" "}
+                        <span className="font-black uppercase">Manifested</span> are already used in a product and cannot be
+                        selected again for a new product.
                     </p>
                 </div>
             </div>

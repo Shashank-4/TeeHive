@@ -9,15 +9,12 @@ import {
     FileText,
     AlertTriangle,
     Maximize2,
-    MousePointer2,
-    SlidersHorizontal
+    X,
 } from "lucide-react";
-import {
-    DEFAULT_SHADOW_INTENSITY,
-} from "../../constants";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import MockupCanvas, {
     TShirtColor,
+    type DesignTransform,
 } from "../../components/mockup-editor/MockupCanvas";
 import type { MockupCanvasHandle } from "../../components/mockup-editor/MockupCanvas";
 import SelectDesignModal from "../../components/modals/SelectDesignModal";
@@ -43,28 +40,43 @@ interface Category {
     name: string;
 }
 
+interface DraftEditorState {
+    frontDesign?: Design | null;
+    backDesign?: Design | null;
+    frontTransform?: DesignTransform | null;
+    backTransform?: DesignTransform | null;
+    selectedColors?: string[];
+    primaryColor?: string;
+    primaryView?: ViewType;
+}
+
 export default function ArtistMockupCreator() {
     const navigate = useNavigate();
+    const [searchParams] = useSearchParams();
+    const editingProductId = searchParams.get("productId");
+    const isEditMode = Boolean(editingProductId);
     const [previewColor, setPreviewColor] = useState<TShirtColor>(TShirtColor.White);
     const [selectedColors, setSelectedColors] = useState<TShirtColor[]>([TShirtColor.White]);
     const [primaryColor, setPrimaryColor] = useState<TShirtColor>(TShirtColor.White);
     const [primaryView, setPrimaryView] = useState<ViewType>("front");
     const [currentView, setCurrentView] = useState<ViewType>("front");
     const [productName, setProductName] = useState("");
+    const [tagInput, setTagInput] = useState("");
+    const [tags, setTags] = useState<string[]>([]);
     const [price, setPrice] = useState("");
     const [showGuides, setShowGuides] = useState(true);
     const [isSaving, setIsSaving] = useState(false);
+    const [isHydratingDraft, setIsHydratingDraft] = useState(false);
     const [saveError, setSaveError] = useState<string | null>(null);
     const [showPublishModal, setShowPublishModal] = useState(false);
     const mockupRef = useRef<MockupCanvasHandle>(null);
+    const [initialFrontTransform, setInitialFrontTransform] = useState<DesignTransform | null>(null);
+    const [initialBackTransform, setInitialBackTransform] = useState<DesignTransform | null>(null);
 
     const [categories, setCategories] = useState<Category[]>([]);
     const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
     const [pricingProtocols, setPricingProtocols] = useState<PricingProtocol[]>([]);
     const [globalColors, setGlobalColors] = useState<{ name: string; hex: string; mockupUrl: string; backMockupUrl?: string; shadowMapUrl?: string; displacementMapUrl?: string }[]>([]);
-
-    // Realism Engine sliders
-    const [shadowIntensity, setShadowIntensity] = useState(DEFAULT_SHADOW_INTENSITY);
 
     useEffect(() => {
         const fetchCategories = async () => {
@@ -91,7 +103,7 @@ export default function ArtistMockupCreator() {
                 const colors = res.data.data.colors;
                 setGlobalColors(colors);
                 // Auto-select first global color as default
-                if (colors.length > 0) {
+                if (!isEditMode && colors.length > 0) {
                     const firstHex = colors[0].hex as TShirtColor;
                     setPreviewColor(firstHex);
                     setSelectedColors([firstHex]);
@@ -104,10 +116,48 @@ export default function ArtistMockupCreator() {
         fetchCategories();
         fetchPricing();
         fetchColors();
-    }, []);
+    }, [isEditMode]);
 
     const [frontDesign, setFrontDesign] = useState<Design | null>(null);
     const [backDesign, setBackDesign] = useState<Design | null>(null);
+
+    useEffect(() => {
+        if (!editingProductId) return;
+
+        const fetchDraftProduct = async () => {
+            try {
+                setIsHydratingDraft(true);
+                setSaveError(null);
+                const res = await api.get(`/api/artist/products/${editingProductId}`);
+                const product = res.data.data.product;
+                const draftState = (product.draftEditorState || {}) as DraftEditorState;
+
+                setProductName(product.name || "");
+                setSelectedCategories(Array.isArray(product.categories) ? product.categories : []);
+                setTags(Array.isArray(product.tags) ? product.tags : []);
+                setPreviewColor((draftState.primaryColor || product.primaryColor || product.tshirtColor) as TShirtColor);
+                setSelectedColors(
+                    ((draftState.selectedColors && draftState.selectedColors.length
+                        ? draftState.selectedColors
+                        : product.availableColors && product.availableColors.length
+                          ? product.availableColors
+                          : [product.tshirtColor]) as TShirtColor[])
+                );
+                setPrimaryColor((draftState.primaryColor || product.primaryColor || product.tshirtColor) as TShirtColor);
+                setPrimaryView((draftState.primaryView || product.primaryView || "front") as ViewType);
+                setFrontDesign(draftState.frontDesign || product.design || null);
+                setBackDesign(draftState.backDesign || null);
+                setInitialFrontTransform(draftState.frontTransform || null);
+                setInitialBackTransform(draftState.backTransform || null);
+            } catch (err: any) {
+                setSaveError(err.response?.data?.message || "Failed to load draft product");
+            } finally {
+                setIsHydratingDraft(false);
+            }
+        };
+
+        fetchDraftProduct();
+    }, [editingProductId]);
 
     // Auto-calculate Price Logic
     useEffect(() => {
@@ -147,6 +197,22 @@ export default function ArtistMockupCreator() {
         else setBackDesign(null);
     };
 
+    const addTag = (rawValue: string) => {
+        const normalized = rawValue.trim().toLowerCase();
+        if (!normalized) return;
+        if (tags.includes(normalized)) return;
+        if (tags.length >= 5) {
+            setSaveError("Maximum 5 tags allowed");
+            return;
+        }
+        setTags((prev) => [...prev, normalized]);
+        setTagInput("");
+    };
+
+    const removeTag = (tag: string) => {
+        setTags((prev) => prev.filter((t) => t !== tag));
+    };
+
     // colors is now dynamically fetched
     const activeColorsList = globalColors.length > 0 ? globalColors.map(c => ({ name: c.name, color: c.hex as TShirtColor, mockupUrl: c.mockupUrl })) : [];
 
@@ -161,18 +227,71 @@ export default function ArtistMockupCreator() {
         try {
             if (!mockupRef.current) throw new Error("Manifestation Engine Offline");
 
-            const frontBlob = await mockupRef.current.exportView("front");
-            const frontFile = new File([frontBlob], `${productName.toLowerCase().replace(/\s+/g, "-")}-front.png`, { type: "image/png" });
+            const hexSlug = (hex: string) => hex.replace(/^#/, "").toLowerCase();
 
+            const blobsByColor: { hex: string; front: Blob; back: Blob | null }[] = [];
+            for (const color of selectedColors) {
+                const gc = globalColors.find((c) => c.hex.toLowerCase() === color.toLowerCase());
+                if (!gc) continue;
+                const frontBlob = await mockupRef.current.exportViewWithAppearance({
+                    tshirtColor: color,
+                    colorBaseUrl: gc.mockupUrl || null,
+                    colorBackBaseUrl: gc.backMockupUrl || null,
+                    shadowMapUrl: gc.shadowMapUrl || null,
+                    displacementMapUrl: gc.displacementMapUrl || null,
+                    view: "front",
+                });
+                let backBlob: Blob | null = null;
+                if (backDesign) {
+                    backBlob = await mockupRef.current.exportViewWithAppearance({
+                        tshirtColor: color,
+                        colorBaseUrl: gc.mockupUrl || null,
+                        colorBackBaseUrl: gc.backMockupUrl || null,
+                        shadowMapUrl: gc.shadowMapUrl || null,
+                        displacementMapUrl: gc.displacementMapUrl || null,
+                        view: "back",
+                    });
+                }
+                blobsByColor.push({ hex: color, front: frontBlob, back: backBlob });
+            }
+
+            const primaryEntry =
+                blobsByColor.find((b) => b.hex.toLowerCase() === primaryColor.toLowerCase()) ??
+                blobsByColor[0];
+            if (!primaryEntry) throw new Error("Could not export mockups for selected colors");
+
+            const frontFile = new File(
+                [primaryEntry.front],
+                `${productName.toLowerCase().replace(/\s+/g, "-")}-front.png`,
+                { type: "image/png" }
+            );
             let backFile: File | null = null;
-            if (backDesign) {
-                const backBlob = await mockupRef.current.exportView("back");
-                backFile = new File([backBlob], `${productName.toLowerCase().replace(/\s+/g, "-")}-back.png`, { type: "image/png" });
+            if (backDesign && primaryEntry.back) {
+                backFile = new File(
+                    [primaryEntry.back],
+                    `${productName.toLowerCase().replace(/\s+/g, "-")}-back.png`,
+                    { type: "image/png" }
+                );
             }
 
             const formData = new FormData();
             formData.append("mockupImage", frontFile);
             if (backFile) formData.append("backMockupImage", backFile);
+
+            for (const { hex, front, back } of blobsByColor) {
+                if (hex.toLowerCase() === primaryColor.toLowerCase()) continue;
+                const slug = hexSlug(hex);
+                formData.append(
+                    `cfront_${slug}`,
+                    new File([front], `front-${slug}.png`, { type: "image/png" })
+                );
+                if (back) {
+                    formData.append(
+                        `cback_${slug}`,
+                        new File([back], `back-${slug}.png`, { type: "image/png" })
+                    );
+                }
+            }
             formData.append("name", productName.trim());
             formData.append("price", price);
             formData.append("tshirtColor", previewColor);
@@ -182,43 +301,77 @@ export default function ArtistMockupCreator() {
             formData.append("designId", (frontDesign || backDesign)!.id);
             formData.append("status", status);
             formData.append("categories", JSON.stringify(selectedCategories));
+            formData.append("tags", JSON.stringify(tags));
+            formData.append(
+                "draftEditorState",
+                JSON.stringify({
+                    frontDesign,
+                    backDesign,
+                    frontTransform: mockupRef.current?.getDesignTransform("front") || null,
+                    backTransform: mockupRef.current?.getDesignTransform("back") || null,
+                    selectedColors,
+                    primaryColor,
+                    primaryView,
+                })
+            );
 
-            await api.post("/api/artist/products", formData, { headers: { "Content-Type": "multipart/form-data" } });
+            if (isEditMode && editingProductId) {
+                await api.patch(`/api/artist/products/${editingProductId}`, formData, {
+                    headers: { "Content-Type": "multipart/form-data" },
+                });
+            } else {
+                await api.post("/api/artist/products", formData, {
+                    headers: { "Content-Type": "multipart/form-data" },
+                });
+            }
             navigate("/artist/manage-products");
         } catch (err: any) {
             setSaveError(err.response?.data?.message || "Transmission Failure to Hive Server");
-        } finally {
             setIsSaving(false);
         }
     };
 
     return (
-        <div className="w-full min-h-screen bg-neutral-g1 flex flex-col pt-4">
+        <div className="w-full min-h-screen bg-neutral-g1 flex flex-col pt-4 relative">
+            {(isSaving || isHydratingDraft) && (
+                <div
+                    className="fixed inset-0 z-[200] bg-neutral-black/90 backdrop-blur-sm flex flex-col items-center justify-center gap-8 px-8"
+                    role="status"
+                    aria-live="polite"
+                    aria-busy="true"
+                >
+                    <img
+                        src="/assets/loading-image.svg"
+                        alt=""
+                        className="w-28 h-28 object-contain animate-bounce"
+                    />
+                    <div className="text-center space-y-2 max-w-md">
+                        <p className="font-display text-[13px] font-black uppercase tracking-[2px] text-primary">
+                            {isHydratingDraft ? "Loading draft product" : isEditMode ? "Updating draft product" : "Manifesting product"}
+                        </p>
+                        <p className="font-display text-[11px] font-bold text-white/60 uppercase tracking-wider leading-relaxed">
+                            {isHydratingDraft
+                                ? "Restoring your draft configuration and mockup state."
+                                : "Uploading mockups and syncing your catalog. You will be redirected when complete."}
+                        </p>
+                    </div>
+                </div>
+            )}
             <div className="flex-1 px-4 sm:px-8 pb-12 w-full">
                 {/* Workspace Header */}
                 <div className="flex flex-col md:flex-row md:items-end justify-between mb-10 gap-6">
-                    <div className="space-y-2">
-                        <div className="inline-flex items-center gap-2 bg-neutral-black text-white px-3 py-1 rounded-[4px] font-display text-[10px] font-black uppercase tracking-[2px]">
-                            <MousePointer2 className="w-3 h-3 text-primary" /> Manifestation Forge
-                        </div>
-                        <h1 className="font-display text-[ clamp(32px,5vw,48px) ] font-black text-neutral-black leading-none uppercase tracking-tight">
-                            Product <span className="text-primary italic">Creator</span>
-                        </h1>
-                        <p className="font-display text-[14px] font-bold text-neutral-g4 uppercase tracking-wider">
-                            Transform your source graphics into verified hive gear.
-                        </p>
-                    </div>
-
                     <div className="flex gap-4">
                         <button
                             onClick={() => handleSaveProduct("DRAFT")}
-                            className="flex items-center gap-3 px-6 py-3 bg-white border-[2px] border-neutral-black rounded-[4px] font-display text-[13px] font-black uppercase tracking-[1px] shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] hover:translate-x-[1px] hover:translate-y-[1px] hover:shadow-none transition-all"
+                            disabled={isSaving}
+                            className="flex items-center gap-3 px-6 py-3 bg-white border-[2px] border-neutral-black rounded-[4px] font-display text-[13px] font-black uppercase tracking-[1px] shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] hover:translate-x-[1px] hover:translate-y-[1px] hover:shadow-none transition-all disabled:opacity-40 disabled:pointer-events-none"
                         >
-                            <FileText className="w-4 h-4" /> Save Lab Draft
+                            <FileText className="w-4 h-4" /> {isEditMode ? "Update Lab Draft" : "Save Lab Draft"}
                         </button>
                         <button
                             onClick={() => setShowPublishModal(true)}
-                            className="flex items-center gap-3 px-8 py-3 bg-primary border-[2px] border-neutral-black rounded-[4px] font-display text-[13px] font-black uppercase tracking-[1px] shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] hover:translate-x-[2px] hover:translate-y-[2px] hover:shadow-none transition-all"
+                            disabled={isSaving}
+                            className="flex items-center gap-3 px-8 py-3 bg-primary border-[2px] border-neutral-black rounded-[4px] font-display text-[13px] font-black uppercase tracking-[1px] shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] hover:translate-x-[2px] hover:translate-y-[2px] hover:shadow-none transition-all disabled:opacity-40 disabled:pointer-events-none"
                         >
                             <Send className="w-4 h-4" /> Transmit to Store
                         </button>
@@ -233,7 +386,19 @@ export default function ArtistMockupCreator() {
                             <div className="absolute top-0 right-0 w-32 h-full bg-neutral-g1/50 -skew-x-12 translate-x-16 pointer-events-none" />
 
                             <div className="flex justify-between items-center mb-8 relative z-10">
-                                <h2 className="font-display text-[18px] font-black uppercase tracking-[1px]">Real-Time Preview</h2>
+                                
+                                {/* View Switcher */}
+                                <div className="flex gap-4 z-10">
+                                    {["front", "back"].map((v) => (
+                                        <button
+                                            key={v}
+                                            onClick={() => setCurrentView(v as ViewType)}
+                                            className={`px-8 py-4 border-[2px] border-neutral-black rounded-[4px] font-display text-[12px] font-black uppercase tracking-[2px] transition-all ${currentView === v ? 'bg-neutral-black text-white shadow-[6px_6px_0px_0px_rgba(255,222,0,1)] translate-x-[-2px] translate-y-[-2px]' : 'bg-white hover:bg-neutral-g1'}`}
+                                        >
+                                            {v} Side {(v === "front" ? frontDesign : backDesign) && "●"}
+                                        </button>
+                                    ))}
+                                </div>
                                 <div className="flex gap-2">
                                     <button
                                         onClick={() => setShowGuides(!showGuides)}
@@ -258,7 +423,8 @@ export default function ArtistMockupCreator() {
                                     colorBackBaseUrl={globalColors.find(c => c.hex.toLowerCase() === previewColor.toLowerCase())?.backMockupUrl || null}
                                     shadowMapUrl={globalColors.find(c => c.hex.toLowerCase() === previewColor.toLowerCase())?.shadowMapUrl || null}
                                     displacementMapUrl={globalColors.find(c => c.hex.toLowerCase() === previewColor.toLowerCase())?.displacementMapUrl || null}
-                                    shadowIntensity={shadowIntensity}
+                                    initialFrontTransform={initialFrontTransform}
+                                    initialBackTransform={initialBackTransform}
                                 />
                                 {!frontDesign && !backDesign && (
                                     <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none opacity-20">
@@ -266,19 +432,6 @@ export default function ArtistMockupCreator() {
                                         <p className="font-display text-[14px] font-black uppercase italic tracking-[2px]">Awaiting Visual Input</p>
                                     </div>
                                 )}
-                            </div>
-
-                            {/* View Switcher */}
-                            <div className="mt-8 flex gap-4 relative z-10">
-                                {["front", "back"].map((v) => (
-                                    <button
-                                        key={v}
-                                        onClick={() => setCurrentView(v as ViewType)}
-                                        className={`flex-1 py-4 border-[2px] border-neutral-black rounded-[4px] font-display text-[12px] font-black uppercase tracking-[2px] transition-all ${currentView === v ? 'bg-neutral-black text-white shadow-[6px_6px_0px_0px_rgba(255,222,0,1)] translate-x-[-2px] translate-y-[-2px]' : 'bg-white hover:bg-neutral-g1'}`}
-                                    >
-                                        {v} Side {(v === "front" ? frontDesign : backDesign) && "●"}
-                                    </button>
-                                ))}
                             </div>
                         </div>
 
@@ -369,6 +522,54 @@ export default function ArtistMockupCreator() {
                                         })}
                                     </div>
                                 </div>
+                                <div className="space-y-2">
+                                    <label className="font-display text-[10px] font-black uppercase tracking-[2px] text-neutral-g4 px-1">
+                                        Search Tags (Max 5)
+                                    </label>
+                                    <div className="flex gap-2">
+                                        <input
+                                            value={tagInput}
+                                            onChange={(e) => setTagInput(e.target.value)}
+                                            onKeyDown={(e) => {
+                                                if (e.key === "Enter" || e.key === ",") {
+                                                    e.preventDefault();
+                                                    addTag(tagInput);
+                                                }
+                                            }}
+                                            placeholder="e.g. anime, streetwear"
+                                            className="w-full bg-neutral-g1 border-[2px] border-neutral-black px-4 py-2.5 font-display text-[12px] font-black tracking-[1px] rounded-[4px] outline-none focus:bg-white transition-all"
+                                        />
+                                        <button
+                                            type="button"
+                                            onClick={() => addTag(tagInput)}
+                                            disabled={tags.length >= 5}
+                                            className="px-4 py-2.5 bg-primary border-[2px] border-neutral-black rounded-[4px] font-display text-[10px] font-black uppercase tracking-[1px] disabled:opacity-40"
+                                        >
+                                            Add
+                                        </button>
+                                    </div>
+                                    <div className="flex flex-wrap gap-2 min-h-[28px]">
+                                        {tags.map((tag) => (
+                                            <span
+                                                key={tag}
+                                                className="inline-flex items-center gap-1 px-2 py-1 bg-primary/20 border-[1px] border-neutral-black rounded-[2px] font-display text-[10px] font-black uppercase"
+                                            >
+                                                {tag}
+                                                <button
+                                                    type="button"
+                                                    onClick={() => removeTag(tag)}
+                                                    className="hover:text-danger"
+                                                    aria-label={`Remove ${tag}`}
+                                                >
+                                                    <X className="w-3 h-3" />
+                                                </button>
+                                            </span>
+                                        ))}
+                                    </div>
+                                    <p className="text-[9px] font-bold text-neutral-g3 uppercase">
+                                        Customer search matches these tags directly.
+                                    </p>
+                                </div>
                             </div>
                         </div>
 
@@ -397,7 +598,11 @@ export default function ArtistMockupCreator() {
                                                     />
                                                     {isSelected && (
                                                         <button
-                                                            onClick={() => setPrimaryColor(c.color)}
+                                                            onClick={() => {
+                                                                // Primary color should drive the exported mockup base.
+                                                                setPrimaryColor(c.color);
+                                                                setPreviewColor(c.color);
+                                                            }}
                                                             className={`absolute -top-1 -right-1 w-5 h-5 rounded-full flex items-center justify-center border-[1px] border-neutral-black shadow-sm transition-all ${isPrimary ? 'bg-primary' : 'bg-white'}`}
                                                         >
                                                             <Star className={`w-3 h-3 ${isPrimary ? 'fill-neutral-black' : 'text-neutral-g2'}`} />
@@ -426,41 +631,6 @@ export default function ArtistMockupCreator() {
                             </div>
                         </div>
 
-                        {/* 4. Realism Engine */}
-                        <div className="bg-white border-[2px] border-neutral-black rounded-[6px] p-6 shadow-[8px_8px_0px_0px_rgba(0,0,0,1)]">
-                            <h3 className="font-display text-[14px] font-black uppercase tracking-[1px] mb-6 flex items-center gap-2">
-                                <SlidersHorizontal className="w-4 h-4 text-primary" /> Realism Engine
-                            </h3>
-                            <div className="space-y-5">
-                                {/* Shadow Depth */}
-                                <div className="space-y-2">
-                                    <div className="flex items-center justify-between">
-                                        <label className="font-display text-[10px] font-black uppercase tracking-[2px] text-neutral-g4">Shadow Depth</label>
-                                        <span className="font-display text-[11px] font-black text-neutral-black bg-neutral-g1 px-2 py-0.5 rounded-[2px] border border-neutral-black/10">{(shadowIntensity * 100).toFixed(0)}%</span>
-                                    </div>
-                                    <input
-                                        type="range"
-                                        min="0"
-                                        max="100"
-                                        step="5"
-                                        value={shadowIntensity * 100}
-                                        onChange={(e) => setShadowIntensity(Number(e.target.value) / 100)}
-                                        className="w-full h-2 bg-neutral-g2 rounded-full appearance-none cursor-pointer accent-primary"
-                                    />
-                                    <p className="font-display text-[8px] font-bold text-neutral-g3 uppercase">Multiply blend strength of fold shadow map</p>
-                                </div>
-
-                                {/* Reset button */}
-                                <button
-                                    onClick={() => {
-                                        setShadowIntensity(DEFAULT_SHADOW_INTENSITY);
-                                    }}
-                                    className="w-full py-2 bg-neutral-g1 border-[2px] border-neutral-black/20 rounded-[4px] font-display text-[10px] font-black uppercase tracking-[1px] text-neutral-g4 hover:bg-white hover:border-neutral-black hover:text-neutral-black transition-all"
-                                >
-                                    Reset to Defaults
-                                </button>
-                            </div>
-                        </div>
                     </div>
                 </div>
             </div>

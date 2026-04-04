@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
-import { X, Loader2, Package, User, MapPin, Truck, AlertCircle } from "lucide-react";
+import { X, Loader2, Package, User, MapPin, Truck, AlertCircle, Phone } from "lucide-react";
 import api from "../../api/axios";
+import ReturnPolicyNote from "../shared/ReturnPolicyNote";
 
 interface OrderDetailsModalProps {
     orderId: string;
@@ -11,12 +12,25 @@ export default function OrderDetailsModal({ orderId, onClose }: OrderDetailsModa
     const [loading, setLoading] = useState(true);
     const [details, setDetails] = useState<any>(null);
     const [error, setError] = useState<string | null>(null);
+    const [imagePreviewUrl, setImagePreviewUrl] = useState<string | null>(null);
+    const [claimStatus, setClaimStatus] = useState("UNDER_REVIEW");
+    const [claimReviewNote, setClaimReviewNote] = useState("");
+    const [claimSaving, setClaimSaving] = useState(false);
+    const [claimFeedback, setClaimFeedback] = useState<string | null>(null);
 
     useEffect(() => {
         const fetchDetails = async () => {
             try {
                 const res = await api.get(`/api/admin/orders/${orderId}`);
                 setDetails(res.data.data);
+                if (res.data.data?.returnClaim) {
+                    setClaimStatus(
+                        res.data.data.returnClaim.status === "OPEN"
+                            ? "UNDER_REVIEW"
+                            : res.data.data.returnClaim.status
+                    );
+                    setClaimReviewNote(res.data.data.returnClaim.reviewNote || "");
+                }
             } catch (err) {
                 console.error(err);
                 setError("Failed to load order details");
@@ -27,6 +41,37 @@ export default function OrderDetailsModal({ orderId, onClose }: OrderDetailsModa
 
         fetchDetails();
     }, [orderId]);
+
+    useEffect(() => {
+        if (!imagePreviewUrl) return;
+        const onKey = (e: KeyboardEvent) => {
+            if (e.key === "Escape") setImagePreviewUrl(null);
+        };
+        window.addEventListener("keydown", onKey);
+        return () => window.removeEventListener("keydown", onKey);
+    }, [imagePreviewUrl]);
+
+    const updateReturnClaim = async () => {
+        if (!details?.returnClaim) return;
+        try {
+            setClaimSaving(true);
+            setClaimFeedback(null);
+            const res = await api.patch(`/api/admin/orders/${orderId}/return-claim`, {
+                status: claimStatus,
+                reviewNote: claimReviewNote,
+            });
+            setDetails((prev: any) => ({
+                ...prev,
+                returnClaim: res.data.data.claim,
+            }));
+            setClaimFeedback("Return claim updated.");
+        } catch (err: any) {
+            console.error(err);
+            setClaimFeedback(err.response?.data?.message || "Failed to update return claim.");
+        } finally {
+            setClaimSaving(false);
+        }
+    };
 
     return (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-neutral-black/80 backdrop-blur-sm">
@@ -77,6 +122,10 @@ export default function OrderDetailsModal({ orderId, onClose }: OrderDetailsModa
                                     <div className="space-y-2">
                                         <p className="font-display text-[14px] font-black uppercase break-words">{details.customerName}</p>
                                         <p className="font-display text-[11px] font-bold text-neutral-g4 uppercase break-words">{details.customerEmail}</p>
+                                        <p className="font-display text-[11px] font-bold text-neutral-g4 flex items-center gap-2 break-words">
+                                            <Phone className="w-3.5 h-3.5 text-primary shrink-0" />
+                                            <span>{details.customerPhone?.trim() || "—"}</span>
+                                        </p>
                                         <p className="font-display text-[10px] font-bold text-neutral-g4 uppercase pt-2 border-t-[1px] border-neutral-black/10 break-words mt-2">Tx ID: {details.paymentIntentId || "N/A"}</p>
                                         <p className="font-display text-[10px] font-bold text-neutral-g4 uppercase break-words">Date: {new Date(details.date).toLocaleString('en-GB')}</p>
                                     </div>
@@ -110,9 +159,16 @@ export default function OrderDetailsModal({ orderId, onClose }: OrderDetailsModa
                                     {details.items.map((item: any) => (
                                         <div key={item.id} className="flex gap-4 p-4 border-[2px] border-neutral-black bg-white group hover:bg-neutral-g1 transition-colors relative shadow-[4px_4px_0px_0px_rgba(0,0,0,0.1)]">
                                             {/* Thumbnail */}
-                                            <div className="w-20 h-20 bg-neutral-black border-[2px] border-neutral-black flex-shrink-0">
+                                            <div className="w-20 h-20 bg-neutral-black border-[2px] border-neutral-black flex-shrink-0 overflow-hidden">
                                                 {item.mockupImageUrl ? (
-                                                    <img src={item.mockupImageUrl} alt={item.productName} className="w-full h-full object-cover" />
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => setImagePreviewUrl(item.mockupImageUrl)}
+                                                        className="w-full h-full p-0 block cursor-zoom-in focus:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-inset"
+                                                        title="View full size"
+                                                    >
+                                                        <img src={item.mockupImageUrl} alt={item.productName} className="w-full h-full object-cover" />
+                                                    </button>
                                                 ) : (
                                                     <div className="w-full h-full flex items-center justify-center opacity-30">
                                                         <Package className="w-8 h-8 text-white" />
@@ -202,11 +258,104 @@ export default function OrderDetailsModal({ orderId, onClose }: OrderDetailsModa
                                     </div>
                                 </div>
                             </div>
+                            <ReturnPolicyNote variant="admin" />
+
+                            {details.returnClaim && (
+                                <div className="bg-white border-[2px] border-neutral-black p-6 shadow-[8px_8px_0px_0px_rgba(0,0,0,1)]">
+                                    <h3 className="font-display text-[16px] font-black uppercase tracking-[2px] text-primary mb-6 border-b-[1px] border-neutral-black/10 pb-3">
+                                        Return Claim Review
+                                    </h3>
+                                    <div className="space-y-4">
+                                        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                                            <div className="font-display text-[11px] font-black uppercase">
+                                                Reason: {details.returnClaim.reason.replaceAll("_", " ")}
+                                            </div>
+                                            <div className="font-display text-[10px] font-black uppercase text-neutral-g4">
+                                                Submitted: {new Date(details.returnClaim.requestedAt).toLocaleString("en-GB")}
+                                            </div>
+                                        </div>
+                                        <p className="font-display text-[11px] font-bold uppercase text-neutral-black leading-relaxed">
+                                            {details.returnClaim.description}
+                                        </p>
+                                        {details.returnClaim.evidenceUrls?.length ? (
+                                            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                                                {details.returnClaim.evidenceUrls.map((url: string) => (
+                                                    <button
+                                                        key={url}
+                                                        type="button"
+                                                        onClick={() => setImagePreviewUrl(url)}
+                                                        className="border-[2px] border-neutral-black rounded-[2px] overflow-hidden bg-neutral-g1"
+                                                    >
+                                                        <img src={url} alt="" className="w-full h-28 object-cover" />
+                                                    </button>
+                                                ))}
+                                            </div>
+                                        ) : null}
+                                        <div className="grid grid-cols-1 gap-4 pt-2">
+                                            <select
+                                                value={claimStatus}
+                                                onChange={(e) => setClaimStatus(e.target.value)}
+                                                className="w-full px-4 py-3 border-[2px] border-neutral-black rounded-[4px] bg-neutral-g1 font-display text-[11px] font-black uppercase"
+                                            >
+                                                {["UNDER_REVIEW", "APPROVED", "REJECTED", "REFUNDED"].map((status) => (
+                                                    <option key={status} value={status}>
+                                                        {status.replaceAll("_", " ")}
+                                                    </option>
+                                                ))}
+                                            </select>
+                                            <textarea
+                                                value={claimReviewNote}
+                                                onChange={(e) => setClaimReviewNote(e.target.value)}
+                                                placeholder="Add review note for the customer or ops team..."
+                                                className="w-full min-h-[110px] px-4 py-3 border-[2px] border-neutral-black rounded-[4px] bg-white font-display text-[11px] font-black uppercase"
+                                            />
+                                            {claimFeedback && (
+                                                <div className="font-display text-[10px] font-black uppercase text-neutral-g4">
+                                                    {claimFeedback}
+                                                </div>
+                                            )}
+                                            <button
+                                                type="button"
+                                                onClick={updateReturnClaim}
+                                                disabled={claimSaving}
+                                                className="w-full py-3 bg-primary border-[2px] border-neutral-black rounded-[4px] font-display text-[11px] font-black uppercase shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] disabled:opacity-40"
+                                            >
+                                                {claimSaving ? "Saving..." : "Update Return Claim"}
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
                             
                         </div>
                     )}
                 </div>
             </div>
+
+            {imagePreviewUrl && (
+                <div
+                    role="dialog"
+                    aria-modal="true"
+                    aria-label="Product image preview"
+                    className="fixed inset-0 z-[110] flex items-center justify-center bg-neutral-black/95 p-4 sm:p-8"
+                    onClick={() => setImagePreviewUrl(null)}
+                >
+                    <button
+                        type="button"
+                        onClick={() => setImagePreviewUrl(null)}
+                        className="absolute top-4 right-4 p-3 bg-white border-[2px] border-neutral-black rounded-full hover:bg-danger hover:text-white transition-all shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] z-[120]"
+                        aria-label="Close preview"
+                    >
+                        <X className="w-5 h-5" />
+                    </button>
+                    <img
+                        src={imagePreviewUrl}
+                        alt=""
+                        className="max-w-full max-h-[min(92vh,100%)] w-auto h-auto object-contain border-[2px] border-white/20 shadow-[8px_8px_0px_0px_rgba(255,107,0,0.5)]"
+                        onClick={(e) => e.stopPropagation()}
+                    />
+                </div>
+            )}
         </div>
     );
 }
