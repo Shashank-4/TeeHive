@@ -3,11 +3,19 @@ import {
     IndianRupee,
     Download,
     History,
-    TrendingUp,
     HelpCircle
 } from "lucide-react";
 import Loader from "../../components/shared/Loader";
 import api from "../../api/axios";
+
+type SummaryCard = {
+    label: string;
+    value: number;
+    color: string;
+    emoji: string;
+    isCount?: boolean;
+    sub?: string;
+};
 
 const statusPillClass = (status: string) => {
     const s = status?.toLowerCase();
@@ -39,7 +47,7 @@ export default function ArtistEarnings() {
         fetchEarningsData();
     }, []);
 
-    const summaryCards = [
+    const summaryCards: SummaryCard[] = [
         { label: "Total Earned", value: stats?.totalEarnings || 0, color: "bg-primary/20", emoji: "₹" },
         { label: "Gross Revenue", value: stats?.totalRevenue || 0, color: "bg-success/20", emoji: "💰" },
         { label: "Units Sold", value: stats?.totalSales || 0, color: "bg-info/20", emoji: "✅", isCount: true },

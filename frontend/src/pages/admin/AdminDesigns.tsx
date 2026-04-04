@@ -8,7 +8,6 @@ import {
     FolderLock,
     Image as ImageIcon,
     Download,
-    Flag,
     CheckCircle,
     XCircle,
     AlertCircle,

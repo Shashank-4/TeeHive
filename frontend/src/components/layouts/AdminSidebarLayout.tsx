@@ -6,16 +6,12 @@ import {
     Package,
     ShoppingBag,
     LogOut,
-    Menu,
     ChevronLeft,
     Crown,
-    Shield,
     Palette,
     Tag,
     Settings,
-    Bell,
     ExternalLink,
-    Search,
     FolderLock,
     Droplet,
     Star
@@ -35,19 +31,6 @@ const adminNavItems = [
     { to: "/admin/config", icon: Settings, label: "Protocol Config" },
 ];
 
-const pageTitles: Record<string, { title: string; subtitle: string; code: string }> = {
-    "/admin/dashboard": { title: "CENTRAL INTELLIGENCE", subtitle: "Global platform telemetry & vitals", code: "SYS_OVERVIEW_01" },
-    "/admin/artists": { title: "PERSONNEL DIRECTORY", subtitle: "Authorized creator nodes & verification", code: "AUTH_NODES_02" },
-    "/admin/designs": { title: "SECURE VAULT", subtitle: "Centralized design asset management", code: "DSGN_VAULT_08" },
-    "/admin/products": { title: "ASSET REPOSITORY", subtitle: "SKU management & publication states", code: "INV_LOG_03" },
-    "/admin/categories": { title: "TAXONOMY ENGINE", subtitle: "System-wide classification schema", code: "STRUC_NODE_04" },
-    "/admin/colors": { title: "COLOR MATRIX", subtitle: "Global blank mockup and hex mappings", code: "CLR_ATTRIB_09" },
-    "/admin/orders": { title: "LOGISTICS LEDGER", subtitle: "Transaction fulfillment & authorization", code: "TRANS_OPS_05" },
-    "/admin/reviews": { title: "CUSTOMER FEEDBACKS", subtitle: "Monitor product quality & artist ratings", code: "CUST_FB_10" },
-    "/admin/users": { title: "IDENTITY REGISTRY", subtitle: "Access level monitoring & control", code: "USR_SESS_06" },
-    "/admin/config": { title: "SYSTEM PROTOCOLS", subtitle: "Global site toggles & endpoint logic", code: "CORE_CFG_07" },
-};
-
 export default function AdminSidebarLayout() {
     const { user, signOut } = useAuth();
     const navigate = useNavigate();
@@ -65,8 +48,6 @@ export default function AdminSidebarLayout() {
         await signOut();
         navigate("/login");
     };
-
-    const currentPage = pageTitles[location.pathname] || { title: "SECURE CONSOLE", subtitle: "Restricted Administrative Interface", code: "AUTH_REQ" };
 
     const SidebarContent = () => (
         <div className="flex flex-col h-full bg-white">

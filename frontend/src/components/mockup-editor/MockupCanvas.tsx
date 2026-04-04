@@ -80,123 +80,6 @@ export interface MockupCanvasHandle {
 const PROXY_BASE = () =>
     `${import.meta.env.VITE_API_URL || "http://localhost:3000"}/api/proxy/image?url=`;
 
-function isDarkColor(hex: string): boolean {
-    const c = hex.replace("#", "");
-    const r = parseInt(c.substring(0, 2), 16);
-    const g = parseInt(c.substring(2, 4), 16);
-    const b = parseInt(c.substring(4, 6), 16);
-    const luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
-    return luminance < 0.5;
-}
-
-/** Load an image as HTMLImageElement (for offscreen pixel manipulation) */
-function loadImageElement(url: string): Promise<HTMLImageElement> {
-    return new Promise((resolve, reject) => {
-        const img = new Image();
-        img.crossOrigin = "anonymous";
-        img.onload = () => resolve(img);
-        img.onerror = () => reject(new Error(`Failed to load image: ${url}`));
-        img.src = url;
-    });
-}
-
-/**
- * Apply pixel-level displacement to a design image.
- *
- * For each output pixel, we sample the displacement map to determine how much
- * to shift the source pixel. 128 = no shift, 0 = shift left/up, 255 = shift right/down.
- * This creates the effect of the design "following" fabric folds.
- */
-function applyPixelDisplacement(
-    designImg: HTMLImageElement,
-    dispImg: HTMLImageElement,
-    strength: number,
-    printArea: { x: number; y: number; width: number; height: number },
-    targetWidth: number,
-    targetHeight: number
-): HTMLCanvasElement {
-    // 1. Draw displacement map at the same scale/position as the base t-shirt
-    const dispCanvas = document.createElement("canvas");
-    dispCanvas.width = CANVAS_WIDTH;
-    dispCanvas.height = CANVAS_HEIGHT;
-    const dispCtx = dispCanvas.getContext("2d")!;
-
-    const padding = 20;
-    const maxW = CANVAS_WIDTH - padding * 2;
-    const maxH = CANVAS_HEIGHT - padding * 2;
-    const dScale = Math.min(maxW / dispImg.width, maxH / dispImg.height);
-    const dw = dispImg.width * dScale;
-    const dh = dispImg.height * dScale;
-    // Align displacement map with the shirt base layer.
-    // The base layer is positioned at (CANVAS_HEIGHT/2 - 25) in `loadBaseLayer`,
-    // so we shift the displacement map's vertical center by the same amount.
-    const BASE_TOP_Y_OFFSET_PX = -25;
-    dispCtx.drawImage(
-        dispImg,
-        (CANVAS_WIDTH - dw) / 2,
-        (CANVAS_HEIGHT - dh) / 2 + BASE_TOP_Y_OFFSET_PX,
-        dw,
-        dh
-    );
-
-    // 2. Extract the print area region from the displacement map
-    const dispData = dispCtx.getImageData(printArea.x, printArea.y, printArea.width, printArea.height);
-
-    // 3. Draw design at target dimensions (print area size)
-    const designCanvas = document.createElement("canvas");
-    designCanvas.width = targetWidth;
-    designCanvas.height = targetHeight;
-    const designCtx = designCanvas.getContext("2d")!;
-    designCtx.drawImage(designImg, 0, 0, targetWidth, targetHeight);
-    const designData = designCtx.getImageData(0, 0, targetWidth, targetHeight);
-
-    // 4. Scale displacement data to match target dimensions
-    const dispScaleCanvas = document.createElement("canvas");
-    dispScaleCanvas.width = targetWidth;
-    dispScaleCanvas.height = targetHeight;
-    const dispScaleCtx = dispScaleCanvas.getContext("2d")!;
-    dispScaleCtx.putImageData(dispData, 0, 0);
-    // Re-draw at target size if dimensions differ
-    if (targetWidth !== printArea.width || targetHeight !== printArea.height) {
-        const tempCanvas = document.createElement("canvas");
-        tempCanvas.width = printArea.width;
-        tempCanvas.height = printArea.height;
-        tempCanvas.getContext("2d")!.putImageData(dispData, 0, 0);
-        dispScaleCtx.clearRect(0, 0, targetWidth, targetHeight);
-        dispScaleCtx.drawImage(tempCanvas, 0, 0, targetWidth, targetHeight);
-    }
-    const scaledDispData = dispScaleCtx.getImageData(0, 0, targetWidth, targetHeight);
-
-    // 5. Apply displacement: for each pixel, sample design at offset position
-    const output = designCtx.createImageData(targetWidth, targetHeight);
-
-    for (let y = 0; y < targetHeight; y++) {
-        for (let x = 0; x < targetWidth; x++) {
-            const idx = (y * targetWidth + x) * 4;
-            const dispValue = scaledDispData.data[idx]; // R channel (grayscale)
-
-            // Map 0–255 → displacement offset: 128 = 0, 0 = -strength, 255 = +strength
-            const offsetX = Math.round(((dispValue - 128) / 128) * strength);
-            const offsetY = Math.round(((dispValue - 128) / 128) * strength * 0.5);
-
-            const srcX = Math.min(Math.max(x - offsetX, 0), targetWidth - 1);
-            const srcY = Math.min(Math.max(y - offsetY, 0), targetHeight - 1);
-            const srcIdx = (srcY * targetWidth + srcX) * 4;
-
-            output.data[idx] = designData.data[srcIdx];         // R
-            output.data[idx + 1] = designData.data[srcIdx + 1]; // G
-            output.data[idx + 2] = designData.data[srcIdx + 2]; // B
-            output.data[idx + 3] = designData.data[srcIdx + 3]; // A
-        }
-    }
-
-    const resultCanvas = document.createElement("canvas");
-    resultCanvas.width = targetWidth;
-    resultCanvas.height = targetHeight;
-    resultCanvas.getContext("2d")!.putImageData(output, 0, 0);
-    return resultCanvas;
-}
-
 // ── Component ──
 
 const MockupCanvas = forwardRef<MockupCanvasHandle, MockupCanvasProps>((
@@ -226,16 +109,13 @@ const MockupCanvas = forwardRef<MockupCanvasHandle, MockupCanvasProps>((
     const currentViewRef = useRef<ViewType>(currentView);
     const containerRef = useRef<HTMLDivElement>(null);
 
-    // Track props in refs for stable closures
-    const tshirtColorRef = useRef(tshirtColor);
+    // Track props in refs for stable closures (color as hex string for filters / export)
+    const tshirtColorRef = useRef<string>(tshirtColor);
     const colorBaseUrlRef = useRef(colorBaseUrl);
     const colorBackBaseUrlRef = useRef(colorBackBaseUrl);
     const shadowMapUrlRef = useRef(shadowMapUrl);
     const displacementMapUrlRef = useRef(displacementMapUrl);
     const shadowIntensityRef = useRef(shadowIntensity);
-
-    // Cache loaded displacement map element
-    const dispImgCacheRef = useRef<{ url: string; img: HTMLImageElement } | null>(null);
 
     useEffect(() => { tshirtColorRef.current = tshirtColor; }, [tshirtColor]);
     useEffect(() => { colorBaseUrlRef.current = colorBaseUrl; }, [colorBaseUrl]);
@@ -502,30 +382,7 @@ const MockupCanvas = forwardRef<MockupCanvasHandle, MockupCanvasProps>((
     }
 
     /**
-     * Load and cache the displacement map as an HTMLImageElement.
-     */
-    async function getDisplacementImage(): Promise<HTMLImageElement | null> {
-        // Determine URL: per-color override or local fallback
-        const url = displacementMapUrlRef.current || "/mockups/tshirt-displacement.png";
-
-        // Check cache
-        if (dispImgCacheRef.current && dispImgCacheRef.current.url === url) {
-            return dispImgCacheRef.current.img;
-        }
-
-        try {
-            const resolvedUrl = url.startsWith("/") ? url : `${PROXY_BASE()}${encodeURIComponent(url)}`;
-            const img = await loadImageElement(resolvedUrl);
-            dispImgCacheRef.current = { url, img };
-            return img;
-        } catch (err) {
-            console.error("[Displacement] Failed to load displacement map:", err);
-            return null;
-        }
-    }
-
-    /**
-     * LAYER 1: Load the artist's design with displacement warp.
+     * LAYER 1: Load the artist's design (flat; no displacement warp).
      *
      * 1. Load raw design as HTMLImageElement
      * 2. If displacement map available, warp pixels via offscreen canvas
@@ -615,59 +472,6 @@ const MockupCanvas = forwardRef<MockupCanvasHandle, MockupCanvasProps>((
             canvas.requestRenderAll();
         } catch (err) {
             console.error("[Design] Error loading:", err);
-        }
-    }
-
-    /**
-     * LAYER 2: Shadow/Highlight overlay with multiply blend.
-     *
-     * Uses configurable intensity. Falls back to local shadow map
-     * if no per-color shadow URL is provided.
-     */
-    async function loadShadowOverlay(canvas: fabric.Canvas) {
-        removeById(canvas, "shadow-overlay");
-
-        // Use per-color shadow URL or fall back to local universal shadow
-        const currentShadowUrl = shadowMapUrlRef.current || "/mockups/tshirt-shading.png";
-        const intensity = shadowIntensityRef.current;
-
-        if (intensity <= 0) return; // Shadow disabled
-
-        const resolvedUrl = currentShadowUrl.startsWith("/")
-            ? currentShadowUrl
-            : `${PROXY_BASE()}${encodeURIComponent(currentShadowUrl)}`;
-
-        try {
-            const img = await fabric.FabricImage.fromURL(resolvedUrl, { crossOrigin: "anonymous" });
-            if (!img) return;
-
-            const padding = 20;
-            const maxWidth = CANVAS_WIDTH - padding * 2;
-            const maxHeight = CANVAS_HEIGHT - padding * 2;
-            const scale = Math.min(maxWidth / (img.width || 1), maxHeight / (img.height || 1));
-
-            img.set({
-                scaleX: scale,
-                scaleY: scale,
-                left: CANVAS_WIDTH / 2,
-                top: CANVAS_HEIGHT / 2 - 25,
-                originX: "center",
-                originY: "center",
-                selectable: false,
-                evented: false,
-                hoverCursor: "default",
-                opacity: intensity,
-            });
-
-            // Apply multiply blend — darkens fold areas over design + base
-            const dark = isDarkColor(tshirtColorRef.current);
-            (img as any).globalCompositeOperation = dark ? "overlay" : "multiply";
-
-            (img as any).id = "shadow-overlay";
-            canvas.add(img);
-            canvas.requestRenderAll();
-        } catch (err) {
-            console.error("[Shadow] Failed to load overlay:", err);
         }
     }
 

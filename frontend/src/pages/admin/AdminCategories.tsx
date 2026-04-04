@@ -140,7 +140,7 @@ export default function AdminCategories() {
                 formData.append("image", newImage);
             }
 
-            const res = await api.post("/api/categories", formData, {
+            await api.post("/api/categories", formData, {
                 headers: { "Content-Type": "multipart/form-data" },
             });
             await fetchCategories();
