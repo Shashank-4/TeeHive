@@ -78,7 +78,7 @@ export default function ArtistPayout() {
             const updatedMethods = res.data.data?.methods || [];
             setMethods(updatedMethods);
             setFormData(payoutFormFromMethods(updatedMethods));
-            setMessage("Payout details saved. Razorpay validation has been triggered.");
+            setMessage("Payout details saved. Finance will verify them before settlement.");
             setMessageType("success");
         } catch (error: any) {
             console.error("Failed to save payout details:", error);
@@ -99,9 +99,9 @@ export default function ArtistPayout() {
               : "Not Set";
     const statusHeading =
         defaultMethod?.verificationStatus === "VERIFIED"
-            ? "Razorpay Verified Payout Method"
+            ? "Verified Payout Method"
             : defaultMethod?.verificationStatus === "PENDING_PROVIDER"
-              ? "Razorpay Validation In Progress"
+              ? "Automated Validation In Progress"
             : defaultMethod?.verificationStatus === "REJECTED"
               ? "Payout Review Rejected"
               : defaultMethod?.verificationStatus === "REQUIRES_RESUBMISSION"

@@ -8,6 +8,8 @@ import {
 } from "@prisma/client";
 import {
     fetchValidationById,
+    shouldRunRazorpayXPayoutValidation,
+    isRazorpayXValidationDisabledByEnv,
     validateBankPayoutMethod,
     validateUpiPayoutMethod,
     type ProviderValidationResult,
@@ -480,58 +482,84 @@ export async function saveArtistPayoutMethodsService(
         ? existingMethodByKey.get(`BANK_ACCOUNT:${bankPayload.fingerprint}`)
         : null;
 
+    if (!shouldRunRazorpayXPayoutValidation() && !isRazorpayXValidationDisabledByEnv()) {
+        console.warn(
+            "[artistPayout] RazorpayX credentials incomplete; saving payout methods for manual finance review only."
+        );
+    }
+
     if (upiPayload && existingUpiMethod?.verificationStatus !== "VERIFIED") {
-        try {
-            providerResults.set(
-                "UPI",
-                await validateUpiPayoutMethod({
-                    artistId,
-                    name: artist.displayName || artist.name,
-                    email: artist.email,
-                    upiId: upiPayload.upiId,
-                    upiName: upiPayload.upiName,
-                })
-            );
-        } catch (error: any) {
-            if (error?.message?.includes("not configured")) {
-                throw error;
-            }
+        if (!shouldRunRazorpayXPayoutValidation()) {
             providerResults.set(
                 "UPI",
                 buildProviderFallbackResult(
                     "UPI",
                     "UPI_PENNYDROP",
-                    error?.message || "Razorpay validation is temporarily unavailable."
+                    isRazorpayXValidationDisabledByEnv()
+                        ? "RazorpayX automated validation is disabled for this environment."
+                        : "RazorpayX is not fully configured; automated validation was skipped."
                 )
             );
+        } else {
+            try {
+                providerResults.set(
+                    "UPI",
+                    await validateUpiPayoutMethod({
+                        artistId,
+                        name: artist.displayName || artist.name,
+                        email: artist.email,
+                        upiId: upiPayload.upiId,
+                        upiName: upiPayload.upiName,
+                    })
+                );
+            } catch (error: any) {
+                providerResults.set(
+                    "UPI",
+                    buildProviderFallbackResult(
+                        "UPI",
+                        "UPI_PENNYDROP",
+                        error?.message || "Razorpay validation is temporarily unavailable."
+                    )
+                );
+            }
         }
     }
 
     if (bankPayload && existingBankMethod?.verificationStatus !== "VERIFIED") {
-        try {
-            providerResults.set(
-                "BANK_ACCOUNT",
-                await validateBankPayoutMethod({
-                    artistId,
-                    name: artist.displayName || artist.name,
-                    email: artist.email,
-                    bankAccountName: bankPayload.bankAccountName,
-                    bankAccountNumber: bankPayload.bankAccountNumber,
-                    bankIfsc: bankPayload.bankIfsc,
-                })
-            );
-        } catch (error: any) {
-            if (error?.message?.includes("not configured")) {
-                throw error;
-            }
+        if (!shouldRunRazorpayXPayoutValidation()) {
             providerResults.set(
                 "BANK_ACCOUNT",
                 buildProviderFallbackResult(
                     "BANK_ACCOUNT",
                     "BANK_PENNYDROP",
-                    error?.message || "Razorpay validation is temporarily unavailable."
+                    isRazorpayXValidationDisabledByEnv()
+                        ? "RazorpayX automated validation is disabled for this environment."
+                        : "RazorpayX is not fully configured; automated validation was skipped."
                 )
             );
+        } else {
+            try {
+                providerResults.set(
+                    "BANK_ACCOUNT",
+                    await validateBankPayoutMethod({
+                        artistId,
+                        name: artist.displayName || artist.name,
+                        email: artist.email,
+                        bankAccountName: bankPayload.bankAccountName,
+                        bankAccountNumber: bankPayload.bankAccountNumber,
+                        bankIfsc: bankPayload.bankIfsc,
+                    })
+                );
+            } catch (error: any) {
+                providerResults.set(
+                    "BANK_ACCOUNT",
+                    buildProviderFallbackResult(
+                        "BANK_ACCOUNT",
+                        "BANK_PENNYDROP",
+                        error?.message || "Razorpay validation is temporarily unavailable."
+                    )
+                );
+            }
         }
     }
 

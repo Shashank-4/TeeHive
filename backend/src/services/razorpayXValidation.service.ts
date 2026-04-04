@@ -83,6 +83,25 @@ function getConfig() {
     return { keyId, keySecret, sourceAccountNumber };
 }
 
+/** When true, never call RazorpayX validation APIs (manual admin review only). */
+export function isRazorpayXValidationDisabledByEnv(): boolean {
+    const v = (process.env.DISABLE_RAZORPAYX_VALIDATION || "").trim().toLowerCase();
+    return v === "true" || v === "1" || v === "yes";
+}
+
+export function isRazorpayXValidationEnvComplete(): boolean {
+    const keyId = process.env.RAZORPAYX_KEY_ID?.trim();
+    const keySecret = process.env.RAZORPAYX_KEY_SECRET?.trim();
+    const sourceAccountNumber = process.env.RAZORPAYX_SOURCE_ACCOUNT_NUMBER?.trim();
+    return Boolean(keyId && keySecret && sourceAccountNumber);
+}
+
+/** Run penny-drop / fund validation against RazorpayX only when explicitly enabled and creds exist. */
+export function shouldRunRazorpayXPayoutValidation(): boolean {
+    if (isRazorpayXValidationDisabledByEnv()) return false;
+    return isRazorpayXValidationEnvComplete();
+}
+
 function sleep(ms: number) {
     return new Promise((resolve) => setTimeout(resolve, ms));
 }
