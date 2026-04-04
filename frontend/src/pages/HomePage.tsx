@@ -249,11 +249,12 @@ function HomePage() {
                         {banners.heroBgImage ? (
                             <ImageWithSkeleton
                                 src={banners.heroBgImage}
-                                className="absolute top-[0] w-full h-full object-cover opacity-[1.00] select-none -z-0 pointer-events-none"
+                                wrapperLayout="absolute-fill"
+                                className="h-full w-full object-cover object-center select-none"
                                 alt=""
                                 loading="eager"
                                 fetchPriority="high"
-                                wrapperClassName="absolute top-[0] w-full h-full -z-0 pointer-events-none"
+                                wrapperClassName="-z-0 pointer-events-none overflow-hidden"
                             />
                         ) : (
                             <div className="absolute top-[-10%] left-[-5%] text-[380px] font-display font-black text-neutral-black/[0.03] select-none leading-none -z-0 pointer-events-none uppercase">
