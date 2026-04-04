@@ -1,12 +1,20 @@
-import { useState } from "react";
-import { Link } from "react-router-dom";
+import { useEffect, useState } from "react";
+import { Link, useSearchParams } from "react-router-dom";
 import { User, Palette, Zap, ShieldCheck, Star, Shield } from "lucide-react";
 import SignInForm from "../components/forms/SignInForm";
 import SignUpForm from "../components/forms/SignUpForm";
 
 export default function LoginPage() {
+    const [searchParams] = useSearchParams();
     const [userType, setUserType] = useState<"CUSTOMER" | "ARTIST">("CUSTOMER");
     const [isSignUp, setIsSignUp] = useState(false);
+
+    useEffect(() => {
+        const type = (searchParams.get("type") || "").toLowerCase();
+        const mode = (searchParams.get("mode") || "").toLowerCase();
+        setUserType(type === "artist" ? "ARTIST" : "CUSTOMER");
+        setIsSignUp(mode === "signup");
+    }, [searchParams]);
 
     return (
         <div className="h-screen w-screen bg-white text-neutral-black flex flex-col md:flex-row font-body overflow-hidden">

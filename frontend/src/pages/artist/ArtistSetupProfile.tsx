@@ -1,9 +1,10 @@
 import { useState, useEffect, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
+import Cropper, { type Area } from "react-easy-crop";
+import "react-easy-crop/react-easy-crop.css";
 import api from "../../api/axios";
 import {
     Camera,
-    Plus,
     Globe,
     Link2,
     Send,
@@ -14,6 +15,47 @@ import {
     CreditCard,
     Smartphone,
 } from "lucide-react";
+import { payoutFormFromMethods } from "../../utils/payoutMethods";
+
+const createImage = (url: string): Promise<HTMLImageElement> =>
+    new Promise((resolve, reject) => {
+        const image = new Image();
+        image.addEventListener("load", () => resolve(image));
+        image.addEventListener("error", (err) => reject(err));
+        image.src = url;
+    });
+
+const getCroppedImageBlob = async (imageSrc: string, cropPixels: Area): Promise<Blob> => {
+    const image = await createImage(imageSrc);
+    const canvas = document.createElement("canvas");
+    canvas.width = cropPixels.width;
+    canvas.height = cropPixels.height;
+
+    const ctx = canvas.getContext("2d");
+    if (!ctx) throw new Error("Could not initialize image editor");
+
+    ctx.drawImage(
+        image,
+        cropPixels.x,
+        cropPixels.y,
+        cropPixels.width,
+        cropPixels.height,
+        0,
+        0,
+        cropPixels.width,
+        cropPixels.height
+    );
+
+    return await new Promise((resolve, reject) => {
+        canvas.toBlob((blob) => {
+            if (!blob) {
+                reject(new Error("Failed to crop image"));
+                return;
+            }
+            resolve(blob);
+        }, "image/jpeg", 0.92);
+    });
+};
 
 export default function ArtistSetupProfile() {
     const navigate = useNavigate();
@@ -41,6 +83,12 @@ export default function ArtistSetupProfile() {
     const [coverPhotoFile, setCoverPhotoFile] = useState<File | null>(null);
     const [displayPhotoPreview, setDisplayPhotoPreview] = useState<string>("");
     const [coverPhotoPreview, setCoverPhotoPreview] = useState<string>("");
+    const [cropModalOpen, setCropModalOpen] = useState(false);
+    const [selectedImageForCrop, setSelectedImageForCrop] = useState<string>("");
+    const [selectedImageName, setSelectedImageName] = useState("avatar");
+    const [crop, setCrop] = useState({ x: 0, y: 0 });
+    const [zoom, setZoom] = useState(1);
+    const [croppedAreaPixels, setCroppedAreaPixels] = useState<Area | null>(null);
 
     // State
     const [saving, setSaving] = useState(false);
@@ -50,8 +98,11 @@ export default function ArtistSetupProfile() {
 
     const fetchProfile = useCallback(async () => {
         try {
-            const response = await api.get("/api/artist/profile");
-            const profile = response.data.data.profile;
+            const [profileResponse, payoutResponse] = await Promise.all([
+                api.get("/api/artist/profile"),
+                api.get("/api/artist/payout-methods"),
+            ]);
+            const profile = profileResponse.data.data.profile;
             setDisplayName(profile.displayName || "");
             setBio(profile.bio || "");
             setPortfolioUrl(profile.portfolioUrl || "");
@@ -61,17 +112,14 @@ export default function ArtistSetupProfile() {
             setDribbbleUrl(profile.dribbbleUrl || "");
             if (profile.displayPhotoUrl) setDisplayPhotoPreview(profile.displayPhotoUrl);
             if (profile.coverPhotoUrl) setCoverPhotoPreview(profile.coverPhotoUrl);
-            // Load payout details if they exist
-            if (profile.payoutDetails) {
-                const pd = profile.payoutDetails as any;
-                setUpiId(pd.upiId || "");
-                setUpiName(pd.upiName || "");
-                setBankAccountName(pd.bankAccountName || "");
-                setBankAccountNumber(pd.bankAccountNumber || "");
-                setBankIfsc(pd.bankIfsc || "");
-                setBankName(pd.bankName || "");
-                setPreferredMethod(pd.preferredMethod || "UPI");
-            }
+            const payoutForm = payoutFormFromMethods(payoutResponse.data.data?.methods || []);
+            setUpiId(payoutForm.upiId);
+            setUpiName(payoutForm.upiName);
+            setBankAccountName(payoutForm.bankAccountName);
+            setBankAccountNumber(payoutForm.bankAccountNumber);
+            setBankIfsc(payoutForm.bankIfsc);
+            setBankName(payoutForm.bankName);
+            setPreferredMethod(payoutForm.preferredMethod);
         } catch (err) {
             console.error("Failed to fetch profile:", err);
         } finally {
@@ -86,9 +134,43 @@ export default function ArtistSetupProfile() {
     const handleDisplayPhotoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
         if (file) {
-            setDisplayPhotoFile(file);
-            setDisplayPhotoPreview(URL.createObjectURL(file));
+            const preview = URL.createObjectURL(file);
+            setSelectedImageForCrop(preview);
+            setSelectedImageName(file.name || "avatar");
+            setCrop({ x: 0, y: 0 });
+            setZoom(1);
+            setCroppedAreaPixels(null);
+            setCropModalOpen(true);
         }
+        e.target.value = "";
+    };
+
+    const onCropComplete = useCallback((_croppedArea: Area, croppedPixels: Area) => {
+        setCroppedAreaPixels(croppedPixels);
+    }, []);
+
+    const handleApplyAvatarCrop = async () => {
+        if (!selectedImageForCrop || !croppedAreaPixels) return;
+        try {
+            const croppedBlob = await getCroppedImageBlob(selectedImageForCrop, croppedAreaPixels);
+            const croppedFile = new File([croppedBlob], `cropped-${selectedImageName}`, { type: "image/jpeg" });
+            const croppedPreview = URL.createObjectURL(croppedBlob);
+            setDisplayPhotoFile(croppedFile);
+            setDisplayPhotoPreview(croppedPreview);
+            URL.revokeObjectURL(selectedImageForCrop);
+            setSelectedImageForCrop("");
+            setCropModalOpen(false);
+        } catch (err) {
+            setError("Could not crop profile photo. Please try again.");
+        }
+    };
+
+    const handleCancelAvatarCrop = () => {
+        if (selectedImageForCrop) {
+            URL.revokeObjectURL(selectedImageForCrop);
+        }
+        setSelectedImageForCrop("");
+        setCropModalOpen(false);
     };
 
     const handleCoverPhotoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -103,6 +185,11 @@ export default function ArtistSetupProfile() {
         setSaving(true);
         setError(null);
         setSuccess(null);
+        if (!hasValidPayoutDetails) {
+            setError("Please add payout details. Enter either valid UPI details or valid bank details.");
+            setSaving(false);
+            return;
+        }
         try {
             const formData = new FormData();
             formData.append("displayName", displayName);
@@ -119,12 +206,14 @@ export default function ArtistSetupProfile() {
                 headers: { "Content-Type": "multipart/form-data" },
             });
 
-            await api.patch("/api/artist/profile", {
-                payoutDetails: {
-                    upiId, upiName,
-                    bankAccountName, bankAccountNumber, bankIfsc, bankName,
-                    preferredMethod,
-                },
+            await api.put("/api/artist/payout-methods", {
+                upiId,
+                upiName,
+                bankAccountName,
+                bankAccountNumber,
+                bankIfsc,
+                bankName,
+                preferredMethod,
             });
 
             setDisplayPhotoFile(null);
@@ -139,7 +228,24 @@ export default function ArtistSetupProfile() {
         }
     };
 
-    const canSubmit = displayName.trim() && displayPhotoPreview;
+    const hasValidUpiDetails = !!upiId.trim() && !!upiName.trim();
+    const hasValidBankDetails =
+        !!bankAccountName.trim() && !!bankAccountNumber.trim() && !!bankIfsc.trim();
+    const hasValidPayoutDetails = hasValidUpiDetails || hasValidBankDetails;
+    const canSubmit = !!displayName.trim() && !!displayPhotoPreview && hasValidPayoutDetails;
+
+    const activationPayoutMethod = (() => {
+        if (preferredMethod === "UPI" && hasValidUpiDetails) return "UPI";
+        if (preferredMethod === "BANK" && hasValidBankDetails) return "BANK";
+        if (hasValidUpiDetails) return "UPI";
+        if (hasValidBankDetails) return "BANK";
+        return null;
+    })();
+
+    const maskedBankAccountNumber =
+        bankAccountNumber.length > 4
+            ? `${"*".repeat(Math.max(0, bankAccountNumber.length - 4))}${bankAccountNumber.slice(-4)}`
+            : bankAccountNumber;
 
     if (loading) {
         return (
@@ -154,28 +260,6 @@ export default function ArtistSetupProfile() {
             <div className="flex-1 px-4 sm:px-8 pb-12 w-full">
                 {/* Header Section */}
                 <div className="flex flex-col md:flex-row md:items-end justify-between mb-10 gap-6">
-                    <div className="space-y-2">
-                        <div className="inline-flex items-center gap-2 bg-neutral-black text-white px-3 py-1 rounded-[4px] font-display text-[10px] font-black uppercase tracking-[2px]">
-                            <Plus className="w-3 h-3" /> Artist Onboarding
-                        </div>
-                        <h1 className="font-display text-[ clamp(32px,5vw,48px) ] font-black text-neutral-black leading-none uppercase tracking-tight">
-                            Setup Your <span className="text-primary italic">Profile</span>
-                        </h1>
-                        <p className="font-display text-[14px] font-bold text-neutral-g4 uppercase tracking-wider max-w-xl">
-                            Complete your storefront details, payout info, and upload your first 3 designs to get verified.
-                        </p>
-                    </div>
-
-                    <div className="flex flex-wrap gap-3">
-                        <button
-                            onClick={handleSaveAndActivate}
-                            disabled={saving || !canSubmit}
-                            className="flex items-center gap-2 px-6 py-3 bg-white border-[2px] border-neutral-black rounded-[4px] font-display text-[13px] font-black uppercase tracking-[1px] shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] hover:translate-x-[2px] hover:translate-y-[2px] hover:shadow-none transition-all disabled:opacity-50"
-                        >
-                            {saving ? <Loader2 className="w-4 h-4 animate-spin text-primary" /> : <Send className="w-4 h-4 text-primary" />}
-                            {saving ? "Saving..." : "Save & Activate"}
-                        </button>
-                    </div>
                 </div>
 
                 {/* Alerts */}
@@ -234,9 +318,9 @@ export default function ArtistSetupProfile() {
                                     {/* Display Photo */}
                                     <div className="shrink-0 space-y-3">
                                         <label className="font-display text-[11px] font-black uppercase tracking-[1.5px] text-neutral-g4 block">Profile Pic *</label>
-                                        <div className="relative w-32 h-32 group border-[2px] border-neutral-black rounded-[4px] bg-neutral-g1 flex items-center justify-center cursor-pointer overflow-hidden transition-all hover:bg-neutral-g2">
+                                        <div className="relative w-32 h-32 group border-[2px] border-neutral-black rounded-full bg-neutral-g1 flex items-center justify-center cursor-pointer overflow-hidden transition-all hover:bg-neutral-g2">
                                             {displayPhotoPreview ? (
-                                                <img src={displayPhotoPreview} alt="Avatar" className="w-full h-full object-cover" />
+                                                <img src={displayPhotoPreview} alt="Avatar" className="w-full h-full object-cover rounded-full" />
                                             ) : (
                                                 <Camera className="w-8 h-8 opacity-30" />
                                             )}
@@ -389,7 +473,7 @@ export default function ArtistSetupProfile() {
 
                                 <div className="mt-6 p-4 bg-primary/10 border-l-[4px] border-primary">
                                     <p className="font-body text-[12px] font-bold text-neutral-black leading-relaxed">
-                                        🐝 <strong className="uppercase">Note:</strong> You earn <span className="text-[14px] font-black">25%</span> of every sale. Payouts are released on the 1st of every month automatically once you hit the ₹500 threshold.
+                                        🐝 <strong className="uppercase">Note:</strong> You earn <span className="text-[14px] font-black">25%</span> of every sale. Royalties for the previous month's verified sales are settled manually on the 10th day of the current month, so keep your payout details accurate to avoid delays.
                                     </p>
                                 </div>
                             </div>
@@ -415,6 +499,34 @@ export default function ArtistSetupProfile() {
                                         <span className="text-white/40">Profile Photo</span>
                                         {displayPhotoPreview ? <CheckCircle className="w-3 h-3 text-success" /> : <span className="text-danger">Mandatory</span>}
                                     </div>
+                                    <div className="flex items-center justify-between">
+                                        <span className="text-white/40">Payout Details</span>
+                                        {hasValidPayoutDetails ? <CheckCircle className="w-3 h-3 text-success" /> : <span className="text-danger">Mandatory</span>}
+                                    </div>
+                                </div>
+
+                                <div className="mb-6 rounded-[4px] border border-white/20 bg-white/5 p-3">
+                                    <p className="font-display text-[10px] font-black uppercase tracking-[1px] text-white/50 mb-2">
+                                        Payout Summary
+                                    </p>
+                                    {activationPayoutMethod === "UPI" ? (
+                                        <p className="font-body text-[12px] font-bold text-white/90 leading-relaxed">
+                                            Method: UPI <br />
+                                            UPI ID: {upiId.trim()} <br />
+                                            Name: {upiName.trim()}
+                                        </p>
+                                    ) : activationPayoutMethod === "BANK" ? (
+                                        <p className="font-body text-[12px] font-bold text-white/90 leading-relaxed">
+                                            Method: Bank Transfer <br />
+                                            Account: {maskedBankAccountNumber || "Not provided"} <br />
+                                            IFSC: {bankIfsc.trim() || "Not provided"} <br />
+                                            Name: {bankAccountName.trim() || "Not provided"}
+                                        </p>
+                                    ) : (
+                                        <p className="font-body text-[12px] font-bold text-danger leading-relaxed">
+                                            Add either UPI details or bank details to activate.
+                                        </p>
+                                    )}
                                 </div>
                             </div>
 
@@ -433,6 +545,62 @@ export default function ArtistSetupProfile() {
                     </div>
                 </div>
             </div>
+            {cropModalOpen && (
+                <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-[2px] p-4 flex items-center justify-center">
+                    <div className="w-full max-w-xl bg-white border-[2px] border-neutral-black rounded-[6px] overflow-hidden shadow-[10px_10px_0px_0px_rgba(0,0,0,1)]">
+                        <div className="bg-neutral-black text-white px-4 py-3">
+                            <h3 className="font-display text-[12px] font-black uppercase tracking-[1px]">
+                                Adjust Profile Picture
+                            </h3>
+                        </div>
+                        <div className="p-4">
+                            <div className="relative w-full h-[360px] bg-neutral-black rounded-[4px] overflow-hidden">
+                                <Cropper
+                                    image={selectedImageForCrop}
+                                    crop={crop}
+                                    zoom={zoom}
+                                    aspect={1}
+                                    cropShape="round"
+                                    showGrid={false}
+                                    onCropChange={setCrop}
+                                    onZoomChange={setZoom}
+                                    onCropComplete={onCropComplete}
+                                />
+                            </div>
+                            <div className="mt-4">
+                                <label className="font-display text-[10px] font-black uppercase tracking-[1px] text-neutral-g4 block mb-2">
+                                    Zoom
+                                </label>
+                                <input
+                                    type="range"
+                                    min={1}
+                                    max={3}
+                                    step={0.1}
+                                    value={zoom}
+                                    onChange={(e) => setZoom(Number(e.target.value))}
+                                    className="w-full accent-primary"
+                                />
+                            </div>
+                            <div className="mt-5 grid grid-cols-2 gap-3">
+                                <button
+                                    type="button"
+                                    onClick={handleCancelAvatarCrop}
+                                    className="py-3 border-[2px] border-neutral-black rounded-[4px] font-display text-[11px] font-black uppercase tracking-[1px] hover:bg-neutral-g1 transition-colors"
+                                >
+                                    Cancel
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={handleApplyAvatarCrop}
+                                    className="py-3 bg-primary border-[2px] border-neutral-black rounded-[4px] font-display text-[11px] font-black uppercase tracking-[1px] hover:bg-primary/80 transition-colors"
+                                >
+                                    Use This Photo
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 }

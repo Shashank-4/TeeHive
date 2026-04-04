@@ -8,7 +8,6 @@ import {
     FolderLock,
     Image as ImageIcon,
     Download,
-    Flag,
     CheckCircle,
     XCircle,
     AlertCircle,
@@ -52,14 +51,15 @@ export default function AdminDesigns() {
     const [searchQuery, setSearchQuery] = useState("");
     const [statusFilter, setStatusFilter] = useState("");
     
-    // Bulk action states
+    // Bulk selection state (download-only)
     const [selectedIds, setSelectedIds] = useState<string[]>([]);
     const [isDownloading, setIsDownloading] = useState(false);
-    const [isFlagging, setIsFlagging] = useState(false);
+    const [actionLoadingId, setActionLoadingId] = useState<string | null>(null);
 
     // Modals
     const [fullscreenImage, setFullscreenImage] = useState<string | null>(null);
     const [rejectModalOpen, setRejectModalOpen] = useState(false);
+    const [rejectTargetId, setRejectTargetId] = useState<string | null>(null);
     const [rejectReason, setRejectReason] = useState("Quality Issue");
     const [rejectComments, setRejectComments] = useState("");
 
@@ -157,30 +157,36 @@ export default function AdminDesigns() {
         }
     };
 
-    const handleBulkFlag = async (action: "APPROVE" | "REJECT", customReason: string | null = null) => {
-        if (selectedIds.length === 0) return;
-        
-        setIsFlagging(true);
+    const flagSingleDesign = async (
+        designId: string,
+        action: "APPROVE" | "REJECT",
+        customReason: string | null = null
+    ) => {
+        if (!designId) return;
+        setActionLoadingId(designId);
         try {
-            await api.patch(`/api/admin/designs/bulk-flag`, { 
-                designIds: selectedIds, 
-                action, 
-                reason: customReason 
+            await api.patch(`/api/admin/designs/bulk-flag`, {
+                designIds: [designId],
+                action,
+                reason: customReason,
             });
-            // Refresh table
             await fetchDesigns(pagination.page);
         } catch (err) {
-            console.error("Bulk flag failed", err);
-            alert(`Failed to ${action.toLowerCase()} designs.`);
+            console.error("Flag design failed", err);
+            alert(`Failed to ${action.toLowerCase()} design.`);
         } finally {
-            setIsFlagging(false);
+            setActionLoadingId(null);
         }
     };
 
-    const handleRejectSubmit = () => {
-        const fullReason = `${rejectReason}${rejectComments ? ` - ${rejectComments}` : ''}`;
+    const handleRejectSubmit = async () => {
+        const targetId = rejectTargetId;
+        if (!targetId) return;
+
+        const fullReason = `${rejectReason}${rejectComments ? ` - ${rejectComments}` : ""}`;
         setRejectModalOpen(false);
-        handleBulkFlag("REJECT", fullReason);
+        setRejectTargetId(null);
+        await flagSingleDesign(targetId, "REJECT", fullReason);
         setRejectReason("Quality Issue");
         setRejectComments("");
     };
@@ -233,7 +239,7 @@ export default function AdminDesigns() {
                         </button>
                     </form>
 
-                    {/* Bulk Actions Banner */}
+                    {/* Bulk Actions Banner (Download-only) */}
                     <div className={`flex items-center gap-3 transition-opacity duration-300 ${selectedIds.length > 0 ? "opacity-100" : "opacity-0 pointer-events-none"}`}>
                         <span className="font-display text-[11px] font-black uppercase bg-white px-3 py-2 border-[2px] border-neutral-black rounded-[4px]">
                             {selectedIds.length} Selected
@@ -246,29 +252,13 @@ export default function AdminDesigns() {
                             {isDownloading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
                             Batch Get
                         </button>
-                        <button 
-                            onClick={() => handleBulkFlag("APPROVE")}
-                            disabled={isFlagging}
-                            className="flex items-center gap-2 px-5 py-3 bg-success text-white border-[2px] border-neutral-black rounded-[4px] font-display text-[11px] font-black uppercase tracking-[1px] shadow-[4px_4px_0px_0px_rgba(0,0,0,0.2)] hover:translate-x-[2px] hover:translate-y-[2px] hover:shadow-none transition-all disabled:opacity-50"
-                        >
-                            {isFlagging ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle className="w-4 h-4" />}
-                            Approve
-                        </button>
-                        <button 
-                            onClick={() => setRejectModalOpen(true)}
-                            disabled={isFlagging}
-                            className="flex items-center gap-2 px-5 py-3 bg-danger text-white border-[2px] border-neutral-black rounded-[4px] font-display text-[11px] font-black uppercase tracking-[1px] shadow-[4px_4px_0px_0px_rgba(0,0,0,0.2)] hover:translate-x-[2px] hover:translate-y-[2px] hover:shadow-none transition-all disabled:opacity-50"
-                        >
-                            {isFlagging ? <Loader2 className="w-4 h-4 animate-spin" /> : <Flag className="w-4 h-4" />}
-                            Reject
-                        </button>
                     </div>
                 </div>
 
                 {/* Table Container */}
                 <div className="bg-white border-[2px] border-neutral-black rounded-[6px] shadow-[12px_12px_0px_0px_rgba(0,0,0,1)] overflow-hidden">
                     <div className="overflow-x-auto">
-                        <table className="w-full border-collapse min-w-[800px]">
+                        <table className="w-full border-collapse min-w-[900px]">
                             <thead>
                                 <tr className="bg-neutral-black text-white">
                                     <th className="py-5 px-6 w-12 text-center">
@@ -284,18 +274,21 @@ export default function AdminDesigns() {
                                             {h}
                                         </th>
                                     ))}
+                                    <th className="font-display text-[10px] font-black tracking-[2px] uppercase py-5 px-6 text-left whitespace-nowrap">
+                                        Actions
+                                    </th>
                                 </tr>
                             </thead>
                             <tbody className="divide-y-[1px] divide-neutral-black/10">
                                 {loading ? (
-                                    <tr><td colSpan={6} className="py-24 text-center">
+                                    <tr><td colSpan={7} className="py-24 text-center">
                                         <div className="flex flex-col items-center gap-4">
                                             <Loader2 className="w-12 h-12 text-primary animate-spin" />
                                             <p className="font-display text-[10px] font-black uppercase tracking-[2px]">Fetching Records...</p>
                                         </div>
                                     </td></tr>
                                 ) : designs.length === 0 ? (
-                                    <tr><td colSpan={6} className="py-24 text-center">
+                                    <tr><td colSpan={7} className="py-24 text-center">
                                         <div className="flex flex-col items-center gap-4 opacity-30">
                                             <Database className="w-16 h-16" />
                                             <p className="font-display text-[12px] font-black uppercase tracking-[2px]">No Designs Found</p>
@@ -352,6 +345,44 @@ export default function AdminDesigns() {
                                                     {new Date(design.createdAt).toLocaleDateString()}
                                                 </span>
                                             </td>
+                                            <td className="py-5 px-6">
+                                                {(() => {
+                                                    const isResolved = design.status === "APPROVED" || design.status === "REJECTED";
+                                                    const isBusy = actionLoadingId === design.id;
+
+                                                    return (
+                                                        <div className="flex gap-3 items-center">
+                                                            <button
+                                                                type="button"
+                                                                disabled={isResolved || isBusy}
+                                                                onClick={() => flagSingleDesign(design.id, "APPROVE", null)}
+                                                                className={`px-4 py-2 border-[1.5px] rounded-[2px] font-display text-[9px] font-black uppercase tracking-[1px] transition-all shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] ${isResolved ? "bg-neutral-g1 text-neutral-g4 border-neutral-g2 cursor-not-allowed" : "bg-success text-white border-neutral-black hover:bg-white hover:text-success hover:shadow-none"} ${isBusy ? "opacity-50 cursor-wait" : ""}`}
+                                                            >
+                                                                {design.status === "APPROVED"
+                                                                    ? "Approved"
+                                                                    : isBusy
+                                                                      ? "Approving..."
+                                                                      : "Approve"}
+                                                            </button>
+                                                            <button
+                                                                type="button"
+                                                                disabled={isResolved || isBusy}
+                                                                onClick={() => {
+                                                                    setRejectTargetId(design.id);
+                                                                    setRejectModalOpen(true);
+                                                                }}
+                                                                className={`px-4 py-2 border-[1.5px] rounded-[2px] font-display text-[9px] font-black uppercase tracking-[1px] transition-all shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] ${isResolved ? "bg-neutral-g1 text-neutral-g4 border-neutral-g2 cursor-not-allowed" : "bg-danger text-white border-neutral-black hover:bg-white hover:text-danger hover:shadow-none"} ${isBusy ? "opacity-50 cursor-wait" : ""}`}
+                                                            >
+                                                                {design.status === "REJECTED"
+                                                                    ? "Rejected"
+                                                                    : isBusy
+                                                                      ? "Rejecting..."
+                                                                      : "Reject"}
+                                                            </button>
+                                                        </div>
+                                                    );
+                                                })()}
+                                            </td>
                                         </tr>
                                     ))
                                 )}
@@ -388,7 +419,14 @@ export default function AdminDesigns() {
                             <h2 className="font-display text-[18px] font-black uppercase tracking-[1px] flex items-center gap-2">
                                 <AlertCircle className="w-5 h-5 text-danger" /> Reject Designs
                             </h2>
-                            <button onClick={() => setRejectModalOpen(false)} className="hover:opacity-50 transition-opacity">
+                            <button
+                                onClick={() => {
+                                    setRejectModalOpen(false);
+                                    setRejectTargetId(null);
+                                }}
+                                className="hover:opacity-50 transition-opacity"
+                                type="button"
+                            >
                                 <XCircle className="w-6 h-6" />
                             </button>
                         </div>
@@ -422,7 +460,11 @@ export default function AdminDesigns() {
                         
                         <div className="mt-8 flex gap-4">
                             <button 
-                                onClick={() => setRejectModalOpen(false)}
+                                onClick={() => {
+                                    setRejectModalOpen(false);
+                                    setRejectTargetId(null);
+                                }}
+                                type="button"
                                 className="flex-1 py-3 px-4 bg-white border-[2px] border-neutral-black rounded-[4px] font-display text-[12px] font-black uppercase tracking-[1px] shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] hover:translate-y-[2px] hover:translate-x-[2px] hover:shadow-none transition-all"
                             >
                                 Cancel

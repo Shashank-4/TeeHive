@@ -16,6 +16,7 @@ import {
     Smartphone,
     ArrowLeft,
 } from "lucide-react";
+import { payoutFormFromMethods } from "../../utils/payoutMethods";
 
 interface Design {
     id: string;
@@ -65,8 +66,11 @@ export default function ArtistEditProfile() {
 
     const fetchProfile = useCallback(async () => {
         try {
-            const response = await api.get("/api/artist/profile");
-            const profile = response.data.data.profile;
+            const [profileResponse, payoutResponse] = await Promise.all([
+                api.get("/api/artist/profile"),
+                api.get("/api/artist/payout-methods"),
+            ]);
+            const profile = profileResponse.data.data.profile;
             setDisplayName(profile.displayName || "");
             setBio(profile.bio || "");
             setPortfolioUrl(profile.portfolioUrl || "");
@@ -77,17 +81,14 @@ export default function ArtistEditProfile() {
             if (profile.displayPhotoUrl) setDisplayPhotoPreview(profile.displayPhotoUrl);
             if (profile.coverPhotoUrl) setCoverPhotoPreview(profile.coverPhotoUrl);
             if (profile.designs) setDesigns(profile.designs);
-            // Load payout details if they exist
-            if (profile.payoutDetails) {
-                const pd = profile.payoutDetails as any;
-                setUpiId(pd.upiId || "");
-                setUpiName(pd.upiName || "");
-                setBankAccountName(pd.bankAccountName || "");
-                setBankAccountNumber(pd.bankAccountNumber || "");
-                setBankIfsc(pd.bankIfsc || "");
-                setBankName(pd.bankName || "");
-                setPreferredMethod(pd.preferredMethod || "UPI");
-            }
+            const payoutForm = payoutFormFromMethods(payoutResponse.data.data?.methods || []);
+            setUpiId(payoutForm.upiId);
+            setUpiName(payoutForm.upiName);
+            setBankAccountName(payoutForm.bankAccountName);
+            setBankAccountNumber(payoutForm.bankAccountNumber);
+            setBankIfsc(payoutForm.bankIfsc);
+            setBankName(payoutForm.bankName);
+            setPreferredMethod(payoutForm.preferredMethod);
         } catch (err) {
             console.error("Failed to fetch profile:", err);
         } finally {
@@ -134,13 +135,14 @@ export default function ArtistEditProfile() {
                 headers: { "Content-Type": "multipart/form-data" },
             });
 
-            // Save payout details separately via PATCH
-            await api.patch("/api/artist/profile", {
-                payoutDetails: {
-                    upiId, upiName,
-                    bankAccountName, bankAccountNumber, bankIfsc, bankName,
-                    preferredMethod,
-                },
+            await api.put("/api/artist/payout-methods", {
+                upiId,
+                upiName,
+                bankAccountName,
+                bankAccountNumber,
+                bankIfsc,
+                bankName,
+                preferredMethod,
             });
 
             setDisplayPhotoFile(null);
@@ -198,15 +200,6 @@ export default function ArtistEditProfile() {
                         >
                             <ArrowLeft className="w-4 h-4" /> Back to Profile
                         </button>
-                        <div className="inline-flex items-center gap-2 bg-neutral-black text-white px-3 py-1 rounded-[4px] font-display text-[10px] font-black uppercase tracking-[2px]">
-                            <ImageIcon className="w-3 h-3 text-primary" /> Profile Editor
-                        </div>
-                        <h1 className="font-display text-[ clamp(32px,5vw,48px) ] font-black text-neutral-black leading-none uppercase tracking-tight">
-                            Edit Your <span className="text-primary italic">Profile</span>
-                        </h1>
-                        <p className="font-display text-[14px] font-bold text-neutral-g4 uppercase tracking-wider max-w-xl">
-                            Update your storefront details, payout information, and portfolio.
-                        </p>
                     </div>
 
                     <div className="flex flex-wrap gap-3">
@@ -424,7 +417,7 @@ export default function ArtistEditProfile() {
 
                                 <div className="mt-6 p-4 bg-primary/10 border-l-[4px] border-primary">
                                     <p className="font-body text-[12px] font-bold text-neutral-black leading-relaxed">
-                                        🐝 <strong className="uppercase">Note:</strong> You earn <span className="text-[14px] font-black">25%</span> of every sale. Payouts are released on the 1st of every month automatically once you hit the ₹500 threshold.
+                                        🐝 <strong className="uppercase">Note:</strong> You earn <span className="text-[14px] font-black">25%</span> of every sale. Royalties for the previous month's verified sales are settled manually on the 10th day of the current month, so keep your payout details accurate to avoid delays.
                                     </p>
                                 </div>
                             </div>

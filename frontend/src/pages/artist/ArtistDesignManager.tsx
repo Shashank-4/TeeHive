@@ -5,6 +5,7 @@ import {
     Grid,
     List,
     Plus,
+    RefreshCw,
 } from "lucide-react";
 import Loader from "../../components/shared/Loader";
 import { Link } from "react-router-dom";
@@ -25,6 +26,7 @@ export default function ArtistDesignManager() {
     const [showUploadModal, setShowUploadModal] = useState(false);
     const [designs, setDesigns] = useState<Design[]>([]);
     const [isLoading, setIsLoading] = useState(true);
+    const [isRefreshing, setIsRefreshing] = useState(false);
     const [error, setError] = useState<string | null>(null);
 
     function handleModalClose() {
@@ -55,21 +57,24 @@ export default function ArtistDesignManager() {
         }
     };
 
+    const loadDesigns = async (mode: "initial" | "refresh" = "initial") => {
+        try {
+            if (mode === "initial") setIsLoading(true);
+            else setIsRefreshing(true);
+            setError(null);
+            const response = await api.get("/api/designs");
+            setDesigns(response.data.data.designs);
+        } catch (err) {
+            setError("Failed to fetch designs. Please try again.");
+            console.error("Error while fetching the designs of the artist", err);
+        } finally {
+            setIsLoading(false);
+            setIsRefreshing(false);
+        }
+    };
+
     useEffect(() => {
-        const fetchDesigns = async () => {
-            try {
-                setIsLoading(true);
-                setError(null);
-                const response = await api.get("/api/designs");
-                setDesigns(response.data.data.designs);
-            } catch (err) {
-                setError("Failed to fetch designs. Please try again.");
-                console.error("Error while fetching the designs of the artist", err);
-            } finally {
-                setIsLoading(false);
-            }
-        };
-        fetchDesigns();
+        loadDesigns("initial");
     }, []);
 
     if (isLoading) {
@@ -98,18 +103,6 @@ export default function ArtistDesignManager() {
             <div className="flex-1 px-4 sm:px-8 pb-12 w-full">
                 {/* Header Section */}
                 <div className="flex flex-col md:flex-row md:items-end justify-between mb-10 gap-6">
-                    <div className="space-y-2">
-                        <div className="inline-flex items-center gap-2 bg-neutral-black text-white px-3 py-1 rounded-[4px] font-display text-[10px] font-black uppercase tracking-[2px]">
-                            <Grid className="w-3 h-3 text-primary" /> Source Vault
-                        </div>
-                        <h1 className="font-display text-[ clamp(32px,5vw,48px) ] font-black text-neutral-black leading-none uppercase tracking-tight">
-                            Design <span className="text-primary italic">Lab</span>
-                        </h1>
-                        <p className="font-display text-[14px] font-bold text-neutral-g4 uppercase tracking-wider">
-                            Your arsenal of visual assets ready for manifestation.
-                        </p>
-                    </div>
-
                     <button
                         onClick={() => setShowUploadModal(true)}
                         className="flex items-center gap-3 px-8 py-4 bg-primary border-[2px] border-neutral-black rounded-[4px] font-display text-[14px] font-black uppercase tracking-[1px] shadow-[6px_6px_0px_0px_rgba(0,0,0,1)] hover:translate-x-[2px] hover:translate-y-[2px] hover:shadow-none transition-all"
@@ -129,8 +122,18 @@ export default function ArtistDesignManager() {
                         />
                     </div>
 
-                    <div className="flex gap-3">
-                        <button className="flex items-center gap-2 px-4 py-3 bg-white border-[2px] border-neutral-black rounded-[4px] font-display text-[11px] font-black uppercase tracking-[1px] hover:bg-neutral-g1 transition-colors">
+                    <div className="flex gap-3 flex-wrap">
+                        <button
+                            type="button"
+                            onClick={() => loadDesigns("refresh")}
+                            disabled={isRefreshing || isLoading}
+                            className="flex items-center gap-2 px-4 py-3 bg-white border-[2px] border-neutral-black rounded-[4px] font-display text-[11px] font-black uppercase tracking-[1px] hover:bg-primary transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                            title="Refresh status from server (e.g. after admin review)"
+                        >
+                            <RefreshCw className={`w-4 h-4 ${isRefreshing ? "animate-spin" : ""}`} />
+                            Sync status
+                        </button>
+                        <button type="button" className="flex items-center gap-2 px-4 py-3 bg-white border-[2px] border-neutral-black rounded-[4px] font-display text-[11px] font-black uppercase tracking-[1px] hover:bg-neutral-g1 transition-colors">
                             <Filter className="w-4 h-4" /> Filter
                         </button>
                         <div className="flex border-[2px] border-neutral-black rounded-[4px] overflow-hidden bg-white">

@@ -1,9 +1,10 @@
 /**
  * mockup.service.ts — High-fidelity production mockup renderer
  *
- * Uses Sharp to composite the artist's transparent design onto a color base
- * with displacement mapping (pixel warping) and shadow overlay for realistic
- * "printed into the fabric" results.
+ * Uses Sharp to composite the artist's transparent design onto a color base.
+ *
+ * Note: displacement mapping + shadow overlay were disabled because they were
+ * producing visible artifacts in mockups.
  *
  * Pipeline:
  *   1. Load color base image (the blank t-shirt in a specific color)
@@ -150,34 +151,8 @@ export async function renderProductionMockup(input: MockupRenderInput): Promise<
         .png()
         .toBuffer();
 
-    // 3. Apply displacement if map is available
-    if (displacementMapUrl) {
-        try {
-            const dispBuffer = await fetchImageBuffer(displacementMapUrl);
-
-            // We need to extract the displacement for just the print area region
-            // Crop the displacement map to the print area
-            const dispCropped = await sharp(dispBuffer)
-                .resize(baseWidth, baseHeight, { fit: "cover" })
-                .extract({
-                    left: printArea.x,
-                    top: printArea.y,
-                    width: printArea.width,
-                    height: printArea.height,
-                })
-                .toBuffer();
-
-            designBuffer = await applyDisplacement(
-                designBuffer,
-                dispCropped,
-                displacementStrength,
-                printArea.width,
-                printArea.height
-            );
-        } catch (err) {
-            console.error("[MockupEngine] Displacement mapping failed, using flat design:", err);
-        }
-    }
+    // 3. (disabled) Apply displacement if map is available
+    // Intentionally skipped to avoid visual artifacts during mockup creation.
 
     // 4. Apply slight blur + opacity reduction for "printed into fabric" look
     designBuffer = await sharp(designBuffer)
@@ -214,32 +189,8 @@ export async function renderProductionMockup(input: MockupRenderInput): Promise<
         },
     ]);
 
-    // 6. Apply shadow/highlight overlay if available
-    if (shadowMapUrl) {
-        try {
-            const shadowBuffer = await fetchImageBuffer(shadowMapUrl);
-
-            // Resize shadow map to match base dimensions
-            const shadowResized = await sharp(shadowBuffer)
-                .resize(baseWidth, baseHeight, { fit: "cover" })
-                .ensureAlpha()
-                .png()
-                .toBuffer();
-
-            // Get the intermediate result as buffer first
-            const intermediateBuffer = await result.png().toBuffer();
-
-            // Composite shadow with multiply (for light shirts) or overlay (for dark)
-            result = sharp(intermediateBuffer).composite([
-                {
-                    input: shadowResized,
-                    blend: isDark ? ("overlay" as any) : ("multiply" as any),
-                },
-            ]);
-        } catch (err) {
-            console.error("[MockupEngine] Shadow overlay failed:", err);
-        }
-    }
+    // 6. (disabled) Apply shadow/highlight overlay if available
+    // Intentionally skipped to keep mockups visually consistent.
 
     // 7. Output final PNG
     return result.png({ quality: 95 }).toBuffer();

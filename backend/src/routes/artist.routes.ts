@@ -4,6 +4,7 @@ import { requireRole, requireVerifiedArtist } from "../middleware/requireRole";
 import {
     createProductHandler,
     getMyProductsHandler,
+    getArtistDraftProductHandler,
     updateProductHandler,
     deleteProductHandler,
     publishProductHandler,
@@ -15,11 +16,19 @@ import {
     updateArtistProfileHandler,
     patchArtistProfileHandler,
     submitVerificationHandler,
+    getArtistDashboardConfigHandler,
 } from "../controllers/artistProfile.controller";
+import {
+    getArtistPayoutMethodsHandler,
+    saveArtistPayoutMethodsHandler,
+} from "../controllers/artistPayout.controller";
 import multer from "multer";
 
 const router = Router();
-const upload = multer({ storage: multer.memoryStorage() });
+const upload = multer({
+    storage: multer.memoryStorage(),
+    limits: { fileSize: 15 * 1024 * 1024, files: 48 },
+});
 
 // All routes require authenticated artist
 router.use(requireUser, requireRole("artist"));
@@ -36,23 +45,24 @@ router.put(
 );
 router.post("/submit-verification", submitVerificationHandler);
 router.patch("/profile", patchArtistProfileHandler);
+router.get("/payout-methods", getArtistPayoutMethodsHandler);
+router.put("/payout-methods", saveArtistPayoutMethodsHandler);
 
 // ── Product CRUD (requires verified artist) ──
 router.post(
     "/products",
     requireVerifiedArtist,
-    upload.fields([
-        { name: "mockupImage", maxCount: 1 },
-        { name: "backMockupImage", maxCount: 1 },
-    ]),
+    upload.any(),
     createProductHandler
 );
 router.get("/products", requireVerifiedArtist, getMyProductsHandler);
-router.patch("/products/:id", requireVerifiedArtist, updateProductHandler);
+router.get("/products/:id", requireVerifiedArtist, getArtistDraftProductHandler);
+router.patch("/products/:id", requireVerifiedArtist, upload.any(), updateProductHandler);
 router.delete("/products/:id", requireVerifiedArtist, deleteProductHandler);
 router.patch("/products/:id/publish", requireVerifiedArtist, publishProductHandler);
 
 // ── Dashboard stats & Orders (requires verified artist) ──
+router.get("/dashboard", requireVerifiedArtist, getArtistDashboardConfigHandler);
 router.get("/stats", requireVerifiedArtist, getArtistStatsHandler);
 router.get("/orders", requireVerifiedArtist, getArtistOrdersHandler);
 

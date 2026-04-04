@@ -46,7 +46,7 @@ export default function ArtistDashboard() {
                     api.get("/api/artist/stats"),
                     api.get("/api/orders/artist/recent"),
                     api.get("/api/artist/products?limit=6"),
-                    api.get("/api/config/artist_dashboard")
+                    api.get("/api/artist/dashboard")
                 ]);
 
                 if (statsRes.status === "fulfilled") setStats(statsRes.value.data.data.stats);
@@ -71,18 +71,6 @@ export default function ArtistDashboard() {
                 {/* Header & Announcement */}
                 <div className="flex flex-col gap-8 mb-12">
                     <div className="flex flex-col md:flex-row md:items-end justify-between gap-6">
-                        <div className="space-y-2">
-                            <div className="inline-flex items-center gap-2 bg-neutral-black text-white px-3 py-1 rounded-[4px] font-display text-[10px] font-black uppercase tracking-[2px]">
-                                <TrendingUp className="w-3 h-3 text-primary" /> Command Center
-                            </div>
-                            <h1 className="font-display text-[ clamp(32px,5vw,48px) ] font-black text-neutral-black leading-none uppercase tracking-tight">
-                                Artist <span className="text-primary italic">Hive</span>
-                            </h1>
-                            <p className="font-display text-[14px] font-bold text-neutral-g4 uppercase tracking-wider">
-                                Your central hub for creativity, sales, and hive stats.
-                            </p>
-                        </div>
-
                         <div className="flex gap-4">
                             <button
                                 onClick={() => navigate("/artist/manage-designs")}

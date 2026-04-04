@@ -66,11 +66,6 @@ export default function ArtistReviews() {
 
     return (
         <div className="max-w-6xl mx-auto space-y-8 animate-in fade-in duration-500">
-            <div>
-                <h1 className="text-3xl font-extrabold text-gray-900 tracking-tight">Customer Feedback</h1>
-                <p className="text-gray-500 mt-2 text-lg">See what customers are saying about your designs and product quality.</p>
-            </div>
-
             {/* Stats Overview */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                 <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 flex items-center gap-4">

@@ -16,6 +16,8 @@ interface Product {
     price: number;
     compareAtPrice: number | null;
     mockupImageUrl: string;
+    backMockupImageUrl?: string;
+    primaryView?: "front" | "back";
     tshirtColor: string;
     categories: string[];
 }
@@ -204,9 +206,13 @@ export default function ArtistStorefront() {
                             >
                                 <div className="aspect-[4/5] bg-gray-50 relative overflow-hidden">
                                     <img
-                                        src={product.mockupImageUrl}
+                                        src={
+                                            product.primaryView === "back"
+                                                ? product.backMockupImageUrl || product.mockupImageUrl
+                                                : product.mockupImageUrl
+                                        }
                                         alt={product.name}
-                                        className="w-full h-full object-cover mix-blend-multiply group-hover:scale-105 transition-transform duration-500"
+                                        className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
                                     />
                                     {product.compareAtPrice && product.compareAtPrice > product.price && (
                                         <div className="absolute top-3 left-3 bg-red-500 text-white text-xs font-bold px-2 py-1 rounded-md">

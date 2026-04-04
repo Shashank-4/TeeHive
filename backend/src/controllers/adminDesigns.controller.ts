@@ -76,10 +76,17 @@ export const bulkFlagDesignsHandler = async (req: Request, res: Response, next: 
             // For REJECT, we delete high res from R2 and point imageUrl to thumbnail
             const designs = await prisma.design.findMany({
                 where: { id: { in: designIds } },
-                select: { id: true, fileKey: true, artist: { select: { email: true, name: true, displayName: true } } }
+                select: {
+                    id: true,
+                    fileKey: true,
+                    status: true,
+                    artist: { select: { email: true, name: true, displayName: true } },
+                }
             });
             
             for (const design of designs) {
+                // Enforce one-time decision: only PENDING designs can transition.
+                if (design.status !== "PENDING") continue;
                 if (design.fileKey && !design.fileKey.endsWith("-thumb.jpg")) {
                     try {
                         await r2.send(new DeleteObjectCommand({
@@ -121,7 +128,7 @@ export const bulkFlagDesignsHandler = async (req: Request, res: Response, next: 
             }
         } else {
             await prisma.design.updateMany({
-                where: { id: { in: designIds } },
+                where: { id: { in: designIds }, status: "PENDING" },
                 data: { 
                     isRejected: false, 
                     status: "APPROVED", 

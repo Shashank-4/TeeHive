@@ -21,6 +21,8 @@ import api from "../../api/axios";
 import { useAuth } from "../../context/AuthContext";
 import Loader from "../../components/shared/Loader";
 import { Button } from "../../components/ui/Button";
+import ReturnPolicyNote from "../../components/shared/ReturnPolicyNote";
+import Toast from "../../components/shared/Toast";
 
 interface OrderItem {
     id: string;
@@ -50,7 +52,37 @@ interface Order {
         postalCode: string;
         country: string;
     } | null;
+    returnClaim: {
+        id: string;
+        reason: string;
+        status: string;
+        description: string;
+        evidenceUrls: string[];
+        requestedAt: string;
+        reviewedAt: string | null;
+        reviewNote: string | null;
+    } | null;
+    returnClaimEligibility: {
+        eligible: boolean;
+        message: string;
+        deadline: string | null;
+        policyWindowDays: number;
+    };
 }
+
+interface ClaimFormState {
+    reason: string;
+    description: string;
+    evidence: File[];
+}
+
+const RETURN_CLAIM_REASON_OPTIONS = [
+    { value: "DAMAGED_GOODS", label: "Damaged goods" },
+    { value: "WRONG_PRODUCT", label: "Wrong product delivered" },
+    { value: "WRONG_SIZE", label: "Wrong size delivered" },
+    { value: "WRONG_COLOR", label: "Wrong color delivered" },
+    { value: "OTHER_ELIGIBLE_ISSUE", label: "Other eligible issue" },
+];
 
 export default function CustomerOrders() {
     const { isAuthenticated } = useAuth();
@@ -58,6 +90,10 @@ export default function CustomerOrders() {
     const [orders, setOrders] = useState<Order[]>([]);
     const [isLoading, setIsLoading] = useState(true);
     const [expandedOrder, setExpandedOrder] = useState<string | null>(null);
+    const [claimFormOpenOrder, setClaimFormOpenOrder] = useState<string | null>(null);
+    const [claimForms, setClaimForms] = useState<Record<string, ClaimFormState>>({});
+    const [claimSubmitting, setClaimSubmitting] = useState<Record<string, boolean>>({});
+    const [toast, setToast] = useState<{ message: string; type: "success" | "error" } | null>(null);
 
     useEffect(() => {
         if (!isAuthenticated) {
@@ -77,6 +113,73 @@ export default function CustomerOrders() {
         } finally {
             setIsLoading(false);
         }
+    };
+
+    const getClaimForm = (orderId: string): ClaimFormState =>
+        claimForms[orderId] || {
+            reason: "DAMAGED_GOODS",
+            description: "",
+            evidence: [],
+        };
+
+    const handleClaimFieldChange = (
+        orderId: string,
+        field: keyof ClaimFormState,
+        value: string | File[]
+    ) => {
+        setClaimForms((prev) => ({
+            ...prev,
+            [orderId]: {
+                ...getClaimForm(orderId),
+                [field]: value,
+            },
+        }));
+    };
+
+    const submitReturnClaim = async (orderId: string) => {
+        const form = getClaimForm(orderId);
+        if (form.description.trim().length < 20) {
+            setToast({
+                message: "Please describe the issue in at least 20 characters.",
+                type: "error",
+            });
+            return;
+        }
+
+        try {
+            setClaimSubmitting((prev) => ({ ...prev, [orderId]: true }));
+            const payload = new FormData();
+            payload.append("reason", form.reason);
+            payload.append("description", form.description.trim());
+            form.evidence.slice(0, 3).forEach((file) => payload.append("evidence", file));
+
+            await api.post(`/api/orders/${orderId}/return-claim`, payload, {
+                headers: { "Content-Type": "multipart/form-data" },
+            });
+
+            setToast({
+                message: "Return claim submitted for review.",
+                type: "success",
+            });
+            setClaimFormOpenOrder(null);
+            await fetchOrders();
+        } catch (error: any) {
+            setToast({
+                message:
+                    error.response?.data?.message || "Failed to submit the return claim.",
+                type: "error",
+            });
+        } finally {
+            setClaimSubmitting((prev) => ({ ...prev, [orderId]: false }));
+        }
+    };
+
+    const returnClaimStatusClass = (status: string) => {
+        const s = status?.toUpperCase();
+        if (s === "OPEN" || s === "UNDER_REVIEW") return "bg-primary/10 text-neutral-black border-primary";
+        if (s === "APPROVED" || s === "REFUNDED") return "bg-success/10 text-success border-success";
+        if (s === "REJECTED") return "bg-danger/10 text-danger border-danger";
+        return "bg-neutral-g2 text-neutral-g4 border-neutral-g3";
     };
 
     const getStatusStyles = (status: string) => {
@@ -113,6 +216,7 @@ export default function CustomerOrders() {
 
     return (
         <div className="min-h-screen bg-neutral-g1 py-20 px-4 md:px-16 relative overflow-hidden">
+            {toast && <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
             {/* Background Decor */}
             <div className="absolute top-0 left-[-10%] text-[400px] font-display font-black text-neutral-black/[0.02] select-none leading-none -z-0 pointer-events-none uppercase">LOGS</div>
 
@@ -269,6 +373,117 @@ export default function CustomerOrders() {
                                                             <span className="opacity-40 italic">PROTOCOL_AUTH</span>
                                                             <span className="text-success flex items-center gap-1.5"><Shield className="w-3 h-3" /> VERIFIED</span>
                                                         </div>
+                                                        <ReturnPolicyNote />
+                                                        {order.returnClaim ? (
+                                                            <div className="border-[2px] border-neutral-black rounded-[4px] bg-white p-4 space-y-3">
+                                                                <div className="flex items-center justify-between gap-3">
+                                                                    <div className="font-display text-[10px] font-black uppercase tracking-[2px]">
+                                                                        Return Claim
+                                                                    </div>
+                                                                    <span className={`px-2 py-1 border rounded-[2px] font-display text-[9px] font-black uppercase tracking-[1px] ${returnClaimStatusClass(order.returnClaim.status)}`}>
+                                                                        {order.returnClaim.status.replaceAll("_", " ")}
+                                                                    </span>
+                                                                </div>
+                                                                <div className="font-display text-[10px] font-bold uppercase text-neutral-g4">
+                                                                    Reason: {order.returnClaim.reason.replaceAll("_", " ")}
+                                                                </div>
+                                                                <p className="font-display text-[10px] font-bold text-neutral-black uppercase leading-relaxed">
+                                                                    {order.returnClaim.description}
+                                                                </p>
+                                                                {order.returnClaim.evidenceUrls?.length ? (
+                                                                    <div className="grid grid-cols-3 gap-2">
+                                                                        {order.returnClaim.evidenceUrls.map((url) => (
+                                                                            <a key={url} href={url} target="_blank" rel="noreferrer" className="block border-[2px] border-neutral-black rounded-[2px] overflow-hidden bg-white">
+                                                                                <img src={url} alt="" className="w-full h-20 object-cover" />
+                                                                            </a>
+                                                                        ))}
+                                                                    </div>
+                                                                ) : null}
+                                                                {order.returnClaim.reviewNote ? (
+                                                                    <div className="font-display text-[10px] font-bold uppercase text-neutral-g4 border-t border-neutral-black/10 pt-3">
+                                                                        Finance note: {order.returnClaim.reviewNote}
+                                                                    </div>
+                                                                ) : null}
+                                                            </div>
+                                                        ) : order.returnClaimEligibility?.eligible ? (
+                                                            <div className="border-[2px] border-neutral-black rounded-[4px] bg-white p-4 space-y-4">
+                                                                <div className="space-y-2">
+                                                                    <div className="font-display text-[10px] font-black uppercase tracking-[2px]">
+                                                                        Report Delivery Issue
+                                                                    </div>
+                                                                    <p className="font-display text-[10px] font-bold uppercase text-neutral-g4 leading-relaxed">
+                                                                        {order.returnClaimEligibility.message}
+                                                                    </p>
+                                                                </div>
+                                                                {claimFormOpenOrder === order.id ? (
+                                                                    <div className="space-y-3">
+                                                                        <select
+                                                                            value={getClaimForm(order.id).reason}
+                                                                            onChange={(e) =>
+                                                                                handleClaimFieldChange(order.id, "reason", e.target.value)
+                                                                            }
+                                                                            className="w-full px-4 py-3 border-[2px] border-neutral-black rounded-[4px] bg-neutral-g1 font-display text-[11px] font-black uppercase"
+                                                                        >
+                                                                            {RETURN_CLAIM_REASON_OPTIONS.map((option) => (
+                                                                                <option key={option.value} value={option.value}>
+                                                                                    {option.label}
+                                                                                </option>
+                                                                            ))}
+                                                                        </select>
+                                                                        <textarea
+                                                                            value={getClaimForm(order.id).description}
+                                                                            onChange={(e) =>
+                                                                                handleClaimFieldChange(order.id, "description", e.target.value)
+                                                                            }
+                                                                            placeholder="Describe the issue, what was expected, and what was delivered..."
+                                                                            className="w-full min-h-[110px] px-4 py-3 border-[2px] border-neutral-black rounded-[4px] bg-white font-display text-[11px] font-black uppercase"
+                                                                        />
+                                                                        <input
+                                                                            type="file"
+                                                                            accept="image/*"
+                                                                            multiple
+                                                                            onChange={(e) =>
+                                                                                handleClaimFieldChange(
+                                                                                    order.id,
+                                                                                    "evidence",
+                                                                                    Array.from(e.target.files || []).slice(0, 3)
+                                                                                )
+                                                                            }
+                                                                            className="block w-full font-display text-[10px] font-black uppercase"
+                                                                        />
+                                                                        <p className="font-display text-[9px] font-bold uppercase text-neutral-g4">
+                                                                            Upload up to 3 photos showing the damaged or incorrect delivery.
+                                                                        </p>
+                                                                        <div className="grid grid-cols-1 gap-3">
+                                                                            <button
+                                                                                onClick={() => submitReturnClaim(order.id)}
+                                                                                disabled={claimSubmitting[order.id]}
+                                                                                className="w-full py-3 bg-primary border-[2px] border-neutral-black rounded-[4px] font-display text-[11px] font-black uppercase shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] disabled:opacity-40"
+                                                                            >
+                                                                                {claimSubmitting[order.id] ? "Submitting..." : "Submit Return Claim"}
+                                                                            </button>
+                                                                            <button
+                                                                                onClick={() => setClaimFormOpenOrder(null)}
+                                                                                className="w-full py-3 bg-white border-[2px] border-neutral-black rounded-[4px] font-display text-[11px] font-black uppercase"
+                                                                            >
+                                                                                Cancel
+                                                                            </button>
+                                                                        </div>
+                                                                    </div>
+                                                                ) : (
+                                                                    <button
+                                                                        onClick={() => setClaimFormOpenOrder(order.id)}
+                                                                        className="w-full py-3 bg-white border-[2px] border-neutral-black rounded-[4px] font-display text-[11px] font-black uppercase shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]"
+                                                                    >
+                                                                        Report Damaged / Wrong Item
+                                                                    </button>
+                                                                )}
+                                                            </div>
+                                                        ) : (
+                                                            <div className="font-display text-[10px] font-bold uppercase text-neutral-g4 border-[2px] border-dashed border-neutral-black/20 rounded-[4px] p-4 leading-relaxed">
+                                                                {order.returnClaimEligibility?.message}
+                                                            </div>
+                                                        )}
                                                         {order.status === "DELIVERED" && (
                                                             <div className="pt-4 text-center">
                                                                 <Link 

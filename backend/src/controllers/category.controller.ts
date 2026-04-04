@@ -6,6 +6,24 @@ import { r2 } from "../util/s3";
 
 const prisma = new PrismaClient();
 
+const CATEGORY_SORT_CONFIG_KEY = "category_sort_mode";
+
+type CategorySortMode = "alphabetical" | "custom";
+
+async function getCategorySortMode(): Promise<CategorySortMode> {
+    const row = await prisma.siteConfig.findUnique({ where: { key: CATEGORY_SORT_CONFIG_KEY } });
+    const v = row?.value as { mode?: string } | null;
+    return v?.mode === "custom" ? "custom" : "alphabetical";
+}
+
+async function setCategorySortMode(mode: CategorySortMode) {
+    await prisma.siteConfig.upsert({
+        where: { key: CATEGORY_SORT_CONFIG_KEY },
+        create: { key: CATEGORY_SORT_CONFIG_KEY, value: { mode } },
+        update: { value: { mode } },
+    });
+}
+
 const BUCKET_NAME = process.env.CLOUDFLARE_BUCKET_NAME!;
 const PUBLIC_URL = process.env.CLOUDFLARE_PUBLIC_URL!;
 
@@ -47,10 +65,14 @@ export const createCategoryHandler = async (req: Request, res: Response) => {
             imageUrl = await uploadImageToR2(req.file);
         }
 
+        const maxRow = await prisma.category.aggregate({ _max: { sortOrder: true } });
+        const nextOrder = (maxRow._max.sortOrder ?? -1) + 1;
+
         const category = await prisma.category.create({
             data: {
                 name: name.toLowerCase().trim(),
-                imageUrl
+                imageUrl,
+                sortOrder: nextOrder,
             },
         });
 
@@ -120,13 +142,102 @@ export const deleteCategoryHandler = async (req: Request, res: Response) => {
 
 export const getCategoriesHandler = async (req: Request, res: Response) => {
     try {
+        const mode = await getCategorySortMode();
         const categories = await prisma.category.findMany({
-            orderBy: { name: "asc" },
+            orderBy:
+                mode === "custom"
+                    ? [{ sortOrder: "asc" }, { name: "asc" }]
+                    : { name: "asc" },
         });
 
-        res.status(200).json({ status: "success", data: { categories } });
+        res.status(200).json({
+            status: "success",
+            data: { categories, categorySortMode: mode },
+        });
     } catch (error: any) {
         console.error("Error fetching categories:", error);
         res.status(500).json({ status: "error", message: "Failed to fetch categories" });
+    }
+};
+
+export const updateCategorySortModeHandler = async (req: Request, res: Response) => {
+    try {
+        const { mode } = req.body as { mode?: string };
+        if (mode !== "alphabetical" && mode !== "custom") {
+            return res.status(400).json({ status: "fail", message: "mode must be alphabetical or custom" });
+        }
+
+        const previous = await getCategorySortMode();
+
+        if (mode === "custom" && previous === "alphabetical") {
+            const all = await prisma.category.findMany({ orderBy: { name: "asc" } });
+            await prisma.$transaction(
+                all.map((c, i) =>
+                    prisma.category.update({ where: { id: c.id }, data: { sortOrder: i } })
+                )
+            );
+        }
+
+        await setCategorySortMode(mode);
+
+        const categories = await prisma.category.findMany({
+            orderBy:
+                mode === "custom"
+                    ? [{ sortOrder: "asc" }, { name: "asc" }]
+                    : { name: "asc" },
+        });
+
+        res.status(200).json({
+            status: "success",
+            data: { categorySortMode: mode, categories },
+        });
+    } catch (error: any) {
+        console.error("Error updating category sort mode:", error);
+        res.status(500).json({ status: "error", message: "Failed to update category sort mode" });
+    }
+};
+
+export const reorderCategoriesHandler = async (req: Request, res: Response) => {
+    try {
+        const { orderedIds } = req.body as { orderedIds?: string[] };
+        if (!Array.isArray(orderedIds) || orderedIds.length === 0) {
+            return res.status(400).json({ status: "fail", message: "orderedIds (non-empty string[]) is required" });
+        }
+
+        const all = await prisma.category.findMany({ select: { id: true } });
+        if (orderedIds.length !== all.length) {
+            return res.status(400).json({
+                status: "fail",
+                message: "orderedIds must include every category exactly once",
+            });
+        }
+        const idSet = new Set(all.map((a) => a.id));
+        if (new Set(orderedIds).size !== orderedIds.length) {
+            return res.status(400).json({ status: "fail", message: "orderedIds must not contain duplicates" });
+        }
+        for (const id of orderedIds) {
+            if (!idSet.has(id)) {
+                return res.status(400).json({ status: "fail", message: "Invalid category id in orderedIds" });
+            }
+        }
+
+        await prisma.$transaction(
+            orderedIds.map((id, i) =>
+                prisma.category.update({ where: { id }, data: { sortOrder: i } })
+            )
+        );
+        await setCategorySortMode("custom");
+
+        const categories = await prisma.category.findMany({
+            orderBy: [{ sortOrder: "asc" }, { name: "asc" }],
+        });
+
+        res.status(200).json({
+            status: "success",
+            data: { categories, categorySortMode: "custom" as const },
+        });
+    } catch (error: any) {
+        console.error("Error reordering categories:", error);
+        res.status(500).json({ status: "error", message: "Failed to reorder categories" });
     }
 };

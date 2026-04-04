@@ -3,11 +3,19 @@ import {
     IndianRupee,
     Download,
     History,
-    TrendingUp,
     HelpCircle
 } from "lucide-react";
 import Loader from "../../components/shared/Loader";
 import api from "../../api/axios";
+
+type SummaryCard = {
+    label: string;
+    value: number;
+    color: string;
+    emoji: string;
+    isCount?: boolean;
+    sub?: string;
+};
 
 const statusPillClass = (status: string) => {
     const s = status?.toLowerCase();
@@ -26,13 +34,10 @@ export default function ArtistEarnings() {
         const fetchEarningsData = async () => {
             try {
                 setLoading(true);
-                const [statsRes, payoutsRes] = await Promise.all([
-                    api.get("/api/artist/stats"),
-                    api.get("/api/artist/payouts")
-                ]);
+                const statsRes = await api.get("/api/artist/stats");
 
                 setStats(statsRes.data.data.stats);
-                setPayouts(payoutsRes.data.data.payouts || []);
+                setPayouts([]);
             } catch (error) {
                 console.error("Failed to fetch earnings data:", error);
             } finally {
@@ -42,11 +47,11 @@ export default function ArtistEarnings() {
         fetchEarningsData();
     }, []);
 
-    const summaryCards = [
-        { label: "Total Earned (All Time)", value: stats?.totalEarnings || 0, color: "bg-primary/20", emoji: "₹" },
-        { label: "Pending Payout", value: stats?.pendingPayout || 0, color: "bg-success/20", emoji: "💰", sub: "Releases 1 Apr 2026" },
-        { label: "Total Paid Out", value: stats?.totalPaidOut || 0, color: "bg-info/20", emoji: "✅" },
-        { label: "This Month", value: (stats?.totalEarnings || 0) * 0.4 || 0, color: "bg-neutral-g2/50", emoji: "🛍️" },
+    const summaryCards: SummaryCard[] = [
+        { label: "Total Earned", value: stats?.totalEarnings || 0, color: "bg-primary/20", emoji: "₹" },
+        { label: "Gross Revenue", value: stats?.totalRevenue || 0, color: "bg-success/20", emoji: "💰" },
+        { label: "Units Sold", value: stats?.totalSales || 0, color: "bg-info/20", emoji: "✅", isCount: true },
+        { label: "Paid Orders", value: stats?.totalOrders || 0, color: "bg-neutral-g2/50", emoji: "🛍️", isCount: true },
     ];
 
     if (loading) {
@@ -62,18 +67,6 @@ export default function ArtistEarnings() {
             <div className="flex-1 px-4 sm:px-8 pb-12 w-full">
                 {/* Header Section */}
                 <div className="flex flex-col md:flex-row md:items-end justify-between mb-10 gap-6">
-                    <div className="space-y-2">
-                        <div className="inline-flex items-center gap-2 bg-neutral-black text-white px-3 py-1 rounded-[4px] font-display text-[10px] font-black uppercase tracking-[2px]">
-                            <TrendingUp className="w-3 h-3 text-primary" /> Financial Overview
-                        </div>
-                        <h1 className="font-display text-[ clamp(32px,5vw,48px) ] font-black text-neutral-black leading-none uppercase tracking-tight">
-                            Your <span className="text-primary italic">Treasury</span>
-                        </h1>
-                        <p className="font-display text-[14px] font-bold text-neutral-g4 uppercase tracking-wider">
-                            Track every rupee your art generates across the Hive.
-                        </p>
-                    </div>
-
                     <button className="flex items-center gap-3 px-6 py-3 bg-white border-[2px] border-neutral-black rounded-[4px] font-display text-[13px] font-black uppercase tracking-[1px] shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] hover:translate-x-[2px] hover:translate-y-[2px] hover:shadow-none transition-all">
                         <Download className="w-4 h-4 text-primary" /> Download Report
                     </button>
@@ -88,7 +81,7 @@ export default function ArtistEarnings() {
                             </div>
                             <div className="space-y-1">
                                 <div className="font-display text-[32px] font-black text-neutral-black leading-none tracking-tight">
-                                    ₹{card.value?.toLocaleString('en-IN')}
+                                    {card.isCount ? card.value?.toLocaleString('en-IN') : `₹${card.value?.toLocaleString('en-IN')}`}
                                 </div>
                                 <div className="font-display text-[10px] font-black uppercase tracking-[1px] text-neutral-g3">
                                     {card.label}
@@ -166,8 +159,9 @@ export default function ArtistEarnings() {
                             <ul className="space-y-4">
                                 {[
                                     { t: "The Cut", d: "You get 25% of the final unit sale price (including discounts) on every verified sale." },
-                                    { t: "Release Cycle", d: "Payouts are processed on the 1st of every month automatically." },
-                                    { t: "Min Threshold", d: "A minimum of ₹500 must be earned to trigger a payout." },
+                                    { t: "Royalty Cycle", d: "Royalties for the previous month's verified sales are settled manually on the 10th day of the current month after reconciliation." },
+                                    { t: "Settlement Review", d: "Finance only steps in when payout validation fails, mismatches the beneficiary name, or needs resubmission." },
+                                    { t: "Payout Method", d: "Keep your UPI or bank details accurate so settlements are not delayed." },
                                     { t: "TDS/Tax", d: "All payouts are inclusive of applicable taxes for Indian artists." }
                                 ].map((item, i) => (
                                     <li key={i} className="space-y-1">

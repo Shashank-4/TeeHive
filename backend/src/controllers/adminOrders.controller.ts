@@ -1,6 +1,7 @@
 import { Request, Response } from "express";
-import { PrismaClient, OrderStatus } from "@prisma/client";
+import { PrismaClient, OrderStatus, ReturnClaimStatus } from "@prisma/client";
 import { sendFeedbackRequestEmail } from "../services/email.service";
+import { buildReturnClaimView } from "../services/orderReturnClaim.service";
 
 const prisma = new PrismaClient();
 
@@ -44,6 +45,7 @@ export const listOrdersHandler = async (req: Request, res: Response) => {
                         }
                     },
                     payment: true,
+                    returnClaim: true,
                 }
             }),
             prisma.order.count({ where }),
@@ -67,6 +69,7 @@ export const listOrdersHandler = async (req: Request, res: Response) => {
                 paymentStatus: order.payment?.status || "PENDING",
                 items: order.items.reduce((sum, item) => sum + item.quantity, 0),
                 artistsInvolved: Array.from(artists).join(", ") || "N/A",
+                returnClaimStatus: order.returnClaim?.status || null,
             };
         });
 
@@ -172,7 +175,12 @@ export const getOrderByIdHandler = async (req: Request, res: Response) => {
                             }
                         }
                     }
-                }
+                },
+                returnClaim: {
+                    include: {
+                        reviewedByAdmin: { select: { id: true, name: true, email: true } },
+                    },
+                },
             }
         });
 
@@ -239,15 +247,80 @@ export const getOrderByIdHandler = async (req: Request, res: Response) => {
                 date: order.createdAt,
                 customerName: order.user?.name,
                 customerEmail: order.user?.email,
+                customerPhone: order.shippingAddress?.phone || null,
                 fulfillmentStatus: order.status,
                 paymentStatus: order.payment?.status || "PENDING",
                 shippingAddress: order.shippingAddress,
                 items: formattedItems,
                 breakdown,
+                returnClaim: order.returnClaim
+                    ? buildReturnClaimView({
+                          ...order.returnClaim,
+                          order: {
+                              status: order.status,
+                              updatedAt: order.updatedAt,
+                          },
+                      } as any)
+                    : null,
             }
         });
     } catch (err) {
         console.error("Fetch Order Details Error:", err);
         res.status(500).json({ status: "error", message: "Failed to fetch order details" });
+    }
+};
+
+export const updateReturnClaimStatusHandler = async (req: Request, res: Response) => {
+    try {
+        const { id } = req.params;
+        const { status, reviewNote } = req.body as {
+            status?: ReturnClaimStatus;
+            reviewNote?: string;
+        };
+
+        if (!status || !Object.values(ReturnClaimStatus).includes(status)) {
+            return res.status(400).json({
+                status: "fail",
+                message: "A valid return claim status is required.",
+            });
+        }
+
+        const order = await prisma.order.findUnique({
+            where: { id },
+            include: { returnClaim: true },
+        });
+
+        if (!order?.returnClaim) {
+            return res.status(404).json({
+                status: "fail",
+                message: "Return claim not found for this order.",
+            });
+        }
+
+        const updatedClaim = await prisma.orderReturnClaim.update({
+            where: { orderId: id },
+            data: {
+                status,
+                reviewNote: reviewNote?.trim() || null,
+                reviewedAt: new Date(),
+                reviewedByAdminId: res.locals.user.id,
+            },
+            include: {
+                reviewedByAdmin: { select: { id: true, name: true, email: true } },
+                order: { select: { status: true, updatedAt: true } },
+            },
+        });
+
+        return res.status(200).json({
+            status: "success",
+            message: "Return claim updated.",
+            data: { claim: buildReturnClaimView(updatedClaim) },
+        });
+    } catch (err) {
+        console.error("Update Return Claim Status Error:", err);
+        return res.status(500).json({
+            status: "error",
+            message: "Failed to update return claim status",
+        });
     }
 };

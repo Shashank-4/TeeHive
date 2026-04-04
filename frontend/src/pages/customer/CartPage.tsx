@@ -13,13 +13,15 @@ import {
 } from "lucide-react";
 import { useCart } from "../../context/CartContext";
 import { Button } from "../../components/ui/Button";
+import GstInclusiveNote from "../../components/shared/GstInclusiveNote";
+
+const CART_SIZES = ["XS", "S", "M", "L", "XL", "XXL"] as const;
 
 export default function Cart() {
-    const { items, removeItem, updateQuantity, subtotal } = useCart();
+    const { items, removeItem, updateQuantity, updateItemVariant, subtotal } = useCart();
 
     const shipping = subtotal > 3000 ? 0 : 100;
-    const tax = Math.round(subtotal * 0.18 * 100) / 100;
-    const total = subtotal + shipping + tax;
+    const total = subtotal + shipping;
 
     if (items.length === 0) {
         return (
@@ -118,12 +120,63 @@ export default function Cart() {
                                                                 {item.name}
                                                             </h3>
                                                         </Link>
-                                                        <div className="flex items-center gap-6 mt-6">
-                                                            <div className="flex flex-col gap-1.5 font-display text-[10px] font-black uppercase text-neutral-black/30 tracking-[1px]">
-                                                                SIZE: <span className="text-neutral-black bg-neutral-g2 px-2 py-1 border-[1.5px] border-neutral-black rounded-[2px] w-fit italic">{item.size}</span>
+                                                        <div className="flex flex-col gap-4 mt-6">
+                                                            <div className="flex flex-col gap-2 font-display text-[10px] font-black uppercase text-neutral-black/30 tracking-[1px]">
+                                                                <span>SIZE</span>
+                                                                <div className="flex flex-wrap gap-2">
+                                                                    {CART_SIZES.map((size) => (
+                                                                        <button
+                                                                            key={size}
+                                                                            type="button"
+                                                                            onClick={() =>
+                                                                                updateItemVariant(
+                                                                                    item.productId,
+                                                                                    item.size,
+                                                                                    item.color,
+                                                                                    size,
+                                                                                    item.color
+                                                                                )
+                                                                            }
+                                                                            className={`min-w-[40px] px-2 py-1.5 rounded-[2px] border-[1.5px] font-display text-[11px] font-black transition-all ${
+                                                                                item.size === size
+                                                                                    ? "border-neutral-black bg-primary text-neutral-black shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]"
+                                                                                    : "border-neutral-g2 bg-white text-neutral-g3 hover:border-neutral-black hover:text-neutral-black"
+                                                                            }`}
+                                                                        >
+                                                                            {size}
+                                                                        </button>
+                                                                    ))}
+                                                                </div>
                                                             </div>
-                                                            <div className="flex flex-col gap-1.5 font-display text-[10px] font-black uppercase text-neutral-black/30 tracking-[1px]">
-                                                                COLOR: <span className="w-5 h-5 rounded-full border-[2px] border-neutral-black" style={{ backgroundColor: item.color }}></span>
+                                                            <div className="flex flex-col gap-2 font-display text-[10px] font-black uppercase text-neutral-black/30 tracking-[1px]">
+                                                                <span>COLOR</span>
+                                                                <div className="flex flex-wrap gap-2 items-center">
+                                                                    {(item.availableColors?.length
+                                                                        ? item.availableColors
+                                                                        : [item.color]
+                                                                    ).map((hex) => (
+                                                                        <button
+                                                                            key={hex}
+                                                                            type="button"
+                                                                            title={hex}
+                                                                            onClick={() =>
+                                                                                updateItemVariant(
+                                                                                    item.productId,
+                                                                                    item.size,
+                                                                                    item.color,
+                                                                                    item.size,
+                                                                                    hex
+                                                                                )
+                                                                            }
+                                                                            className={`w-8 h-8 rounded-full border-[2px] shrink-0 transition-transform ${
+                                                                                item.color === hex
+                                                                                    ? "border-neutral-black ring-2 ring-primary ring-offset-2 scale-110"
+                                                                                    : "border-neutral-g2 hover:border-neutral-black"
+                                                                            }`}
+                                                                            style={{ backgroundColor: hex }}
+                                                                        />
+                                                                    ))}
+                                                                </div>
                                                             </div>
                                                         </div>
                                                     </div>
@@ -192,9 +245,8 @@ export default function Cart() {
                                         )}
                                     </span>
                                 </div>
-                                <div className="flex justify-between font-display text-[13px] font-black uppercase text-neutral-black/40 tracking-[1px]">
-                                    <span>INTERNAL_TAX</span>
-                                    <span className="text-neutral-black">₹{tax.toLocaleString('en-IN')}</span>
+                                <div className="pt-2">
+                                    <GstInclusiveNote className="text-neutral-black/35" />
                                 </div>
 
                                 <div className="pt-8 border-t-[3px] border-dashed border-neutral-black/10">
@@ -204,7 +256,9 @@ export default function Cart() {
                                             ₹{total.toLocaleString('en-IN')}
                                         </span>
                                     </div>
-                                    <div className="text-[10px] text-neutral-black/20 font-black mt-2 text-right uppercase tracking-[2px]">INCLUSIVE_VAT_G4</div>
+                                    <div className="text-[10px] text-neutral-black/25 font-black mt-2 text-right uppercase tracking-[2px]">
+                                        TOTAL_EXCLUDES_SHIPPING_GST_ON_ITEMS_INCLUDED
+                                    </div>
                                 </div>
                             </div>
 

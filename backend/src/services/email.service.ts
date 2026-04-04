@@ -97,6 +97,28 @@ export const sendAdminOrderNotification = async (orderData: { orderId: string, c
     );
 };
 
+export const sendAdminReturnClaimNotification = async (claimData: {
+    orderId: string;
+    customerName: string;
+    reason: string;
+    description: string;
+}) => {
+    const adminEmail = process.env.ADMIN_EMAIL || "admin@teehive.com";
+    const frontendUrl = process.env.FRONTEND_URL || "http://localhost:5173";
+    return sendEmail(
+        adminEmail,
+        "New return claim submitted",
+        "admin-return-claim-notification",
+        {
+            OrderID: claimData.orderId,
+            CustomerName: claimData.customerName,
+            Reason: claimData.reason,
+            Description: claimData.description,
+            AdminPanelLink: `${frontendUrl}/admin/orders`,
+        }
+    );
+};
+
 export const sendArtistApprovalEmail = async (to: string, name: string) => {
     return sendEmail(
         to,

@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
 import { Search, Palette, ShoppingBag, Globe, Instagram, Twitter, Verified } from "lucide-react";
 import Loader from "../../components/shared/Loader";
+import ImageWithSkeleton from "../../components/shared/ImageWithSkeleton";
 import api from "../../api/axios";
 
 interface Artist {
@@ -78,7 +79,14 @@ export default function BrowseArtists() {
             <div className="bg-neutral-black relative overflow-hidden py-24 px-8 border-b-[1.5px] border-neutral-black min-h-[440px] flex items-center">
                 {/* Background Banner */}
                 <div className="absolute inset-0">
-                    <img src={bannerUrl} alt="" className="w-full h-full object-cover opacity-30 grayscale" />
+                    <ImageWithSkeleton
+                        src={bannerUrl}
+                        alt=""
+                        className="w-full h-full object-cover opacity-30 grayscale"
+                        loading="eager"
+                        fetchPriority="high"
+                        wrapperClassName="w-full h-full"
+                    />
                     <div className="absolute inset-0 bg-gradient-to-t from-neutral-black via-neutral-black/40 to-transparent"></div>
                 </div>
 
@@ -152,10 +160,11 @@ export default function BrowseArtists() {
                                     {/* Cover */}
                                     <div className="h-32 bg-neutral-black relative overflow-hidden border-b-[1.5px] border-neutral-black">
                                         {artist.coverPhotoUrl ? (
-                                            <img
+                                            <ImageWithSkeleton
                                                 src={artist.coverPhotoUrl}
                                                 alt=""
                                                 className="w-full h-full object-cover grayscale opacity-50 group-hover:grayscale-0 group-hover:opacity-80 transition-all duration-700"
+                                                wrapperClassName="w-full h-full"
                                             />
                                         ) : (
                                             <div className="w-full h-full flex items-center justify-center font-display text-[30px] font-black tracking-widest text-white/5 select-none">
@@ -169,10 +178,11 @@ export default function BrowseArtists() {
                                     <div className="px-6 pb-8 -mt-10 relative flex-1 flex flex-col items-center text-center">
                                         <div className="w-20 h-20 rounded-full border-[1.5px] border-neutral-black overflow-hidden bg-primary flex items-center justify-center mb-5 z-10 shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] group-hover:shadow-none group-hover:scale-105 transition-all">
                                             {artist.displayPhotoUrl ? (
-                                                <img
+                                                <ImageWithSkeleton
                                                     src={artist.displayPhotoUrl}
                                                     alt={artist.displayName || artist.name}
                                                     className="w-full h-full object-cover"
+                                                    wrapperClassName="w-full h-full rounded-full"
                                                 />
                                             ) : (
                                                 <span className="text-3xl font-black text-neutral-black">

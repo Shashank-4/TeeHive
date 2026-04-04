@@ -5,6 +5,8 @@ import axios from "../../api/axios";
 import { useAuth } from "../../context/AuthContext";
 import { useCart } from "../../context/CartContext";
 import Loader from "../../components/shared/Loader";
+import GstInclusiveNote from "../../components/shared/GstInclusiveNote";
+import ReturnPolicyNote from "../../components/shared/ReturnPolicyNote";
 
 // Declare Razorpay on window
 declare global {
@@ -19,6 +21,7 @@ export default function Checkout() {
     const { items, subtotal, clearCart } = useCart();
     const [step, setStep] = useState<"shipping" | "payment">("shipping");
     const [isLoading, setIsLoading] = useState(false);
+    const [paymentError, setPaymentError] = useState("");
     
     // Coupon state
     const [couponCode, setCouponCode] = useState("");
@@ -43,8 +46,7 @@ export default function Checkout() {
     
     // Calculate shipping based on discounted total
     const shipping = discountedSubtotal > 3000 ? 0 : 100;
-    const tax = Math.round(discountedSubtotal * 0.18 * 100) / 100;
-    const total = discountedSubtotal + shipping + tax;
+    const total = discountedSubtotal + shipping;
 
     const handleApplyCoupon = async () => {
         if (!couponCode) return;
@@ -77,6 +79,49 @@ export default function Checkout() {
         }));
     };
 
+    const validateShippingStrict = (a: typeof shippingAddress): string | null => {
+        if (!a.firstName.trim() || !a.lastName.trim()) return "Please enter your first and last name.";
+        if (!a.email.trim()) return "Email is required.";
+        if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(a.email.trim())) return "Please enter a valid email address.";
+        if (!a.address.trim()) return "Street address is required.";
+        if (!a.city.trim() || !a.state.trim()) return "City and state are required.";
+        if (!a.zipCode.trim()) return "Postal code is required.";
+        if (a.country === "India" && !/^\d{6}$/.test(a.zipCode.trim()))
+            return "Indian pincode must be exactly 6 digits.";
+        if (a.country !== "India" && a.zipCode.trim().length < 3)
+            return "Please enter a valid postal code.";
+        if (!a.country.trim()) return "Country is required.";
+        const phoneDigits = a.phone.replace(/\D/g, "");
+        if (phoneDigits.length < 10) return "Please enter a valid phone number (at least 10 digits).";
+        return null;
+    };
+
+    const handleShippingSubmit = (e: React.FormEvent<HTMLFormElement>) => {
+        e.preventDefault();
+        const form = e.currentTarget;
+        if (!form.checkValidity()) {
+            form.reportValidity();
+            return;
+        }
+        const err = validateShippingStrict(shippingAddress);
+        if (err) {
+            alert(err);
+            return;
+        }
+        setStep("payment");
+    };
+
+    const buildOrderItems = () =>
+        items.map((item) => ({
+            id: item.productId,
+            title: item.name,
+            quantity: item.quantity,
+            price: item.price,
+            size: item.size,
+            color: item.color,
+            image: item.image,
+        }));
+
     const loadRazorpayScript = () => {
         return new Promise((resolve) => {
             const script = document.createElement("script");
@@ -88,7 +133,15 @@ export default function Checkout() {
     };
 
     const handleCheckout = async () => {
+        const err = validateShippingStrict(shippingAddress);
+        if (err) {
+            alert(err);
+            setStep("shipping");
+            return;
+        }
+
         setIsLoading(true);
+        setPaymentError("");
 
         const res = await loadRazorpayScript();
 
@@ -99,36 +152,107 @@ export default function Checkout() {
         }
 
         try {
-            const orderItems = items.map((item) => ({
-                id: item.productId,
-                title: item.name,
-                quantity: item.quantity,
-                price: item.price,
-                size: item.size,
-                color: item.color,
-                image: item.image,
-            }));
+            if (!window.Razorpay) {
+                throw new Error("Razorpay SDK is unavailable in this browser session.");
+            }
 
+            const orderItems = buildOrderItems();
             const { data } = await axios.post("/api/orders/checkout", {
-                items: orderItems,
+                items: orderItems.map(({ id, quantity, size, color }) => ({
+                    id,
+                    quantity,
+                    size,
+                    color,
+                })),
                 shippingAddress,
-                userId: user?.id,
                 couponCode: appliedCoupon?.code,
-                discountAmount: discountAmount
             });
 
-            clearCart();
-            navigate("/order/confirmation", {
-                state: {
-                    orderId: data.dbOrderId,
-                    total: data.total,
-                    items: orderItems,
-                    shippingAddress,
+            const session = data.data;
+            const razorpayInstance = new window.Razorpay({
+                key: session.keyId,
+                amount: session.amount,
+                currency: session.currency,
+                order_id: session.razorpayOrderId,
+                name: "TeeHive",
+                description: "Complete your TeeHive purchase",
+                image: "/favicon.ico",
+                prefill: {
+                    name: session.customer?.name,
+                    email: session.customer?.email,
+                    contact: session.customer?.contact,
+                },
+                notes: {
+                    internalOrderId: session.orderId,
+                },
+                theme: {
+                    color: "#f0dd26",
+                },
+                modal: {
+                    ondismiss: () => {
+                        setIsLoading(false);
+                        setPaymentError("Payment window closed before completion. Your cart is still intact.");
+                    },
+                },
+                handler: async (response: {
+                    razorpay_payment_id: string;
+                    razorpay_order_id: string;
+                    razorpay_signature: string;
+                }) => {
+                    setIsLoading(true);
+                    setPaymentError("");
+
+                    try {
+                        const verifyResponse = await axios.post("/api/orders/checkout/verify", {
+                            orderId: session.orderId,
+                            razorpayOrderId: response.razorpay_order_id,
+                            razorpayPaymentId: response.razorpay_payment_id,
+                            razorpaySignature: response.razorpay_signature,
+                        });
+
+                        const verifiedOrder = verifyResponse.data.data.order;
+                        clearCart();
+                        navigate("/order/confirmation", {
+                            state: {
+                                orderId: verifiedOrder.id,
+                                total: verifiedOrder.totalAmount,
+                                items: orderItems,
+                                paymentStatus: "success",
+                                paymentId: response.razorpay_payment_id,
+                                shippingAddress: {
+                                    ...shippingAddress,
+                                    name: `${shippingAddress.firstName} ${shippingAddress.lastName}`,
+                                },
+                            },
+                        });
+                    } catch (verifyError: any) {
+                        console.error("Error verifying payment:", verifyError);
+                        setPaymentError(
+                            verifyError.response?.data?.message ||
+                                "Payment was received but verification failed. Please contact support if money was debited."
+                        );
+                    } finally {
+                        setIsLoading(false);
+                    }
                 },
             });
-        } catch (error) {
+
+            razorpayInstance.on("payment.failed", (response: any) => {
+                setIsLoading(false);
+                setPaymentError(
+                    response?.error?.description ||
+                        response?.error?.reason ||
+                        "Payment failed. Please try again with another method."
+                );
+            });
+
+            razorpayInstance.open();
+            setIsLoading(false);
+        } catch (error: any) {
             console.error("Error creating order:", error);
-            alert("Something went wrong during checkout.");
+            setPaymentError(
+                error.response?.data?.message || error.message || "Something went wrong during checkout."
+            );
         } finally {
             setIsLoading(false);
         }
@@ -199,29 +323,46 @@ export default function Checkout() {
                 <div className="lg:grid lg:grid-cols-12 lg:gap-x-12 lg:items-start max-w-[1600px] mx-auto">
                     <div className="lg:col-span-7">
                         {step === "shipping" ? (
-                            <div className="bg-white border-[1.5px] border-neutral-black p-8 rounded-[2px] shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]">
+                            <form
+                                onSubmit={handleShippingSubmit}
+                                className="bg-white border-[1.5px] border-neutral-black p-8 rounded-[2px] shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]"
+                            >
                                 <h2 className="font-display text-[18px] font-black text-neutral-black uppercase tracking-[1px] mb-8 flex items-center gap-3">
                                     <Truck className="w-5 h-5 text-primary" /> Delivery Address
                                 </h2>
                                 <div className="grid grid-cols-1 gap-y-6 gap-x-6 sm:grid-cols-2">
                                     {[
-                                        { id: "firstName", label: "First Name", type: "text", span: false },
-                                        { id: "lastName", label: "Last Name", type: "text", span: false },
-                                        { id: "email", label: "Email Address", type: "email", span: true },
-                                        { id: "address", label: "Full Street Address", type: "text", span: true },
-                                        { id: "city", label: "City", type: "text", span: false },
-                                        { id: "state", label: "State", type: "text", span: false },
-                                        { id: "zipCode", label: "Pincode", type: "text", span: false },
+                                        { id: "firstName", label: "First Name", type: "text", span: false, auto: "given-name" as const },
+                                        { id: "lastName", label: "Last Name", type: "text", span: false, auto: "family-name" as const },
+                                        { id: "email", label: "Email Address", type: "email", span: true, auto: "email" as const },
+                                        { id: "address", label: "Full Street Address", type: "text", span: true, auto: "street-address" as const },
+                                        { id: "city", label: "City", type: "text", span: false, auto: "address-level2" as const },
+                                        { id: "state", label: "State", type: "text", span: false, auto: "address-level1" as const },
+                                        { id: "zipCode", label: "Pincode", type: "text", span: false, auto: "postal-code" as const },
                                     ].map((field) => (
                                         <div key={field.id} className={field.span ? "sm:col-span-2" : ""}>
                                             <label htmlFor={field.id} className="block font-display text-[10px] font-black uppercase text-neutral-g4 tracking-[1px] mb-2">
-                                                {field.label}
+                                                {field.label} <span className="text-danger">*</span>
                                             </label>
                                             <input
                                                 type={field.type}
                                                 id={field.id}
                                                 name={field.id}
-                                                value={(shippingAddress as any)[field.id]}
+                                                required
+                                                autoComplete={field.auto}
+                                                {...(field.id === "zipCode" && shippingAddress.country === "India"
+                                                    ? {
+                                                          inputMode: "numeric" as const,
+                                                          pattern: "\\d{6}",
+                                                          maxLength: 6,
+                                                          title: "6-digit Indian pincode",
+                                                      }
+                                                    : field.id === "zipCode"
+                                                      ? {
+                                                            title: "Postal code",
+                                                        }
+                                                      : {})}
+                                                value={(shippingAddress as Record<string, string>)[field.id]}
                                                 onChange={handleInputChange}
                                                 className="block w-full px-4 py-3.5 border-[1.5px] border-neutral-g2 rounded-[2px] focus:border-neutral-black focus:ring-0 transition-all font-display text-[13px] font-bold text-neutral-black"
                                             />
@@ -229,29 +370,39 @@ export default function Checkout() {
                                     ))}
 
                                     <div>
-                                        <label htmlFor="country" className="block font-display text-[10px] font-black uppercase text-neutral-g4 tracking-[1px] mb-2">Country</label>
+                                        <label htmlFor="country" className="block font-display text-[10px] font-black uppercase text-neutral-g4 tracking-[1px] mb-2">
+                                            Country <span className="text-danger">*</span>
+                                        </label>
                                         <select
                                             id="country"
                                             name="country"
+                                            required
+                                            autoComplete="country-name"
                                             value={shippingAddress.country}
                                             onChange={handleInputChange}
                                             className="block w-full px-4 py-3.5 border-[1.5px] border-neutral-g2 rounded-[2px] focus:border-neutral-black focus:ring-0 appearance-none bg-white font-display text-[13px] font-bold"
                                         >
-                                            <option>India</option>
-                                            <option>United States</option>
-                                            <option>Canada</option>
+                                            <option value="India">India</option>
+                                            <option value="United States">United States</option>
+                                            <option value="Canada">Canada</option>
                                         </select>
                                     </div>
 
                                     <div className="sm:col-span-2">
-                                        <label htmlFor="phone" className="block font-display text-[10px] font-black uppercase text-neutral-g4 tracking-[1px] mb-2">Phone Number</label>
+                                        <label htmlFor="phone" className="block font-display text-[10px] font-black uppercase text-neutral-g4 tracking-[1px] mb-2">
+                                            Phone Number <span className="text-danger">*</span>
+                                        </label>
                                         <input
                                             type="tel"
                                             name="phone"
                                             id="phone"
+                                            required
+                                            autoComplete="tel"
+                                            inputMode="tel"
                                             value={shippingAddress.phone}
                                             onChange={handleInputChange}
-                                            placeholder="+91-0000000000"
+                                            placeholder="+91 00000 00000"
+                                            title="At least 10 digits"
                                             className="block w-full px-4 py-3.5 border-[1.5px] border-neutral-g2 rounded-[2px] focus:border-neutral-black focus:ring-0 font-display text-[13px] font-bold"
                                         />
                                     </div>
@@ -259,14 +410,13 @@ export default function Checkout() {
 
                                 <div className="mt-10 flex justify-end pt-8 border-t-[1.5px] border-neutral-g1">
                                     <button
-                                        type="button"
-                                        onClick={() => setStep("payment")}
+                                        type="submit"
                                         className="bg-primary text-neutral-black px-10 py-4 font-display text-[14px] font-black uppercase tracking-[1px] border-[1.5px] border-neutral-black shadow-[6px_6px_0px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-1 hover:translate-y-1 transition-all"
                                     >
                                         Proceed to Checkout
                                     </button>
                                 </div>
-                            </div>
+                            </form>
                         ) : (
                             <div className="bg-white border-[1.5px] border-neutral-black p-8 rounded-[2px] shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]">
                                 <h2 className="font-display text-[18px] font-black text-neutral-black uppercase tracking-[1px] mb-8 flex items-center gap-3">
@@ -302,6 +452,11 @@ export default function Checkout() {
                                 </div>
 
                                 <div className="space-y-6">
+                                    {paymentError && (
+                                        <div className="w-full border-[1.5px] border-danger bg-danger/5 text-danger px-4 py-3 rounded-[2px] font-display text-[11px] font-black uppercase tracking-[0.8px]">
+                                            {paymentError}
+                                        </div>
+                                    )}
                                     <button
                                         onClick={handleCheckout}
                                         disabled={isLoading}
@@ -322,6 +477,7 @@ export default function Checkout() {
                                             By clicking authorize, you agree to TeeHive's terms of service and the selected design license.
                                         </p>
                                     </div>
+                                    <ReturnPolicyNote />
                                 </div>
                             </div>
                         )}
@@ -417,10 +573,10 @@ export default function Checkout() {
                                             {shipping === 0 ? "FREE" : `₹${shipping.toLocaleString('en-IN')}`}
                                         </span>
                                     </div>
-                                    <div className="flex justify-between font-display text-[12px] font-bold uppercase text-neutral-g4">
-                                        <span>IGST (18%)</span>
-                                        <span className="text-neutral-black text-[13px]">₹{tax.toLocaleString('en-IN')}</span>
+                                    <div className="pt-1">
+                                        <GstInclusiveNote />
                                     </div>
+                                    <ReturnPolicyNote className="mt-2" />
                                     <div className="border-t-[1.5px] border-neutral-black pt-5 mt-2">
                                         <div className="flex justify-between items-center">
                                             <span className="font-display text-[16px] font-black text-neutral-black uppercase tracking-[1px]">Payable Amount</span>

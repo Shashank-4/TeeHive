@@ -5,6 +5,14 @@ import {
     submitForVerificationService,
 } from "../services/artistProfile.service";
 import { sendArtistApprovalEmail } from "../services/email.service";
+import { PrismaClient } from "@prisma/client";
+
+const prisma = new PrismaClient();
+const DEFAULT_ARTIST_DASHBOARD_CONFIG = {
+    showAnnouncement: true,
+    announcementText:
+        "Welcome to TeeHive! Upload at least 3 designs to submit your profile for verification and start selling.",
+};
 
 /**
  * GET /api/artist/profile — Get the current artist's profile
@@ -113,7 +121,7 @@ export const submitVerificationHandler = async (
 
 /**
  * PATCH /api/artist/profile — Partially update profile (JSON body, no file uploads)
- * Used for saving payoutDetails and other non-file fields
+ * Used for saving lightweight non-file profile fields
  */
 export const patchArtistProfileHandler = async (
     req: Request,
@@ -139,6 +147,34 @@ export const patchArtistProfileHandler = async (
         const { password, ...profile } = updatedUser;
         res.status(200).json({ status: "success", data: { profile } });
     } catch (err: any) {
+        next(err);
+    }
+};
+
+/**
+ * GET /api/artist/dashboard — Fetch artist dashboard config
+ * Falls back to sane defaults when config key is not seeded.
+ */
+export const getArtistDashboardConfigHandler = async (
+    _req: Request,
+    res: Response,
+    next: NextFunction
+) => {
+    try {
+        const config = await prisma.siteConfig.findUnique({
+            where: { key: "artist_dashboard" },
+        });
+
+        res.status(200).json({
+            status: "success",
+            data: {
+                config: {
+                    ...DEFAULT_ARTIST_DASHBOARD_CONFIG,
+                    ...(config?.value as Record<string, unknown> | null),
+                },
+            },
+        });
+    } catch (err) {
         next(err);
     }
 };

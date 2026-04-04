@@ -11,7 +11,10 @@ interface Product {
     price: number;
     compareAtPrice: number | null;
     mockupImageUrl: string;
+    backMockupImageUrl?: string;
+    primaryView?: "front" | "back";
     tshirtColor: string;
+    availableColors?: string[];
     category: string;
     artist: { id: string; name: string };
 }
@@ -49,6 +52,12 @@ export default function Hive50Page() {
     }, []);
 
     const handleQuickAdd = (product: Product) => {
+        const colors =
+            product.availableColors?.length ? product.availableColors : [product.tshirtColor];
+        const displayImage =
+            product.primaryView === "back"
+                ? product.backMockupImageUrl || product.mockupImageUrl
+                : product.mockupImageUrl;
         addItem({
             productId: product.id,
             name: product.name,
@@ -56,8 +65,9 @@ export default function Hive50Page() {
             quantity: 1,
             size: "M",
             color: product.tshirtColor,
-            image: product.mockupImageUrl,
+            image: displayImage,
             artistName: product.artist.name,
+            availableColors: colors,
         });
         setAddedId(product.id);
         setTimeout(() => setAddedId(null), 2000);
@@ -140,7 +150,15 @@ export default function Hive50Page() {
 
                                 <Link to={`/products/${product.id}`} className="block mb-6 mt-8">
                                     <div className="aspect-square bg-white/[0.03] rounded-[4px] overflow-hidden flex items-center justify-center">
-                                        <img src={product.mockupImageUrl} alt={product.name} className="w-full h-full object-cover group-hover:scale-105 transition-transform" />
+                                        <img
+                                            src={
+                                                product.primaryView === "back"
+                                                    ? product.backMockupImageUrl || product.mockupImageUrl
+                                                    : product.mockupImageUrl
+                                            }
+                                            alt={product.name}
+                                            className="w-full h-full object-cover group-hover:scale-105 transition-transform"
+                                        />
                                     </div>
                                 </Link>
 
@@ -179,7 +197,15 @@ export default function Hive50Page() {
                             </div>
 
                             <Link to={`/products/${product.id}`} className="block aspect-square overflow-hidden bg-neutral-g1">
-                                <img src={product.mockupImageUrl} alt={product.name} className="w-full h-full object-cover group-hover:scale-105 transition-transform" />
+                                <img
+                                    src={
+                                        product.primaryView === "back"
+                                            ? product.backMockupImageUrl || product.mockupImageUrl
+                                            : product.mockupImageUrl
+                                    }
+                                    alt={product.name}
+                                    className="w-full h-full object-cover group-hover:scale-105 transition-transform"
+                                />
                             </Link>
 
                             <div className="p-4">

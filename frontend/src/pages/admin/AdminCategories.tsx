@@ -1,11 +1,36 @@
-import React, { useState, useEffect } from "react";
-import { Plus, Trash2, Tag, Loader2, AlertTriangle, Upload, Layers } from "lucide-react";
+import React, { useState, useEffect, useCallback } from "react";
+import {
+    Plus,
+    Trash2,
+    Tag,
+    Loader2,
+    AlertTriangle,
+    Upload,
+    Layers,
+    ArrowDownWideNarrow,
+    ListOrdered,
+    Shuffle,
+    ChevronUp,
+    ChevronDown,
+} from "lucide-react";
 import api from "../../api/axios";
 
 interface Category {
     id: string;
     name: string;
     imageUrl?: string | null;
+    sortOrder?: number;
+}
+
+type CategorySortMode = "alphabetical" | "custom";
+
+function shuffleIds(ids: string[]): string[] {
+    const a = [...ids];
+    for (let i = a.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [a[i], a[j]] = [a[j], a[i]];
+    }
+    return a;
 }
 
 export default function AdminCategories() {
@@ -15,12 +40,16 @@ export default function AdminCategories() {
     const [loading, setLoading] = useState(true);
     const [submitting, setSubmitting] = useState(false);
     const [error, setError] = useState<string | null>(null);
+    const [sortMode, setSortMode] = useState<CategorySortMode>("alphabetical");
+    const [reorderBusy, setReorderBusy] = useState(false);
 
-    const fetchCategories = async () => {
+    const fetchCategories = useCallback(async () => {
         try {
             setLoading(true);
             const res = await api.get("/api/categories");
-            setCategories(res.data.data.categories);
+            setCategories(res.data.data.categories || []);
+            const m = res.data.data.categorySortMode;
+            setSortMode(m === "custom" ? "custom" : "alphabetical");
             setError(null);
         } catch (err) {
             console.error("Failed to load categories", err);
@@ -28,11 +57,75 @@ export default function AdminCategories() {
         } finally {
             setLoading(false);
         }
-    };
+    }, []);
 
     useEffect(() => {
         fetchCategories();
-    }, []);
+    }, [fetchCategories]);
+
+    const persistReorder = async (ordered: Category[]) => {
+        setReorderBusy(true);
+        try {
+            const res = await api.patch("/api/categories/reorder", {
+                orderedIds: ordered.map((c) => c.id),
+            });
+            setCategories(res.data.data.categories || []);
+            setSortMode("custom");
+            setError(null);
+        } catch (err: any) {
+            console.error("Failed to save category order", err);
+            setError(err.response?.data?.message || "Failed to save category order");
+            await fetchCategories();
+        } finally {
+            setReorderBusy(false);
+        }
+    };
+
+    const setAlphabeticalMode = async () => {
+        setReorderBusy(true);
+        try {
+            const res = await api.patch("/api/categories/sort-mode", { mode: "alphabetical" });
+            setCategories(res.data.data.categories || []);
+            setSortMode("alphabetical");
+            setError(null);
+        } catch (err: any) {
+            setError(err.response?.data?.message || "Failed to switch sort mode");
+        } finally {
+            setReorderBusy(false);
+        }
+    };
+
+    const setCustomMode = async () => {
+        setReorderBusy(true);
+        try {
+            const res = await api.patch("/api/categories/sort-mode", { mode: "custom" });
+            setCategories(res.data.data.categories || []);
+            setSortMode("custom");
+            setError(null);
+        } catch (err: any) {
+            setError(err.response?.data?.message || "Failed to switch sort mode");
+        } finally {
+            setReorderBusy(false);
+        }
+    };
+
+    const moveCategory = (categoryId: string, dir: -1 | 1) => {
+        const index = categories.findIndex((c) => c.id === categoryId);
+        const j = index + dir;
+        if (index < 0 || j < 0 || j >= categories.length) return;
+        const next = [...categories];
+        [next[index], next[j]] = [next[j], next[index]];
+        setCategories(next);
+        void persistReorder(next);
+    };
+
+    const randomizeOrder = () => {
+        const shuffled = shuffleIds(categories.map((c) => c.id));
+        const byId = new Map(categories.map((c) => [c.id, c]));
+        const next = shuffled.map((id) => byId.get(id)!);
+        setCategories(next);
+        void persistReorder(next);
+    };
 
     const handleAddCategory = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -47,10 +140,10 @@ export default function AdminCategories() {
                 formData.append("image", newImage);
             }
 
-            const res = await api.post("/api/categories", formData, {
+            await api.post("/api/categories", formData, {
                 headers: { "Content-Type": "multipart/form-data" },
             });
-            setCategories([...categories, res.data.data.category].sort((a, b) => a.name.localeCompare(b.name)));
+            await fetchCategories();
             setNewCategory("");
             setNewImage(null);
             setError(null);
@@ -161,11 +254,49 @@ export default function AdminCategories() {
 
                     {/* Categories List */}
                     <div className="bg-white border-[2px] border-neutral-black rounded-[6px] shadow-[12px_12px_0px_0px_rgba(0,0,0,1)] overflow-hidden">
-                        <div className="bg-neutral-black px-8 py-5 flex items-center justify-between border-b-[2px] border-neutral-black">
-                            <h3 className="font-display text-[14px] font-black text-white uppercase tracking-[2px] flex items-center gap-3">
-                                <Layers className="w-4 h-4 text-primary" /> Active Classifications
-                            </h3>
-                            <span className="font-display text-[10px] font-black uppercase text-primary tracking-[1px]">{categories.length} Nodes</span>
+                        <div className="bg-neutral-black px-8 py-5 flex flex-col gap-4 border-b-[2px] border-neutral-black">
+                            <div className="flex flex-wrap items-center justify-between gap-4">
+                                <h3 className="font-display text-[14px] font-black text-white uppercase tracking-[2px] flex items-center gap-3">
+                                    <Layers className="w-4 h-4 text-primary" /> Active Classifications
+                                </h3>
+                                <span className="font-display text-[10px] font-black uppercase text-primary tracking-[1px]">
+                                    {categories.length} Nodes —{" "}
+                                    {sortMode === "alphabetical" ? "A–Z order" : "Custom order"}
+                                </span>
+                            </div>
+                            <div className="flex flex-wrap gap-3">
+                                <button
+                                    type="button"
+                                    disabled={reorderBusy || sortMode === "alphabetical"}
+                                    onClick={() => void setAlphabeticalMode()}
+                                    className="inline-flex items-center gap-2 px-4 py-2.5 bg-white text-neutral-black border-[2px] border-white font-display text-[10px] font-black uppercase tracking-[1px] rounded-[4px] hover:bg-primary transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+                                >
+                                    <ArrowDownWideNarrow className="w-4 h-4" /> Alphabetical (default)
+                                </button>
+                                <button
+                                    type="button"
+                                    disabled={reorderBusy || sortMode === "custom"}
+                                    onClick={() => void setCustomMode()}
+                                    className="inline-flex items-center gap-2 px-4 py-2.5 bg-white/10 text-white border-[2px] border-white/30 font-display text-[10px] font-black uppercase tracking-[1px] rounded-[4px] hover:bg-primary hover:text-neutral-black hover:border-primary transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+                                >
+                                    <ListOrdered className="w-4 h-4" /> Custom order
+                                </button>
+                                {sortMode === "custom" && (
+                                    <button
+                                        type="button"
+                                        disabled={reorderBusy || categories.length < 2}
+                                        onClick={() => randomizeOrder()}
+                                        className="inline-flex items-center gap-2 px-4 py-2.5 bg-primary text-neutral-black border-[2px] border-neutral-black font-display text-[10px] font-black uppercase tracking-[1px] rounded-[4px] shadow-[3px_3px_0px_0px_rgba(255,255,255,0.2)] hover:translate-x-[1px] hover:translate-y-[1px] hover:shadow-none transition-all disabled:opacity-40"
+                                    >
+                                        <Shuffle className="w-4 h-4" /> Randomize order
+                                    </button>
+                                )}
+                            </div>
+                            {sortMode === "custom" && (
+                                <p className="font-display text-[9px] font-bold text-white/50 uppercase tracking-[1px]">
+                                    Use arrows on each card to reorder. Order syncs to the storefront (home + shop) immediately. Randomize assigns a new random sequence (still saved as custom).
+                                </p>
+                            )}
                         </div>
 
                         <div className="p-8">
@@ -208,10 +339,32 @@ export default function AdminCategories() {
                                                 </div>
                                             </div>
 
-                                            <div className="flex justify-end pt-2 mt-auto">
+                                            <div className="flex justify-between items-center pt-2 mt-auto gap-2">
+                                                {sortMode === "custom" && (
+                                                    <div className="flex gap-1">
+                                                        <button
+                                                            type="button"
+                                                            disabled={reorderBusy}
+                                                            onClick={() => moveCategory(category.id, -1)}
+                                                            className="p-2 border-[1px] border-neutral-black rounded-[2px] hover:bg-primary transition-all disabled:opacity-30"
+                                                            title="Move up"
+                                                        >
+                                                            <ChevronUp className="w-4 h-4" />
+                                                        </button>
+                                                        <button
+                                                            type="button"
+                                                            disabled={reorderBusy}
+                                                            onClick={() => moveCategory(category.id, 1)}
+                                                            className="p-2 border-[1px] border-neutral-black rounded-[2px] hover:bg-primary transition-all disabled:opacity-30"
+                                                            title="Move down"
+                                                        >
+                                                            <ChevronDown className="w-4 h-4" />
+                                                        </button>
+                                                    </div>
+                                                )}
                                                 <button
                                                     onClick={() => handleDeleteCategory(category.id, category.name)}
-                                                    className="p-2 border-[1px] border-neutral-black rounded-[2px] text-danger hover:bg-danger hover:text-white transition-all opacity-0 group-hover:opacity-100 translate-y-2 group-hover:translate-y-0"
+                                                    className="p-2 border-[1px] border-neutral-black rounded-[2px] text-danger hover:bg-danger hover:text-white transition-all opacity-0 group-hover:opacity-100 translate-y-2 group-hover:translate-y-0 ml-auto"
                                                     title="Purge Classification"
                                                 >
                                                     <Trash2 className="w-4 h-4" />
