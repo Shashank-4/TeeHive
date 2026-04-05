@@ -4,6 +4,8 @@ import { Search, User, LogOut, Package, LayoutDashboard, Shield, Menu, X, Shoppi
 import { useAuth } from "../../context/AuthContext";
 import { useCart } from "../../context/CartContext";
 import api from "../../api/axios";
+import { artistPublicPath } from "../../utils/artistRoutes";
+import ArtistRatingInline from "./ArtistRatingInline";
 
 interface SearchProductResult {
     id: string;
@@ -21,6 +23,9 @@ interface SearchArtistResult {
     displayName?: string | null;
     displayPhotoUrl?: string | null;
     productCount?: number;
+    artistSlug?: string | null;
+    artistRating?: number;
+    reviewCount?: number;
 }
 
 export default function Navbar() {
@@ -139,11 +144,11 @@ export default function Navbar() {
         navigate(`/products/${productId}`);
     };
 
-    const openArtist = (artistId: string) => {
+    const openArtist = (a: SearchArtistResult) => {
         setSearchOpen(false);
         setSearchQuery("");
         setMobileMenuOpen(false);
-        navigate(`/artists/${artistId}`);
+        navigate(artistPublicPath({ id: a.id, artistSlug: a.artistSlug }));
     };
 
     const handleSignOut = async () => { setUserMenuOpen(false); await signOut(); navigate("/"); };
@@ -156,6 +161,7 @@ export default function Navbar() {
     };
 
     const handleBecomeArtist = () => {
+        setMobileMenuOpen(false);
         if (!isAuthenticated || !user) {
             navigate("/login?type=artist&mode=signup");
             return;
@@ -177,6 +183,12 @@ export default function Navbar() {
     const navLinkClass = (isActive: boolean) =>
         `font-display text-[15px] font-black tracking-[1.5px] uppercase px-5 h-[72px] flex items-center border-b-[4px] transition-all relative overflow-hidden group ${isActive ? "border-primary text-neutral-black bg-primary/5" : "border-transparent text-neutral-black hover:text-primary"}`;
 
+    const hive50NavClass = (isActive: boolean) =>
+        `font-display text-[15px] font-black tracking-[1.5px] uppercase px-5 h-[72px] flex items-center border-b-[4px] transition-all relative overflow-hidden group text-neutral-black ${isActive ? "border-red-600 bg-red-50/50" : "border-transparent hover:border-red-300"}`;
+
+    const becomeArtistNavClass =
+        "font-display text-[15px] font-black tracking-[1.5px] uppercase px-5 h-[72px] flex items-center border-b-[4px] transition-all relative overflow-hidden group border-transparent text-neutral-black hover:border-emerald-300";
+
     return (
         <nav className="sticky top-0 z-[100] bg-white border-b-[2.5px] border-neutral-black h-[72px] flex items-center shadow-[0_4px_0_0_rgba(0,0,0,0.02)]">
             <div className="w-full max-w-[1920px] mx-auto flex items-center justify-between px-4 md:px-10 h-full">
@@ -193,12 +205,12 @@ export default function Navbar() {
                             <img
                                 src={headerLogo}
                                 alt="TeeHive"
-                                className="h-9 md:h-10 w-auto object-contain"
+                                className="h-14 sm:h-[58px] md:h-16 max-h-[68px] w-auto object-contain"
                             />
                         ) : (
                             <>
-                                <div className="w-4 h-4 bg-neutral-black rounded-full group-hover:bg-primary group-hover:scale-125 transition-all duration-300"></div>
-                                <span className="font-display text-[26px] md:text-[32px] font-black tracking-[1px] text-neutral-black leading-none">
+                                <div className="w-6 h-6 md:w-7 md:h-7 bg-neutral-black rounded-full group-hover:bg-primary group-hover:scale-125 transition-all duration-300 shrink-0" />
+                                <span className="font-display text-[clamp(32px,7vw,48px)] md:text-[52px] font-black tracking-[1px] text-neutral-black leading-none">
                                     TEE<span className="text-primary italic">HIVE</span>
                                 </span>
                             </>
@@ -211,14 +223,18 @@ export default function Navbar() {
                     <NavLink to="/products" className={({ isActive }) => navLinkClass(isActive)}>
                         <span className="relative z-10">Shop</span>
                     </NavLink>
-                    <NavLink to="/hive50" className={({ isActive }) => navLinkClass(isActive)}>
-                        <span className="relative z-10">Hive50</span>
+                    <NavLink to="/hive50" className={({ isActive }) => hive50NavClass(isActive)}>
+                        <span className="relative z-10">
+                            Hive<span className="text-red-600 font-black">50</span>
+                        </span>
                     </NavLink>
                     <NavLink to="/artists" className={({ isActive }) => navLinkClass(isActive)}>
                         <span className="relative z-10">Artists</span>
                     </NavLink>
-                    <button onClick={handleBecomeArtist} className={navLinkClass(false)}>
-                        <span className="relative z-10">Become an Artist</span>
+                    <button type="button" onClick={handleBecomeArtist} className={becomeArtistNavClass}>
+                        <span className="relative z-10">
+                            Become an <span className="text-emerald-600">Artist</span>
+                        </span>
                     </button>
 
                 </div>
@@ -290,7 +306,7 @@ export default function Navbar() {
                                                 {artistResults.map((a) => (
                                                     <button
                                                         key={a.id}
-                                                        onClick={() => openArtist(a.id)}
+                                                        onClick={() => openArtist(a)}
                                                         className="w-full text-left px-4 py-3.5 hover:bg-primary/15 transition-colors border-b border-neutral-black/5 last:border-b-0"
                                                     >
                                                         <div className="flex items-center gap-3">
@@ -307,6 +323,13 @@ export default function Navbar() {
                                                                 </div>
                                                                 <div className="font-display text-[10px] font-bold uppercase tracking-[1px] text-neutral-g3">
                                                                     {a.productCount || 0} designs published
+                                                                </div>
+                                                                <div className="mt-0.5">
+                                                                    <ArtistRatingInline
+                                                                        rating={a.artistRating ?? 0}
+                                                                        reviewCount={a.reviewCount ?? 0}
+                                                                        compact
+                                                                    />
                                                                 </div>
                                                             </div>
                                                         </div>
@@ -367,17 +390,20 @@ export default function Navbar() {
                                 )}
                             </div>
                         ) : (
-                            <Link to="/login" className="hidden md:flex h-[44px] px-6 bg-primary text-black font-display text-[13px] font-black tracking-[1.5px] uppercase rounded-[4px] items-center border-[2px] border-neutral-black transition-all bg-primary text-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] active:translate-x-[2px] active:translate-y-[2px] no-underline">
-                                Sign In
+                            <Link
+                                to="/login"
+                                className="hidden md:flex h-[44px] px-6 bg-primary text-neutral-black font-display text-[13px] font-black tracking-[1.5px] uppercase rounded-[4px] items-center border-[2px] border-neutral-black transition-all shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] hover:bg-neutral-black hover:text-white hover:shadow-none hover:translate-x-[2px] hover:translate-y-[2px] active:translate-x-[2px] active:translate-y-[2px] active:shadow-none no-underline group"
+                            >
+                                <span className="group-hover:scale-[1.02] transition-transform">Sign In</span>
                             </Link>
                         )}
 
                         {/* Cart */}
                         <Link
                             to="/cart"
-                            className="w-[44px] h-[44px] flex items-center justify-center rounded-[4px] border-[2px] border-neutral-black bg-neutral-black text-white hover:bg-primary hover:shadow-none hover:translate-x-[2px] hover:translate-y-[2px] transition-all relative no-underline group shadow-[5px_5px_0px_0px_rgba(0,0,0,0.2)]"
+                            className="w-[44px] h-[44px] flex items-center justify-center rounded-[4px] border-[2px] border-neutral-black bg-white text-neutral-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] hover:bg-primary hover:shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:translate-x-[2px] hover:translate-y-[2px] transition-all relative no-underline group"
                         >
-                            <ShoppingCart className="w-[20px] h-[20px] text-primary group-hover:text-neutral-black group-hover:scale-110 transition-all" />
+                            <ShoppingCart className="w-[20px] h-[20px] text-neutral-black group-hover:scale-110 transition-all" />
                             {itemCount > 0 && (
                                 <span className="absolute -top-2.5 -right-2.5 min-w-[22px] h-[22px] bg-primary rounded-full flex items-center justify-center font-display text-[11px] font-black text-neutral-black px-1 border-[2.5px] border-neutral-black shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] transition-all group-hover:scale-110">
                                     {itemCount > 9 ? "9+" : itemCount}
@@ -401,12 +427,14 @@ export default function Navbar() {
                             <img
                                 src={headerLogo}
                                 alt="TeeHive"
-                                className="h-8 w-auto object-contain"
+                                className="h-14 w-auto max-h-[60px] object-contain"
                             />
                         ) : (
                             <>
-                                <div className="w-3 h-3 bg-primary rounded-full"></div>
-                                <span className="font-display text-[24px] font-black tracking-[1.5px] text-neutral-black">TEEHIVE</span>
+                                <div className="w-5 h-5 bg-primary rounded-full shrink-0" />
+                                <span className="font-display text-[34px] font-black tracking-[1.5px] text-neutral-black leading-none">
+                                    TEE<span className="text-primary italic">HIVE</span>
+                                </span>
                             </>
                         )}
                     </Link>
@@ -468,10 +496,17 @@ export default function Navbar() {
                                                 {artistResults.map((a) => (
                                                     <button
                                                         key={a.id}
-                                                        onClick={() => openArtist(a.id)}
+                                                        onClick={() => openArtist(a)}
                                                         className="w-full text-left px-4 py-3 hover:bg-primary/15 transition-colors border-b border-neutral-black/5 last:border-b-0"
                                                     >
                                                         <div className="font-display text-[11px] font-black uppercase truncate">{a.displayName || a.name}</div>
+                                                        <div className="mt-0.5">
+                                                            <ArtistRatingInline
+                                                                rating={a.artistRating ?? 0}
+                                                                reviewCount={a.reviewCount ?? 0}
+                                                                compact
+                                                            />
+                                                        </div>
                                                     </button>
                                                 ))}
                                             </div>
@@ -483,14 +518,39 @@ export default function Navbar() {
                     </form>
 
                     <nav className="flex flex-col gap-2">
-                        <NavLink to="/" end className={({ isActive }) => `flex items-center px-5 py-4 font-display text-[15px] font-black tracking-[1.5px] uppercase rounded-[4px] transition-all no-underline border-[2px] ${isActive ? "bg-primary border-neutral-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]" : "text-neutral-black hover:bg-neutral-g1 border-transparent"}`}>Home</NavLink>
-                        <NavLink to="/products" className={({ isActive }) => `flex items-center px-5 py-4 font-display text-[15px] font-black tracking-[1.5px] uppercase rounded-[4px] transition-all no-underline border-[2px] ${isActive ? "bg-primary border-neutral-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]" : "text-neutral-black hover:bg-neutral-g1 border-transparent"}`}>Shop Catalog</NavLink>
-                        <NavLink to="/artists" className={({ isActive }) => `flex items-center px-5 py-4 font-display text-[15px] font-black tracking-[1.5px] uppercase rounded-[4px] transition-all no-underline border-[2px] ${isActive ? "bg-primary border-neutral-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]" : "text-neutral-black hover:bg-neutral-g1 border-transparent"}`}>Artist Registry</NavLink>
-                        <button
-                            onClick={handleBecomeArtist}
-                            className="flex items-center px-5 py-4 font-display text-[15px] font-black tracking-[1.5px] uppercase rounded-[4px] transition-all no-underline border-[2px] text-neutral-black hover:bg-neutral-g1 border-transparent text-left"
+                        <NavLink
+                            to="/products"
+                            onClick={() => setMobileMenuOpen(false)}
+                            className={({ isActive }) =>
+                                `flex items-center px-5 py-4 font-display text-[15px] font-black tracking-[1.5px] uppercase rounded-[4px] transition-all no-underline border-[2px] ${isActive ? "bg-primary/10 border-primary text-neutral-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]" : "text-neutral-black border-transparent hover:bg-primary/5 hover:text-primary"}`
+                            }
                         >
-                            Become an Artist
+                            Shop
+                        </NavLink>
+                        <NavLink
+                            to="/hive50"
+                            onClick={() => setMobileMenuOpen(false)}
+                            className={({ isActive }) =>
+                                `flex items-center px-5 py-4 font-display text-[15px] font-black tracking-[1.5px] uppercase rounded-[4px] transition-all no-underline border-[2px] text-neutral-black ${isActive ? "bg-red-50 border-red-600 shadow-[4px_4px_0px_0px_rgba(220,38,38,0.35)]" : "border-transparent hover:bg-red-50 hover:border-red-300"}`
+                            }
+                        >
+                            Hive<span className="text-red-600 font-black">50</span>
+                        </NavLink>
+                        <NavLink
+                            to="/artists"
+                            onClick={() => setMobileMenuOpen(false)}
+                            className={({ isActive }) =>
+                                `flex items-center px-5 py-4 font-display text-[15px] font-black tracking-[1.5px] uppercase rounded-[4px] transition-all no-underline border-[2px] ${isActive ? "bg-primary/10 border-primary text-neutral-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]" : "text-neutral-black border-transparent hover:bg-primary/5 hover:text-primary"}`
+                            }
+                        >
+                            Artists
+                        </NavLink>
+                        <button
+                            type="button"
+                            onClick={handleBecomeArtist}
+                            className="flex items-center px-5 py-4 font-display text-[15px] font-black tracking-[1.5px] uppercase rounded-[4px] transition-all no-underline border-[2px] text-neutral-black border-transparent hover:bg-emerald-50 hover:border-emerald-300 text-left"
+                        >
+                            Become an <span className="text-emerald-600">Artist</span>
                         </button>
                     </nav>
                 </div>
@@ -498,7 +558,13 @@ export default function Navbar() {
                 <div className="p-6 border-t-[2.5px] border-neutral-black shrink-0 bg-neutral-g1/50">
                     {!isAuthenticated ? (
                         <div className="grid grid-cols-2 gap-4">
-                            <Link to="/login" onClick={() => setMobileMenuOpen(false)} className="flex items-center justify-center py-4 bg-white border-[2px] border-neutral-black text-neutral-black font-display text-[13px] font-black tracking-[1.5px] uppercase rounded-[4px] no-underline shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] active:translate-x-[2px] active:translate-y-[2px] active:shadow-none">Sign In</Link>
+                            <Link
+                                to="/login"
+                                onClick={() => setMobileMenuOpen(false)}
+                                className="flex items-center justify-center py-4 bg-white border-[2px] border-neutral-black text-neutral-black font-display text-[13px] font-black tracking-[1.5px] uppercase rounded-[4px] no-underline shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] hover:bg-neutral-black hover:text-white hover:shadow-none hover:translate-x-[2px] hover:translate-y-[2px] transition-all active:translate-x-[2px] active:translate-y-[2px] active:shadow-none group"
+                            >
+                                <span className="group-hover:scale-[1.02] transition-transform">Sign In</span>
+                            </Link>
                             <Link to="/login" onClick={() => setMobileMenuOpen(false)} className="flex items-center justify-center py-4 bg-primary border-[2px] border-neutral-black text-neutral-black font-display text-[13px] font-black tracking-[1.5px] uppercase rounded-[4px] no-underline shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] active:translate-x-[2px] active:translate-y-[2px] active:shadow-none font-black italic">Join Now</Link>
                         </div>
                     ) : (

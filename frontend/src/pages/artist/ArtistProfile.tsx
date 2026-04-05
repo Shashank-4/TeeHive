@@ -42,7 +42,7 @@ export default function ArtistProfile() {
             }
         };
         fetchArtist();
-    }, [artistId]);
+    }, [artistId, user?.id, user?.verificationStatus, navigate]);
 
     if (loading) {
         return (
@@ -122,34 +122,39 @@ export default function ArtistProfile() {
                                 <h1 className="font-display text-[32px] font-black text-neutral-black leading-tight uppercase tracking-tight">
                                     {artist.displayName || artist.name}
                                 </h1>
-                                <p className="font-display text-[12px] font-bold text-neutral-g4 uppercase tracking-wider">
-                                    {artist.role || "Digital Revolutionary"}
-                                </p>
                             </div>
 
                             {/* Stats */}
-                            <div className="grid grid-cols-3 w-full border-y-[2px] border-neutral-black py-6 gap-4">
+                            <div className="grid grid-cols-2 w-full border-y-[2px] border-neutral-black py-6 gap-4">
                                 <div className="space-y-1">
-                                    <div className="font-display text-[22px] font-black text-neutral-black leading-none">{artist.products?.length || 0}</div>
-                                    <div className="font-display text-[9px] font-black text-neutral-g3 uppercase tracking-[1px]">Drops</div>
-                                </div>
-                                <div className="space-y-1 border-x-[2px] border-neutral-black/10">
-                                    <div className="font-display text-[22px] font-black text-neutral-black leading-none flex items-center justify-center gap-1">
-                                        <Star className="w-4 h-4 fill-primary text-primary" /> 4.9
+                                    <div className="font-display text-[22px] font-black text-neutral-black leading-none">
+                                        {artist.products?.length || 0}
                                     </div>
-                                    <div className="font-display text-[9px] font-black text-neutral-g3 uppercase tracking-[1px]">Rep</div>
+                                    <div className="font-display text-[9px] font-black text-neutral-g3 uppercase tracking-[1px]">
+                                        Published products
+                                    </div>
                                 </div>
-                                <div className="space-y-1">
-                                    <div className="font-display text-[22px] font-black text-neutral-black leading-none">1.2k</div>
-                                    <div className="font-display text-[9px] font-black text-neutral-g3 uppercase tracking-[1px]">Fans</div>
+                                <div className="space-y-1 border-l-[2px] border-neutral-black/10 pl-4">
+                                    <div className="font-display text-[22px] font-black text-neutral-black leading-none flex items-center justify-center gap-1.5">
+                                        <Star className="w-5 h-5 fill-primary text-primary shrink-0" />
+                                        {(Number(artist.reviewCount) || 0) > 0
+                                            ? (Number(artist.artistRating) || 0).toFixed(1)
+                                            : "—"}
+                                    </div>
+                                    <div className="font-display text-[9px] font-black text-neutral-g3 uppercase tracking-[1px] text-center">
+                                        Avg rating ({Number(artist.reviewCount) || 0} review
+                                        {(Number(artist.reviewCount) || 0) === 1 ? "" : "s"})
+                                    </div>
                                 </div>
                             </div>
 
                             {/* Actions & Bio */}
                             <div className="w-full space-y-4">
-                                <p className="font-body text-[14px] font-bold text-neutral-g4 italic leading-relaxed">
-                                    "{artist.bio || "Crafting visual echoes in the digital void. Every design has a heartbeat."}"
-                                </p>
+                                {artist.bio?.trim() ? (
+                                    <p className="font-body text-[14px] font-bold text-neutral-black leading-relaxed text-left w-full">
+                                        {artist.bio.trim()}
+                                    </p>
+                                ) : null}
 
                                 <div className="flex flex-wrap justify-center gap-3 pt-4">
                                     {[
@@ -208,7 +213,11 @@ export default function ArtistProfile() {
                                                 <h3 className="font-display text-[18px] font-black text-neutral-black uppercase tracking-tight group-hover:text-primary transition-colors truncate">
                                                     {product.name}
                                                 </h3>
-                                                <p className="font-display text-[10px] font-bold text-neutral-g3 uppercase tracking-[1px]">Premium Cotton Tee</p>
+                                                {product.categories?.length ? (
+                                                    <p className="font-display text-[10px] font-bold text-neutral-g3 uppercase tracking-[1px] truncate">
+                                                        {product.categories.slice(0, 2).join(" · ")}
+                                                    </p>
+                                                ) : null}
                                             </div>
                                             <div className="w-full py-3 bg-neutral-black text-white font-display text-[11px] font-black uppercase tracking-[2px] text-center rounded-[2px] group-hover:bg-primary group-hover:text-neutral-black transition-colors">
                                                 Buy Item

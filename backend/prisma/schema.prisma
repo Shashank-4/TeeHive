@@ -23,7 +23,9 @@ model User {
   canResubmitVerification Boolean              @default(false)
   coverPhotoKey           String?
   coverPhotoUrl           String?
-  displayName             String?
+  displayName             String?              @unique
+  /// Public storefront URL segment (lowercase); unique when set.
+  artistSlug              String?              @unique
   displayPhotoKey         String?
   displayPhotoUrl         String?
   dribbbleUrl             String?

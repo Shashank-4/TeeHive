@@ -13,7 +13,6 @@ import {
     Crown,
     ShieldCheck,
     ClipboardList,
-    Star,
 } from "lucide-react";
 import { useState, useEffect } from "react";
 
@@ -25,7 +24,6 @@ const artistNavItems = [
     { to: "/artist/manage-products", icon: Package, label: "My Products", requiresVerified: true },
     { to: "/artist/payout", icon: ShieldCheck, label: "Payout", requiresVerified: true },
     { to: "/artist/earnings", icon: Crown, label: "Earnings", requiresVerified: true },
-    { to: "/artist/reviews", icon: Star, label: "Reviews", requiresVerified: true },
     { to: "/artist/profile", icon: UserCircle, label: "Profile", requiresVerified: false },
 ];
 
@@ -98,9 +96,9 @@ export default function ArtistSidebarLayout() {
     const SidebarContent = () => (
         <div className="flex flex-col h-full">
             {/* Logo */}
-            <div className="flex items-center justify-between px-[14px] h-[60px] border-b-[1.5px] border-neutral-black shrink-0 overflow-hidden">
+            <div className="flex items-center justify-between gap-3 px-[14px] h-[60px] border-b-[1.5px] border-neutral-black shrink-0 overflow-hidden">
                 <div
-                    className="flex items-center gap-2 cursor-pointer"
+                    className="flex items-center gap-2 cursor-pointer min-w-0 flex-1"
                     onClick={() => navigate("/artist/dashboard")}
                 >
                     {headerLogo ? (
@@ -124,10 +122,12 @@ export default function ArtistSidebarLayout() {
                 </div>
                 {/* Desktop toggle */}
                 <button
+                    type="button"
+                    aria-label={sidebarOpen ? "Collapse sidebar" : "Expand sidebar"}
                     onClick={() => setSidebarOpen(!sidebarOpen)}
-                    className="hidden lg:flex items-center justify-center w-7 h-7 rounded-[4px] bg-neutral-g1 hover:bg-primary transition-colors shrink-0"
+                    className="hidden lg:flex items-center justify-center w-9 h-9 rounded-[4px] bg-neutral-g1 hover:bg-primary border-[1.5px] border-neutral-black transition-all shrink-0 active:scale-95"
                 >
-                    <ChevronLeft className={`w-[14px] h-[14px] stroke-neutral-black stroke-[2.5] transition-transform duration-200 ${!sidebarOpen ? "rotate-180" : ""}`} />
+                    <ChevronLeft className={`w-4 h-4 stroke-neutral-black stroke-[2.5] transition-transform duration-300 ${!sidebarOpen ? "rotate-180" : ""}`} />
                 </button>
                 {/* Mobile close */}
                 <button

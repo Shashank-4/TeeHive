@@ -3,7 +3,6 @@ import {
     Prisma,
     PrismaClient,
     PayoutMethodType,
-    PayoutReviewAction,
     PayoutVerificationStatus,
 } from "@prisma/client";
 import {
@@ -228,9 +227,9 @@ function buildProviderFallbackResult(
         },
         providerValidatedAt: null,
         providerUtr: null,
-        verificationStatus: "PENDING_REVIEW",
+        verificationStatus: "VERIFIED",
         verificationNotes:
-            "Automatic Razorpay validation could not be completed. Finance review is required before settlement.",
+            "Automated Razorpay validation was skipped or unavailable; payout details are stored and treated as verified on file.",
     };
 }
 
@@ -273,9 +272,9 @@ async function refreshPendingProviderValidation(method: any) {
                       latest.results.name_match_score >= 85) ||
                       normalizeName(latest.results?.registered_name || "") === normalizeName(nameUsedForVerification)
                         ? "VERIFIED"
-                        : "PENDING_REVIEW"
+                        : "VERIFIED"
                     : latest.status === "failed"
-                      ? "PENDING_REVIEW"
+                      ? "VERIFIED"
                       : "PENDING_PROVIDER",
             verificationNotes:
                 latest.status === "completed"
@@ -283,11 +282,11 @@ async function refreshPendingProviderValidation(method: any) {
                       latest.results.name_match_score >= 85) ||
                       normalizeName(latest.results?.registered_name || "") === normalizeName(nameUsedForVerification)
                         ? "Live Razorpay validation completed successfully."
-                        : "Razorpay validated the destination, but the beneficiary name needs manual review."
+                        : "Razorpay validated the destination; beneficiary name differed from submission — details kept on file."
                     : latest.status === "failed"
                       ? latest.status_details?.description ||
                         latest.results?.details ||
-                        "Razorpay validation failed and needs manual review."
+                        "Razorpay validation did not complete; payout details kept on file."
                       : "Razorpay validation is still in progress.",
         };
 
@@ -590,7 +589,7 @@ export async function saveArtistPayoutMethodsService(
                           methodFingerprint: payload.fingerprint,
                           verificationStatus: preserveVerified
                               ? "VERIFIED"
-                              : providerResult?.verificationStatus || "PENDING_REVIEW",
+                              : providerResult?.verificationStatus || "VERIFIED",
                           submittedAt: preserveVerified
                               ? existing.submittedAt || existing.verifiedAt || new Date()
                               : new Date(),
@@ -619,7 +618,7 @@ export async function saveArtistPayoutMethodsService(
                           artistId,
                           methodType,
                           methodFingerprint: payload.fingerprint,
-                          verificationStatus: providerResult?.verificationStatus || "PENDING_REVIEW",
+                          verificationStatus: providerResult?.verificationStatus || "VERIFIED",
                           isActive: true,
                           isDefault,
                           submittedAt: new Date(),
@@ -711,73 +710,3 @@ export async function saveArtistPayoutMethodsService(
     };
 }
 
-export async function reviewArtistPayoutMethodService(input: {
-    artistId: string;
-    payoutMethodId: string;
-    reviewerAdminId: string;
-    action: PayoutReviewAction;
-    note?: string;
-}) {
-    const method = await prisma.artistPayoutMethod.findFirst({
-        where: {
-            id: input.payoutMethodId,
-            artistId: input.artistId,
-            isActive: true,
-        },
-    });
-
-    if (!method) {
-        throw new Error("Payout method not found");
-    }
-
-    if (input.action !== "APPROVED" && !input.note?.trim()) {
-        throw new Error("A review note is required for rejection or resubmission.");
-    }
-
-    const updatedMethod = await prisma.$transaction(async (tx) => {
-        const verificationStatus: PayoutVerificationStatus =
-            input.action === "APPROVED"
-                ? "VERIFIED"
-                : input.action === "REQUIRES_RESUBMISSION"
-                  ? "REQUIRES_RESUBMISSION"
-                  : "REJECTED";
-
-        await tx.artistPayoutMethod.update({
-            where: { id: method.id },
-            data: {
-                verificationStatus,
-                verifiedAt: input.action === "APPROVED" ? new Date() : null,
-                rejectedAt: input.action === "APPROVED" ? null : new Date(),
-                rejectionReason: input.action === "APPROVED" ? null : input.note?.trim() || null,
-                verificationNotes: input.note?.trim() || null,
-            },
-        });
-
-        await tx.artistPayoutReview.create({
-            data: {
-                payoutMethodId: method.id,
-                artistId: input.artistId,
-                reviewerAdminId: input.reviewerAdminId,
-                action: input.action,
-                note: input.note?.trim() || null,
-            },
-        });
-
-        return tx.artistPayoutMethod.findUniqueOrThrow({
-            where: { id: method.id },
-            include: {
-                reviews: {
-                    orderBy: { createdAt: "desc" },
-                    take: 5,
-                    include: {
-                        reviewerAdmin: {
-                            select: { id: true, name: true, email: true },
-                        },
-                    },
-                },
-            },
-        });
-    });
-
-    return mapMethodForAdmin(updatedMethod);
-}

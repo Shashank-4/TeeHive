@@ -2,13 +2,17 @@ import { useState, useEffect } from "react";
 import { Link, useParams } from "react-router-dom";
 import {
     ArrowLeft,
-    Share2,
     Palette,
     ExternalLink,
     ShoppingBag,
-    Loader2
+    Heart,
 } from "lucide-react";
 import api from "../../api/axios";
+import ImageWithSkeleton from "../../components/shared/ImageWithSkeleton";
+import Loader from "../../components/shared/Loader";
+import ArtistRatingInline from "../../components/shared/ArtistRatingInline";
+import { useCart } from "../../context/CartContext";
+import { frontMockupUrl, backMockupUrl } from "../../utils/productMockup";
 
 interface Product {
     id: string;
@@ -18,14 +22,18 @@ interface Product {
     mockupImageUrl: string;
     backMockupImageUrl?: string;
     primaryView?: "front" | "back";
+    primaryColor?: string | null;
     tshirtColor: string;
+    availableColors: string[];
     categories: string[];
+    colorMockups?: Record<string, { front: string; back?: string }> | null;
 }
 
 interface Artist {
     id: string;
     name: string;
     displayName: string | null;
+    artistSlug: string | null;
     displayPhotoUrl: string | null;
     coverPhotoUrl: string | null;
     bio: string | null;
@@ -40,16 +48,20 @@ interface Artist {
 }
 
 export default function ArtistStorefront() {
-    const { artistId } = useParams<{ artistId: string }>();
+    const { artistHandle } = useParams<{ artistHandle: string }>();
     const [artist, setArtist] = useState<Artist | null>(null);
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
+    const { addItem } = useCart();
+    const [addedId, setAddedId] = useState<string | null>(null);
 
     useEffect(() => {
         const fetchArtist = async () => {
             try {
                 setIsLoading(true);
-                const res = await api.get(`/api/artists/${artistId}`);
+                const res = await api.get(
+                    `/api/artists/${encodeURIComponent(artistHandle || "")}`
+                );
                 setArtist(res.data.data.artist);
             } catch (err: any) {
                 setError(err.response?.status === 404 ? "Artist not found" : "Failed to load artist profile");
@@ -58,114 +70,149 @@ export default function ArtistStorefront() {
             }
         };
 
-        if (artistId) fetchArtist();
-    }, [artistId]);
+        if (artistHandle) fetchArtist();
+    }, [artistHandle]);
+
+    const handleQuickAdd = (product: Product) => {
+        const colors =
+            product.availableColors?.length ? product.availableColors : [product.tshirtColor];
+        const pickColor = product.primaryColor || product.tshirtColor;
+        const baseMock = {
+            mockupImageUrl: product.mockupImageUrl,
+            backMockupImageUrl: product.backMockupImageUrl,
+            colorMockups: product.colorMockups,
+            primaryColor: product.primaryColor || undefined,
+            tshirtColor: product.tshirtColor,
+        };
+        const useBack = product.primaryView === "back";
+        const img = useBack ? backMockupUrl(baseMock, pickColor) : frontMockupUrl(baseMock, pickColor);
+        addItem({
+            productId: product.id,
+            name: product.name,
+            price: product.price,
+            quantity: 1,
+            size: "M",
+            color: pickColor,
+            image: img,
+            mockupImageUrl: product.mockupImageUrl,
+            backMockupImageUrl: product.backMockupImageUrl,
+            defaultProductColor: product.tshirtColor,
+            primaryColor: product.primaryColor || undefined,
+            primaryView: product.primaryView,
+            mockupView: useBack ? "back" : "front",
+            colorMockups: product.colorMockups ?? undefined,
+            artistName: artist?.displayName || artist?.name || "Artist",
+            availableColors: colors,
+        });
+        setAddedId(product.id);
+        setTimeout(() => setAddedId(null), 2000);
+    };
 
     if (isLoading) {
         return (
-            <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-                <Loader2 className="w-8 h-8 animate-spin text-yellow-500" />
+            <div className="min-h-screen bg-neutral-white flex items-center justify-center">
+                <Loader className="w-16 h-16" />
             </div>
         );
     }
 
     if (error || !artist) {
         return (
-            <div className="min-h-screen bg-gray-50 flex flex-col items-center justify-center">
-                <Palette className="w-16 h-16 text-gray-300 mb-4" />
-                <h2 className="text-2xl font-bold text-gray-900 mb-4">
+            <div className="min-h-screen bg-neutral-g1 flex flex-col items-center justify-center px-6">
+                <Palette className="w-16 h-16 text-neutral-g3 mb-4" />
+                <h2 className="font-display text-2xl font-black text-neutral-black mb-4 uppercase">
                     {error || "Artist not found"}
                 </h2>
-                <Link to="/artists" className="text-yellow-600 hover:text-yellow-700 font-medium flex items-center gap-2">
+                <Link
+                    to="/artists"
+                    className="text-primary font-display font-black uppercase tracking-wide no-underline flex items-center gap-2"
+                >
                     <ArrowLeft className="w-4 h-4" /> Back to Artists
                 </Link>
             </div>
         );
     }
 
-    // Prepare links
     const socialLinks = [
         { key: "portfolio", url: artist.portfolioUrl, label: "Portfolio" },
         { key: "instagram", url: artist.instagramUrl, label: "Instagram" },
         { key: "twitter", url: artist.twitterUrl, label: "Twitter" },
         { key: "behance", url: artist.behanceUrl, label: "Behance" },
         { key: "dribbble", url: artist.dribbbleUrl, label: "Dribbble" },
-    ].filter(link => link.url);
+    ].filter((link) => link.url);
+
+    const hasCover = Boolean(artist.coverPhotoUrl);
 
     return (
-        <div className="min-h-screen bg-gray-50">
-            {/* Header / Cover */}
-            <div className="relative bg-white border-b border-gray-200">
-                <div className="h-64 md:h-80 w-full bg-gradient-to-br from-yellow-100 via-yellow-200 to-amber-200 relative overflow-hidden">
-                    {artist.coverPhotoUrl && (
+        <div className="min-h-screen bg-neutral-white">
+            <div className="relative bg-white border-b-[2.5px] border-neutral-black">
+                <div
+                    className={`h-56 md:h-72 w-full relative overflow-hidden border-b-[2px] border-neutral-black ${
+                        hasCover ? "bg-neutral-black" : "bg-primary"
+                    }`}
+                >
+                    {hasCover && (
                         <img
-                            src={artist.coverPhotoUrl}
-                            alt={`${artist.displayName || artist.name} cover`}
-                            className="w-full h-full object-cover"
+                            src={artist.coverPhotoUrl!}
+                            alt=""
+                            className="w-full h-full object-cover opacity-90"
                         />
                     )}
                     <div className="absolute top-4 left-4">
-                        <Link to="/artists" className="bg-white/80 backdrop-blur text-gray-800 p-2 rounded-full inline-flex hover:bg-white transition-colors">
+                        <Link
+                            to="/artists"
+                            className="bg-white border-[2px] border-neutral-black p-2 rounded-[4px] inline-flex hover:bg-primary transition-colors shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]"
+                        >
                             <ArrowLeft className="w-5 h-5" />
                         </Link>
                     </div>
                 </div>
 
-                <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative">
-                    <div className="flex flex-col md:flex-row gap-6 md:items-end -mt-16 pb-8 md:pb-12">
-                        {/* Avatar */}
-                        <div className="w-32 h-32 md:w-40 md:h-40 rounded-full border-4 border-white overflow-hidden bg-white shrink-0 shadow-md">
+                <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10">
+                    <div className="flex flex-col md:flex-row gap-6 md:items-start -mt-14 md:-mt-16 pb-8 md:pb-10 mb-2 bg-white border-[2.5px] border-neutral-black rounded-[4px] p-5 md:p-8 shadow-[8px_8px_0px_0px_rgba(0,0,0,1)]">
+                        <div className="w-28 h-28 md:w-36 md:h-36 rounded-[4px] border-[3px] border-neutral-black overflow-hidden bg-primary shrink-0 shadow-[6px_6px_0px_0px_rgba(0,0,0,1)] mx-auto md:mx-0">
                             {artist.displayPhotoUrl ? (
                                 <img
                                     src={artist.displayPhotoUrl}
-                                    alt={`${artist.displayName || artist.name} avatar`}
+                                    alt=""
                                     className="w-full h-full object-cover"
                                 />
                             ) : (
-                                <div className="w-full h-full bg-yellow-100 flex items-center justify-center">
-                                    <span className="text-4xl font-black text-yellow-600">
-                                        {(artist.displayName || artist.name).charAt(0).toUpperCase()}
-                                    </span>
+                                <div className="w-full h-full flex items-center justify-center font-display text-4xl font-black text-neutral-black">
+                                    {(artist.displayName || artist.name).charAt(0).toUpperCase()}
                                 </div>
                             )}
                         </div>
 
-                        {/* Info */}
-                        <div className="flex-1 space-y-3 pt-4 md:pt-0">
-                            <div>
-                                <h1 className="text-3xl md:text-4xl font-extrabold text-gray-900">
-                                    {artist.displayName || artist.name}
-                                </h1>
-                                <div className="text-gray-500 flex flex-wrap items-center gap-4 mt-2">
-                                    <span className="flex items-center gap-2">
-                                        <ShoppingBag className="w-4 h-4" />
-                                        {artist.products.length} {artist.products.length === 1 ? 'Design Available' : 'Designs Available'}
-                                    </span>
-                                    {artist.reviewCount > 0 && (
-                                        <span className="flex items-center gap-1.5 px-2.5 py-1 bg-yellow-50 text-yellow-800 text-sm font-bold rounded-lg border border-yellow-200">
-                                            <span>⭐</span>
-                                            <span>{artist.artistRating.toFixed(1)}</span>
-                                            <span className="text-yellow-600/80">({artist.reviewCount})</span>
-                                        </span>
-                                    )}
-                                </div>
+                        <div className="flex-1 space-y-3 pt-0 md:pt-1 min-w-0 text-center md:text-left">
+                            <h1 className="font-display text-3xl md:text-4xl font-black text-neutral-black uppercase tracking-tight [text-wrap:balance]">
+                                {artist.displayName || artist.name}
+                            </h1>
+                            <div className="flex flex-wrap items-center justify-center md:justify-start gap-4 font-display text-[12px] font-bold uppercase tracking-wide text-neutral-black">
+                                <span className="inline-flex items-center gap-2">
+                                    <ShoppingBag className="w-4 h-4 text-primary shrink-0" />
+                                    {artist.products.length}{" "}
+                                    {artist.products.length === 1 ? "design" : "designs"}
+                                </span>
+                                <ArtistRatingInline
+                                    rating={artist.artistRating}
+                                    reviewCount={artist.reviewCount}
+                                />
                             </div>
-
                             {artist.bio && (
-                                <p className="text-gray-600 max-w-3xl leading-relaxed">
+                                <p className="text-neutral-black/85 max-w-3xl mx-auto md:mx-0 leading-relaxed font-body font-medium text-[15px]">
                                     {artist.bio}
                                 </p>
                             )}
-
                             {socialLinks.length > 0 && (
-                                <div className="flex flex-wrap gap-3 pt-2">
+                                <div className="flex flex-wrap gap-2 pt-2 justify-center md:justify-start">
                                     {socialLinks.map((link) => (
                                         <a
                                             key={link.key}
                                             href={link.url as string}
                                             target="_blank"
                                             rel="noopener noreferrer"
-                                            className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-gray-100 text-gray-700 text-sm font-medium rounded-lg hover:bg-gray-200 transition-colors"
+                                            className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-neutral-g1 text-neutral-black text-[11px] font-display font-black uppercase border-[1.5px] border-neutral-black rounded-[2px] hover:bg-primary transition-colors"
                                         >
                                             {link.label} <ExternalLink className="w-3.5 h-3.5" />
                                         </a>
@@ -173,73 +220,103 @@ export default function ArtistStorefront() {
                                 </div>
                             )}
                         </div>
-
-                        {/* Actions (Share) */}
-                        <div className="flex gap-3 md:self-end">
-                            <button className="flex items-center justify-center gap-2 px-4 py-2 border border-gray-300 text-gray-700 rounded-xl font-medium hover:bg-gray-50 transition-colors w-full md:w-auto">
-                                <Share2 className="w-4 h-4" /> Share
-                            </button>
-                        </div>
                     </div>
                 </div>
             </div>
 
-            {/* Products Grid */}
             <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
-                <h2 className="text-2xl font-bold text-gray-900 mb-8 flex items-center gap-2">
-                    <Palette className="w-6 h-6 text-yellow-500" />
-                    Shop {artist.displayName || artist.name}'s Collection
+                <h2 className="font-display text-xl md:text-2xl font-black text-neutral-black mb-8 uppercase tracking-tight flex items-center gap-2">
+                    <Palette className="w-6 h-6 text-primary" />
+                    Shop collection
                 </h2>
 
                 {artist.products.length === 0 ? (
-                    <div className="text-center py-20 bg-white rounded-2xl border border-dashed border-gray-300">
-                        <Palette className="w-12 h-12 text-gray-300 mx-auto mb-3" />
-                        <p className="text-gray-500">This artist hasn't published any designs yet.</p>
+                    <div className="text-center py-20 bg-neutral-g1 border-[2px] border-dashed border-neutral-black rounded-[4px]">
+                        <Palette className="w-12 h-12 text-neutral-g3 mx-auto mb-3" />
+                        <p className="font-display text-neutral-g4 font-bold uppercase tracking-wide">
+                            No published designs yet.
+                        </p>
                     </div>
                 ) : (
-                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-                        {artist.products.map(product => (
-                            <Link
-                                key={product.id}
-                                to={`/products/${product.id}`}
-                                className="group bg-white rounded-2xl border border-gray-100 overflow-hidden shadow-sm hover:shadow-xl transition-all duration-300 hover:-translate-y-1 block"
-                            >
-                                <div className="aspect-[4/5] bg-gray-50 relative overflow-hidden">
-                                    <img
-                                        src={
-                                            product.primaryView === "back"
-                                                ? product.backMockupImageUrl || product.mockupImageUrl
-                                                : product.mockupImageUrl
-                                        }
-                                        alt={product.name}
-                                        className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
-                                    />
-                                    {product.compareAtPrice && product.compareAtPrice > product.price && (
-                                        <div className="absolute top-3 left-3 bg-red-500 text-white text-xs font-bold px-2 py-1 rounded-md">
-                                            SALE
+                    <div className="grid grid-cols-2 lg:grid-cols-4 gap-px bg-neutral-g2 border border-neutral-g2">
+                        {artist.products.map((product) => {
+                            const categoryLabel = product.categories?.[0] || "General";
+                            const onSale =
+                                product.compareAtPrice != null &&
+                                product.compareAtPrice > product.price;
+                            const discountPct = onSale
+                                ? Math.round(
+                                      ((product.compareAtPrice! - product.price) /
+                                          product.compareAtPrice!) *
+                                          100
+                                  )
+                                : 0;
+                            return (
+                                <div
+                                    key={product.id}
+                                    className="bg-white group cursor-pointer relative overflow-hidden transition-all hover:z-10 hover:shadow-[0_12px_48px_rgba(0,0,0,0.12)]"
+                                >
+                                    <Link to={`/products/${product.id}`} className="no-underline block">
+                                        <div className="aspect-square bg-neutral-g1 flex items-center justify-center overflow-hidden relative group-hover:bg-neutral-g2 transition-colors">
+                                            <ImageWithSkeleton
+                                                src={
+                                                    product.primaryView === "back"
+                                                        ? product.backMockupImageUrl || product.mockupImageUrl
+                                                        : product.mockupImageUrl
+                                                }
+                                                alt={product.name}
+                                                className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+                                                wrapperClassName="w-full h-full"
+                                            />
+                                            {onSale && (
+                                                <div className="absolute top-4 left-4 bg-danger text-white font-display text-[10px] font-black px-2 py-1 uppercase tracking-[1px] shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] z-10">
+                                                    -{discountPct}%
+                                                </div>
+                                            )}
+                                            <div className="absolute right-4 top-4 translate-x-12 opacity-0 group-hover:translate-x-0 group-hover:opacity-100 transition-all">
+                                                <span className="w-10 h-10 bg-white border border-neutral-g2 rounded-[4px] flex items-center justify-center pointer-events-none">
+                                                    <Heart className="w-5 h-5" />
+                                                </span>
+                                            </div>
                                         </div>
-                                    )}
+                                        <div className="p-4 pt-5 pb-2">
+                                            <div className="font-display text-[10px] font-bold tracking-[1.5px] uppercase text-primary mb-1 truncate">
+                                                {artist.displayName || artist.name}
+                                            </div>
+                                            <h3 className="font-display text-[16px] font-bold text-neutral-black mb-3 leading-[1.2] tracking-[0.2px] truncate">
+                                                {product.name}
+                                            </h3>
+                                            <div className="flex items-center justify-between mb-4">
+                                                <div className="flex items-baseline gap-2">
+                                                    <span className="font-display text-[18px] font-black text-neutral-black">
+                                                        ₹{product.price.toLocaleString("en-IN")}
+                                                    </span>
+                                                    {onSale && (
+                                                        <span className="font-display text-[12px] font-bold text-neutral-g3 line-through">
+                                                            ₹{product.compareAtPrice!.toLocaleString("en-IN")}
+                                                        </span>
+                                                    )}
+                                                </div>
+                                                <span className="font-display text-[9px] font-bold tracking-[1px] uppercase text-neutral-g3 bg-neutral-g1 px-1.5 py-0.5 rounded-[2px] shrink-0 max-w-[40%] truncate">
+                                                    {categoryLabel}
+                                                </span>
+                                            </div>
+                                        </div>
+                                    </Link>
+                                    <button
+                                        type="button"
+                                        onClick={() => handleQuickAdd(product)}
+                                        className={`w-full py-3 font-display text-[12px] font-extrabold tracking-[1px] uppercase rounded-[3px] border-[1.5px] transition-all ${
+                                            addedId === product.id
+                                                ? "bg-success text-white border-success"
+                                                : "bg-primary text-neutral-black border-primary hover:bg-neutral-black hover:text-white hover:border-neutral-black"
+                                        }`}
+                                    >
+                                        {addedId === product.id ? "✓ Added!" : "Add to Cart"}
+                                    </button>
                                 </div>
-                                <div className="p-4">
-                                    <p className="text-xs font-medium text-gray-500 uppercase tracking-widest mb-1 truncate">
-                                        {product.categories?.[0] || 'Uncategorized'}
-                                    </p>
-                                    <h3 className="text-lg font-bold text-gray-900 mb-2 truncate group-hover:text-yellow-600 transition-colors">
-                                        {product.name}
-                                    </h3>
-                                    <div className="flex items-center gap-2">
-                                        <span className="text-lg font-black text-gray-900">
-                                            ${product.price.toFixed(2)}
-                                        </span>
-                                        {product.compareAtPrice && product.compareAtPrice > product.price && (
-                                            <span className="text-sm font-medium text-gray-400 line-through">
-                                                ${product.compareAtPrice.toFixed(2)}
-                                            </span>
-                                        )}
-                                    </div>
-                                </div>
-                            </Link>
-                        ))}
+                            );
+                        })}
                     </div>
                 )}
             </div>

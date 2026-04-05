@@ -1,9 +1,34 @@
 import axios from "axios";
 
+/**
+ * When VITE_API_URL is unset or empty, use same-origin `/api` so Vite can proxy to the backend (see vite.config.ts).
+ * Set VITE_API_URL only when the API is on a different origin (e.g. production or a custom backend port without proxy).
+ */
+const envApi = import.meta.env.VITE_API_URL as string | undefined;
+const baseURL =
+    envApi != null && String(envApi).trim() !== ""
+        ? String(envApi).replace(/\/$/, "")
+        : "";
+
 const api = axios.create({
-    baseURL: import.meta.env.VITE_API_URL || "http://localhost:3000",
+    baseURL,
     withCredentials: true,
 });
+
+/** Single in-flight refresh so many parallel 401s do not stampede `/api/auth/refresh`. */
+let refreshInFlight: Promise<void> | null = null;
+
+function refreshSession(): Promise<void> {
+    if (!refreshInFlight) {
+        refreshInFlight = api
+            .get("/api/auth/refresh")
+            .then(() => undefined)
+            .finally(() => {
+                refreshInFlight = null;
+            });
+    }
+    return refreshInFlight;
+}
 
 /** 401 from these routes means bad credentials / OTP, not "session expired" — do not try refresh. */
 function isPublicAuthFailureUrl(url: string | undefined): boolean {
@@ -41,7 +66,7 @@ api.interceptors.response.use(
             try {
                 // Attempt to get a new access token by calling the refresh endpoint.
                 // The browser will automatically send the httpOnly refresh_token cookie.
-                await api.get("/api/auth/refresh");
+                await refreshSession();
 
                 // If the refresh call was successful, the new access_token cookie is now set.
                 // We can now retry the original request that failed.

@@ -34,13 +34,19 @@ app.set("trust proxy", 1);
 app.use(helmet({ crossOriginResourcePolicy: { policy: "cross-origin" } }));
 app.use(compression());
 
-// Rate limiter for auth routes (prevent brute-force)
+// Rate limiter for auth routes (brute-force protection on sensitive POSTs only).
+// Refresh + signout must be excluded: they run often during normal browsing and must not share the same cap as login/OTP.
 const authLimiter = rateLimit({
     windowMs: 15 * 60 * 1000, // 15 minutes
-    max: 50, // limit each IP to 50 auth requests per window
+    max: process.env.NODE_ENV === "production" ? 120 : 400,
     standardHeaders: true,
     legacyHeaders: false,
     message: { status: "fail", message: "Too many requests, please try again later." },
+    skip: (req) => {
+        if (req.method !== "GET") return false;
+        const p = req.path || "";
+        return p === "/refresh" || p === "/signout" || p.endsWith("/refresh") || p.endsWith("/signout");
+    },
 });
 
 app.use("/api/webhook", express.raw({ type: "application/json" }), webhookRouter);
@@ -50,7 +56,13 @@ app.use(
     cors({
         origin: process.env.NODE_ENV === "production"
             ? [process.env.FRONTEND_URL!]
-            : [process.env.FRONTEND_URL || "http://localhost:5173", "http://localhost:5173"],
+            : [
+                  process.env.FRONTEND_URL || "http://localhost:5173",
+                  "http://localhost:5173",
+                  "http://127.0.0.1:5173",
+                  "http://localhost:3000",
+                  "http://127.0.0.1:3000",
+              ],
         credentials: true,
     })
 );

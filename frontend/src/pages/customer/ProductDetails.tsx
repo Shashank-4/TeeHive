@@ -10,7 +10,7 @@ import {
     ChevronRight,
     Check,
 } from "lucide-react";
-import { Link, useParams } from "react-router-dom";
+import { Link, useNavigate, useParams } from "react-router-dom";
 import api from "../../api/axios";
 import { useCart } from "../../context/CartContext";
 import Loader from "../../components/shared/Loader";
@@ -18,6 +18,9 @@ import StockStatusPill from "../../components/shared/StockStatusPill";
 import ImageWithSkeleton from "../../components/shared/ImageWithSkeleton";
 import GstInclusiveNote from "../../components/shared/GstInclusiveNote";
 import ReturnPolicyNote from "../../components/shared/ReturnPolicyNote";
+import { BEE_BADGE } from "../../constants/brand";
+import { artistPublicPath } from "../../utils/artistRoutes";
+import ArtistRatingInline from "../../components/shared/ArtistRatingInline";
 
 interface Product {
     id: string;
@@ -50,6 +53,7 @@ interface Product {
         email: string;
         artistRating: number;
         reviewCount: number;
+        artistSlug?: string | null;
     };
     variants?: Array<{
         id: string;
@@ -61,6 +65,7 @@ interface Product {
 
 export default function ProductDetails() {
     const { productId } = useParams<{ productId: string }>();
+    const navigate = useNavigate();
     const [product, setProduct] = useState<Product | null>(null);
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
@@ -69,6 +74,7 @@ export default function ProductDetails() {
     const [currentView, setCurrentView] = useState<"front" | "back">("front");
     const [quantity, setQuantity] = useState(1);
     const [addedToCart, setAddedToCart] = useState(false);
+    const [sizeGuideOpen, setSizeGuideOpen] = useState(false);
     const { addItem } = useCart();
 
     const sizes = ["XS", "S", "M", "L", "XL", "XXL"];
@@ -229,6 +235,30 @@ export default function ProductDetails() {
 
     const hasBackView = Boolean(displayMockups.back || product.backMockupImageUrl);
 
+    const addCurrentToCart = () => {
+        if (!product || isOutOfStock) return;
+        const color = canonicalHex(selectedColor || product.tshirtColor);
+        addItem({
+            productId: product.id,
+            name: product.name,
+            price: product.price,
+            quantity,
+            size: selectedSize,
+            color,
+            image: mainImageSrc,
+            mockupImageUrl: product.mockupImageUrl,
+            backMockupImageUrl: product.backMockupImageUrl,
+            defaultProductColor: product.tshirtColor,
+            primaryColor: product.primaryColor,
+            primaryView: product.primaryView === "back" ? "back" : "front",
+            mockupView: currentView === "back" ? "back" : "front",
+            colorMockups: product.colorMockups ?? undefined,
+            artistName: product.artist.name,
+            availableColors:
+                product.availableColors?.length ? product.availableColors : [product.tshirtColor],
+        });
+    };
+
     return (
         <div className="min-h-screen bg-neutral-white">
             <div className="px-4 sm:px-6 lg:px-8 py-4 sm:py-5 lg:py-6 w-full max-w-[1600px] mx-auto">
@@ -319,7 +349,7 @@ export default function ProductDetails() {
                             <div className="flex flex-wrap items-center gap-2 mb-2">
                                 <StockStatusPill stockStatus={currentStockStatus} />
                                 <span className="font-display text-[10px] font-bold tracking-[1.5px] uppercase text-neutral-g3 bg-neutral-g1 px-2 py-0.5 rounded-[2px] border border-neutral-g2">
-                                    {product.categories?.[0] || "General"}
+                                    <span aria-hidden>{BEE_BADGE}</span> {product.categories?.[0] || "General"}
                                 </span>
                             </div>
 
@@ -336,7 +366,10 @@ export default function ProductDetails() {
                                         Artist
                                     </div>
                                     <Link
-                                        to={`/artists/${product.artist.id}`}
+                                        to={artistPublicPath({
+                                            id: product.artist.id,
+                                            artistSlug: product.artist.artistSlug,
+                                        })}
                                         className="font-display text-[16px] sm:text-[17px] font-black text-neutral-black tracking-tight hover:text-primary transition-colors no-underline block truncate"
                                     >
                                         {product.artist.name}
@@ -347,11 +380,11 @@ export default function ProductDetails() {
                                             {product.artist.displayName?.replace(/\s+/g, "") ||
                                                 product.artist.name.replace(/\s+/g, "")}
                                         </span>
-                                        {product.artist.reviewCount > 0 && (
-                                            <span className="inline-flex items-center text-[11px] font-bold text-neutral-black bg-white border border-neutral-g2 px-1.5 py-0.5 rounded-[2px] shadow-[1px_1px_0px_0px_rgba(0,0,0,0.1)]">
-                                                ⭐ {product.artist.artistRating.toFixed(1)} ({product.artist.reviewCount})
-                                            </span>
-                                        )}
+                                        <ArtistRatingInline
+                                            rating={product.artist.artistRating}
+                                            reviewCount={product.artist.reviewCount}
+                                            compact
+                                        />
                                     </div>
                                 </div>
                             </div>
@@ -404,7 +437,13 @@ export default function ProductDetails() {
                             <div className="space-y-2">
                                 <div className="flex items-center justify-between max-w-sm">
                                     <h3 className="font-display text-[11px] font-black tracking-[1.5px] uppercase text-neutral-black">Select Size</h3>
-                                    <button type="button" className="text-[10px] font-bold text-neutral-g4 underline uppercase hover:text-neutral-black transition-colors">Size Guide</button>
+                                    <button
+                                        type="button"
+                                        onClick={() => setSizeGuideOpen(true)}
+                                        className="text-[10px] font-bold text-neutral-g4 underline uppercase hover:text-neutral-black transition-colors"
+                                    >
+                                        Size Guide
+                                    </button>
                                 </div>
                                 <div className="flex flex-wrap gap-2">
                                     {sizes.map((size) => {
@@ -455,29 +494,16 @@ export default function ProductDetails() {
                         </div>
 
                         {/* Action Buttons */}
-                        <div className="pt-3 flex gap-3">
+                        <div className="pt-3 flex flex-col sm:flex-row flex-wrap gap-3">
                             <button
                                 type="button"
                                 disabled={isOutOfStock}
                                 onClick={() => {
-                                    addItem({
-                                        productId: product.id,
-                                        name: product.name,
-                                        price: product.price,
-                                        quantity,
-                                        size: selectedSize,
-                                        color: selectedColor || product.tshirtColor,
-                                        image: displayMockups.front,
-                                        artistName: product.artist.name,
-                                        availableColors:
-                                            product.availableColors?.length
-                                                ? product.availableColors
-                                                : [product.tshirtColor],
-                                    });
+                                    addCurrentToCart();
                                     setAddedToCart(true);
                                     setTimeout(() => setAddedToCart(false), 2000);
                                 }}
-                                className={`flex-1 min-h-[52px] h-[52px] sm:min-h-[56px] sm:h-[56px] rounded-[4px] border-[1.5px] border-neutral-black font-display text-[13px] sm:text-[14px] font-black uppercase tracking-[0.08em] shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] active:shadow-none active:translate-x-0.5 active:translate-y-0.5 transition-all flex items-center justify-center gap-2 px-2 ${addedToCart
+                                className={`flex-1 min-w-[min(100%,200px)] min-h-[52px] h-[52px] sm:min-h-[56px] sm:h-[56px] rounded-[4px] border-[1.5px] border-neutral-black font-display text-[13px] sm:text-[14px] font-black uppercase tracking-[0.08em] shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] active:shadow-none active:translate-x-0.5 active:translate-y-0.5 transition-all flex items-center justify-center gap-2 px-2 ${addedToCart
                                     ? "bg-success text-white border-success"
                                     : isOutOfStock ? "bg-neutral-g1 text-neutral-g4 border-neutral-g2 cursor-not-allowed" : "bg-primary hover:bg-white text-neutral-black"
                                     }`}
@@ -490,6 +516,20 @@ export default function ProductDetails() {
                                         {isOutOfStock ? "Out of Stock" : `Add to Bag — ₹${(product.price * quantity).toLocaleString('en-IN')}`}
                                     </>
                                 )}
+                            </button>
+                            <button
+                                type="button"
+                                disabled={isOutOfStock}
+                                onClick={() => {
+                                    addCurrentToCart();
+                                    navigate("/order/checkout");
+                                }}
+                                className={`flex-1 min-w-[min(100%,200px)] min-h-[52px] h-[52px] sm:min-h-[56px] sm:h-[56px] rounded-[4px] border-[1.5px] border-neutral-black font-display text-[13px] sm:text-[14px] font-black uppercase tracking-[0.08em] shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] active:shadow-none active:translate-x-0.5 active:translate-y-0.5 transition-all flex items-center justify-center gap-2 px-2 ${isOutOfStock
+                                    ? "bg-neutral-g1 text-neutral-g4 border-neutral-g2 cursor-not-allowed"
+                                    : "bg-neutral-black text-white hover:bg-primary hover:text-neutral-black"
+                                    }`}
+                            >
+                                Buy now — ₹{(product.price * quantity).toLocaleString("en-IN")}
                             </button>
                             <button type="button" className="w-[52px] h-[52px] sm:w-[56px] sm:h-[56px] shrink-0 flex items-center justify-center border-[1.5px] border-neutral-black rounded-[4px] hover:bg-danger-light hover:text-danger hover:border-danger transition-all shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] active:shadow-none active:translate-x-0.5 active:translate-y-0.5">
                                 <Heart className="w-5 h-5 sm:w-6 sm:h-6" />
@@ -521,6 +561,37 @@ export default function ProductDetails() {
                     </div>
                 </div>
             </div>
+
+            {sizeGuideOpen && (
+                <div
+                    className="fixed inset-0 z-[200] flex items-center justify-center bg-neutral-black/80 p-4"
+                    role="dialog"
+                    aria-modal="true"
+                    aria-label="Size guide"
+                    onClick={() => setSizeGuideOpen(false)}
+                >
+                    <div
+                        className="relative max-w-3xl w-full max-h-[90vh] overflow-auto bg-white border-[3px] border-neutral-black rounded-[4px] shadow-[12px_12px_0px_0px_rgba(0,0,0,1)] p-4 sm:p-6"
+                        onClick={(e) => e.stopPropagation()}
+                    >
+                        <button
+                            type="button"
+                            onClick={() => setSizeGuideOpen(false)}
+                            className="absolute top-3 right-3 font-display text-[11px] font-black uppercase tracking-[1px] px-3 py-1.5 border-[2px] border-neutral-black bg-primary hover:bg-white transition-colors"
+                        >
+                            Close
+                        </button>
+                        <h2 className="font-display text-[18px] font-black uppercase tracking-tight mb-4 pr-20">
+                            Size guide
+                        </h2>
+                        <img
+                            src="/assets/size-guide.png"
+                            alt="T-shirt size guide"
+                            className="w-full h-auto object-contain rounded-[2px] border border-neutral-g2"
+                        />
+                    </div>
+                </div>
+            )}
         </div>
     );
 }

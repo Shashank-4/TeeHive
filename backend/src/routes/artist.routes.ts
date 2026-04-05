@@ -10,6 +10,8 @@ import {
     publishProductHandler,
     getArtistStatsHandler,
     getArtistOrdersHandler,
+    getArtistRevenueSeriesHandler,
+    getArtistEarningsCsvHandler,
 } from "../controllers/product.controller";
 import {
     getArtistProfileHandler,
@@ -63,7 +65,9 @@ router.patch("/products/:id/publish", requireVerifiedArtist, publishProductHandl
 
 // ── Dashboard stats & Orders (requires verified artist) ──
 router.get("/dashboard", requireVerifiedArtist, getArtistDashboardConfigHandler);
+router.get("/stats/revenue-series", requireVerifiedArtist, getArtistRevenueSeriesHandler);
 router.get("/stats", requireVerifiedArtist, getArtistStatsHandler);
+router.get("/earnings/csv", requireVerifiedArtist, getArtistEarningsCsvHandler);
 router.get("/orders", requireVerifiedArtist, getArtistOrdersHandler);
 
 export default router;

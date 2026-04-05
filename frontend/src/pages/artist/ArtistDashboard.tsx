@@ -8,6 +8,7 @@ import {
 import Loader from "../../components/shared/Loader";
 import { useNavigate } from "react-router-dom";
 import api from "../../api/axios";
+import RevenueChart from "../../components/artist/RevenueChart";
 
 interface ArtistDashboardConfig {
     showAnnouncement: boolean;
@@ -38,6 +39,9 @@ export default function ArtistDashboard() {
     const [recentProducts, setRecentProducts] = useState<any[]>([]);
     const [config, setConfig] = useState<ArtistDashboardConfig>(DEFAULT_ARTIST_CONFIG);
     const [statsLoading, setStatsLoading] = useState(true);
+    const [revRange, setRevRange] = useState<"7d" | "30d" | "365d">("30d");
+    const [revPoints, setRevPoints] = useState<{ label: string; earnings: number }[]>([]);
+    const [revLoading, setRevLoading] = useState(true);
 
     useEffect(() => {
         const fetchDashboardData = async () => {
@@ -64,6 +68,30 @@ export default function ArtistDashboard() {
         };
         fetchDashboardData();
     }, []);
+
+    useEffect(() => {
+        let cancelled = false;
+        const loadSeries = async () => {
+            setRevLoading(true);
+            try {
+                const res = await api.get("/api/artist/stats/revenue-series", {
+                    params: { range: revRange },
+                });
+                if (!cancelled) {
+                    setRevPoints(res.data?.data?.points ?? []);
+                }
+            } catch (e) {
+                console.error("Failed to load revenue series:", e);
+                if (!cancelled) setRevPoints([]);
+            } finally {
+                if (!cancelled) setRevLoading(false);
+            }
+        };
+        loadSeries();
+        return () => {
+            cancelled = true;
+        };
+    }, [revRange]);
 
     return (
         <div className="w-full min-h-screen bg-neutral-g1 flex flex-col pt-4">
@@ -128,23 +156,40 @@ export default function ArtistDashboard() {
                     <div className="space-y-8">
                         {/* Revenue Placeholder */}
                         <div className="bg-white border-[2px] border-neutral-black rounded-[6px] overflow-hidden shadow-[8px_8px_0px_0px_rgba(0,0,0,1)]">
-                            <div className="bg-neutral-black p-4 flex items-center justify-between text-white">
+                            <div className="bg-neutral-black p-4 flex flex-wrap items-center justify-between gap-3 text-white">
                                 <div className="flex items-center gap-3">
                                     <TrendingUp className="w-5 h-5 text-primary" />
-                                    <h2 className="font-display text-[14px] font-black uppercase tracking-[1px]">Revenue Matrix</h2>
+                                    <div>
+                                        <h2 className="font-display text-[14px] font-black uppercase tracking-[1px]">Your revenue</h2>
+                                        <p className="font-display text-[9px] font-bold text-white/50 uppercase tracking-wide mt-0.5">
+                                            Artist share (25%) from paid orders
+                                        </p>
+                                    </div>
                                 </div>
-                                <div className="flex gap-1">
-                                    {["7D", "30D", "1Y"].map(t => (
-                                        <button key={t} className={`px-2 py-1 font-display text-[9px] font-black rounded-[2px] ${t === '30D' ? 'bg-primary text-neutral-black' : 'text-neutral-g3 hover:text-white'}`}>{t}</button>
+                                <div className="flex gap-1 border border-white/20 rounded-[4px] p-0.5">
+                                    {(
+                                        [
+                                            { key: "7d" as const, label: "7D" },
+                                            { key: "30d" as const, label: "30D" },
+                                            { key: "365d" as const, label: "1Y" },
+                                        ]
+                                    ).map(({ key, label }) => (
+                                        <button
+                                            key={key}
+                                            type="button"
+                                            onClick={() => setRevRange(key)}
+                                            className={`px-3 py-1.5 font-display text-[9px] font-black rounded-[2px] transition-colors ${
+                                                revRange === key
+                                                    ? "bg-primary text-neutral-black"
+                                                    : "text-neutral-g3 hover:text-white"
+                                            }`}
+                                        >
+                                            {label}
+                                        </button>
                                     ))}
                                 </div>
                             </div>
-                            <div className="p-12 text-center bg-neutral-g1/30">
-                                <div className="w-16 h-16 bg-white border-[2px] border-neutral-black rounded-full flex items-center justify-center mx-auto mb-4 opacity-20">
-                                    <TrendingUp className="w-8 h-8" />
-                                </div>
-                                <p className="font-display text-[11px] font-black uppercase tracking-[2px] text-neutral-g4">Visualization module coming soon</p>
-                            </div>
+                            <RevenueChart points={revPoints} loading={revLoading} />
                         </div>
 
                         {/* Recent Orders */}

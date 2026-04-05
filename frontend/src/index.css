@@ -27,6 +27,22 @@
   }
 }
 
+/** Hero banners: duplicated “TeeHive” track moves right (reads as text drifting L→R). */
+.animate-banner-teehive-ltr {
+  width: max-content;
+  animation: bannerTeehiveLtr 100s linear infinite;
+}
+
+@keyframes bannerTeehiveLtr {
+  0% {
+    transform: translateX(-50%);
+  }
+
+  100% {
+    transform: translateX(0);
+  }
+}
+
 .scrollbar-hide::-webkit-scrollbar {
   display: none;
 }

@@ -1,8 +1,11 @@
-import { useState, useEffect, useCallback, type CSSProperties } from "react";
+import { useState, useEffect, useCallback, useMemo, type CSSProperties } from "react";
 import { Link } from "react-router-dom";
 import { ChevronLeft, ChevronRight, ArrowRight } from "lucide-react";
 import ImageWithSkeleton from "../shared/ImageWithSkeleton";
 import Loader from "../shared/Loader";
+import { BEE_BADGE } from "../../constants/brand";
+import { artistPublicPath } from "../../utils/artistRoutes";
+import ArtistRatingInline from "../shared/ArtistRatingInline";
 
 const DROPS_SECTION_BG =
     "https://cdn.culture-circle.com/culture-circle-new/public/assets/dropsection/Group%2018.svg";
@@ -38,7 +41,13 @@ export interface LatestDropProduct {
     mockupImageUrl: string;
     backMockupImageUrl?: string;
     primaryView?: "front" | "back";
-    artist: { id: string; name: string };
+    artist: {
+        id: string;
+        name: string;
+        artistSlug?: string | null;
+        artistRating?: number;
+        reviewCount?: number;
+    };
 }
 
 interface LatestDropsShowcaseProps {
@@ -54,11 +63,19 @@ function productImage(p: LatestDropProduct) {
 const carouselArrowBtnClass =
     "shrink-0 z-30 w-11 h-11 md:w-12 md:h-12 flex items-center justify-center rounded-sm border-2 border-neutral-black bg-white text-neutral-black hover:bg-primary transition-colors font-display text-lg font-black shadow-[3px_3px_0_0_rgba(0,0,0,1)]";
 
+/** Max products in the strip; carousel shows 5 at a time (center + 2 each side). */
+const LATEST_DROPS_MAX = 10;
+const VISIBLE_RADIUS = 2;
+
 export default function LatestDropsShowcase({ products, isLoading }: LatestDropsShowcaseProps) {
+    const items = useMemo(
+        () => products.slice(0, LATEST_DROPS_MAX),
+        [products]
+    );
     const [activeIndex, setActiveIndex] = useState(0);
     /** Incremented on prev/next arrows only so the center card bounce animation replays. */
     const [centerBounceKey, setCenterBounceKey] = useState(0);
-    const n = products.length;
+    const n = items.length;
 
     useEffect(() => {
         setActiveIndex((i) => (n === 0 ? 0 : Math.min(i, n - 1)));
@@ -99,10 +116,19 @@ export default function LatestDropsShowcase({ products, isLoading }: LatestDrops
                     <div className="flex flex-col md:flex-row md:items-end justify-between gap-8 mb-10">
                         <div className="max-w-xl space-y-3 text-left">
                             <h2 className="font-display text-[clamp(2rem,5vw,3.5rem)] md:text-[56px] font-black text-neutral-black leading-none tracking-tight uppercase">
-                                Latest <span className="text-primary italic">Drops</span>
+                                Latest{" "}
+                                <span
+                                    className="text-primary italic"
+                                    style={{
+                                        textShadow:
+                                            "3px 3px 0 #0a0a0a, 4px 4px 0 rgba(0,0,0,0.2), 0 2px 14px rgba(0,0,0,0.12)",
+                                    }}
+                                >
+                                    Drops
+                                </span>
                             </h2>
                             <p className="font-display text-[14px] font-bold text-neutral-g4 uppercase tracking-[2px]">
-                                New releases sync soon.
+                                <span aria-hidden>{BEE_BADGE}</span> New releases sync soon.
                             </p>
                         </div>
                         <Link
@@ -127,10 +153,19 @@ export default function LatestDropsShowcase({ products, isLoading }: LatestDrops
                 <header className="w-full flex flex-col md:flex-row md:items-end justify-between gap-4 md:gap-6 mb-0 shrink-0">
                     <div className="max-w-[600px] space-y-3 text-left">
                         <h2 className="font-display text-[clamp(2rem,5vw,3.5rem)] md:text-[56px] font-black text-neutral-black leading-none tracking-tight uppercase">
-                            Latest <span className="text-primary italic">Drops</span>
+                            Latest{" "}
+                            <span
+                                className="text-primary italic"
+                                style={{
+                                    textShadow:
+                                        "3px 3px 0 #0a0a0a, 4px 4px 0 rgba(0,0,0,0.2), 0 2px 14px rgba(0,0,0,0.12)",
+                                }}
+                            >
+                                Drops
+                            </span>
                         </h2>
                         <p className="font-display text-[14px] font-bold text-neutral-g4 uppercase tracking-[2px]">
-                            Curated releases from verified creators.
+                            <span aria-hidden>{BEE_BADGE}</span> Curated releases from verified creators.
                         </p>
                     </div>
                     <Link
@@ -149,7 +184,7 @@ export default function LatestDropsShowcase({ products, isLoading }: LatestDrops
                         role="tablist"
                         aria-label="Slide indicators"
                     >
-                        {products.map((_, i) => (
+                        {items.map((_, i) => (
                             <button
                                 key={i}
                                 type="button"
@@ -177,53 +212,39 @@ export default function LatestDropsShowcase({ products, isLoading }: LatestDrops
                         </button>
 
                         <div
-                            className="flex-1 min-w-0 max-w-[min(100%,1240px)] mx-auto"
+                            className="flex-1 min-w-0 max-w-[min(100%,1480px)] mx-auto px-1 sm:px-2"
                             style={{ perspective: "2000px" }}
                         >
                             <div
-                                className="relative min-h-[340px] sm:min-h-[400px] md:min-h-[520px] h-[min(58vh,620px)] flex items-center justify-center [transform-style:preserve-3d] py-1 overflow-visible"
+                                className="relative min-h-[340px] sm:min-h-[400px] md:min-h-[520px] h-[min(58vh,640px)] flex items-center justify-center [transform-style:preserve-3d] py-1 overflow-visible"
                                 role="region"
                                 aria-roledescription="carousel"
                                 aria-label="Latest product drops"
                             >
-                                {products.map((product, i) => {
+                                {items.map((product, i) => {
                                     const dist = i - activeIndex;
                                     const abs = Math.abs(dist);
                                     const isActive = dist === 0;
 
-                                    if (abs > 4) return null;
+                                    if (abs > VISIBLE_RADIUS) return null;
 
                                     const scale =
-                                        isActive
-                                            ? 1
-                                            : abs === 1
-                                              ? 0.78
-                                              : abs === 2
-                                                ? 0.64
-                                                : abs === 3
-                                                  ? 0.54
-                                                  : 0.46;
+                                        isActive ? 1 : abs === 1 ? 0.82 : 0.68;
                                     const opacity =
-                                        isActive
-                                            ? 1
-                                            : abs === 1
-                                              ? 0.9
-                                              : abs === 2
-                                                ? 0.52
-                                                : abs === 3
-                                                  ? 0.32
-                                                  : 0.2;
-                                    const translateX = isActive
-                                        ? "0px"
-                                        : abs === 1
-                                          ? `calc(${dist} * min(32vw, 300px))`
-                                          : abs === 2
-                                            ? `calc(${dist} * min(56vw, 500px))`
-                                            : abs === 3
-                                              ? `calc(${dist} * min(78vw, 680px))`
-                                              : `calc(${dist} * min(96vw, 820px))`;
-                                    const rotateY = isActive ? 0 : dist * -9;
-                                    const z = isActive ? 0 : -48 - abs * 32;
+                                        isActive ? 1 : abs === 1 ? 0.92 : 0.76;
+                                    /** Cumulative X from center so each ring clears the previous tile + gap. */
+                                    const translateX = (() => {
+                                        if (isActive) return "0px";
+                                        const near = "min(52vw, 360px)";
+                                        const far = "min(46vw, 300px)";
+                                        if (abs === 1) {
+                                            return `calc(${dist} * (${near}))`;
+                                        }
+                                        const sign = dist > 0 ? 1 : -1;
+                                        return `calc(${sign} * ((${near}) + (${far})))`;
+                                    })();
+                                    const rotateY = isActive ? 0 : dist * -8;
+                                    const z = isActive ? 0 : -44 - abs * 36;
 
                                     const src = productImage(product);
 
@@ -231,7 +252,7 @@ export default function LatestDropsShowcase({ products, isLoading }: LatestDrops
                                         "isolate absolute left-1/2 top-1/2 rounded-2xl transition-all duration-500 ease-out",
                                         isActive
                                             ? "overflow-visible flex flex-col w-[min(88vw,300px)] sm:w-[min(80vw,340px)] md:w-[min(68vw,380px)] lg:w-[420px] z-20 bg-white6 shadow-[0_24px_56px_-14px_rgba(0,0,0,0.22)]"
-                                            : "overflow-hidden aspect-[4/5] w-[min(52vw,210px)] sm:w-[230px] md:w-[260px] z-10 bg-neutral-g1 shadow-[0_14px_36px_-10px_rgba(0,0,0,0.14)]",
+                                            : "overflow-hidden aspect-[4/5] w-[min(46vw,200px)] sm:w-[210px] md:w-[240px] z-10 bg-neutral-g1 shadow-[0_14px_36px_-10px_rgba(0,0,0,0.14)]",
                                     ].join(" ");
 
                                     const frameStyle: CSSProperties = {
@@ -300,11 +321,18 @@ export default function LatestDropsShowcase({ products, isLoading }: LatestDrops
                                                         </Link>
                                                     </h3>
                                                     <Link
-                                                        to={`/artists/${product.artist.id}`}
-                                                        className="font-display text-[10px] font-black tracking-[1.5px] uppercase text-neutral-g4 hover:text-neutral-black transition-colors truncate no-underline"
+                                                        to={artistPublicPath(product.artist)}
+                                                        className="font-display text-[10px] font-black tracking-[1.5px] uppercase text-neutral-g4 hover:text-neutral-black transition-colors truncate no-underline block"
                                                     >
                                                         {product.artist.name}
                                                     </Link>
+                                                    <div className="mt-0.5">
+                                                        <ArtistRatingInline
+                                                            rating={product.artist.artistRating ?? 0}
+                                                            reviewCount={product.artist.reviewCount ?? 0}
+                                                            compact
+                                                        />
+                                                    </div>
                                                     <div className="flex items-baseline gap-2 flex-wrap">
                                                         <span className="inline-flex items-center px-1.5 py-0.5 rounded-sm bg-neutral-g1 border border-neutral-g2 font-display text-[9px] font-black uppercase tracking-wider text-neutral-g4">
                                                             INR

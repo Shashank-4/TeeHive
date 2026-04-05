@@ -7,6 +7,7 @@ import { useCart } from "../../context/CartContext";
 import Loader from "../../components/shared/Loader";
 import GstInclusiveNote from "../../components/shared/GstInclusiveNote";
 import ReturnPolicyNote from "../../components/shared/ReturnPolicyNote";
+import { cartItemThumbnail } from "../../utils/productMockup";
 
 // Declare Razorpay on window
 declare global {
@@ -119,7 +120,7 @@ export default function Checkout() {
             price: item.price,
             size: item.size,
             color: item.color,
-            image: item.image,
+            image: cartItemThumbnail(item),
         }));
 
     const loadRazorpayScript = () => {
@@ -492,12 +493,12 @@ export default function Checkout() {
                                 </h2>
                                 <div className="divide-y-[1.5px] divide-neutral-g1">
                                     {items.map((item) => (
-                                        <div key={`${item.productId}-${item.size}-${item.color}`} className="py-5 flex gap-5 group">
+                                        <div key={`${item.productId}-${item.size}-${item.color}`} className="py-5 flex gap-5">
                                             <div className="flex-shrink-0 w-20 h-24 border border-neutral-g2 rounded-[2px] overflow-hidden bg-neutral-g1">
                                                 <img
-                                                    src={item.image}
+                                                    src={cartItemThumbnail(item)}
                                                     alt={item.name}
-                                                    className="w-full h-full object-cover grayscale-[0.5] group-hover:grayscale-0 transition-all"
+                                                    className="w-full h-full object-cover"
                                                 />
                                             </div>
                                             <div className="flex-1 min-w-0 flex flex-col justify-between">

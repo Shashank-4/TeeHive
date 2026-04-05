@@ -1,8 +1,9 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import Cropper, { type Area } from "react-easy-crop";
 import "react-easy-crop/react-easy-crop.css";
 import api from "../../api/axios";
+import { useAuth } from "../../context/AuthContext";
 import {
     Camera,
     Globe,
@@ -16,6 +17,7 @@ import {
     Smartphone,
 } from "lucide-react";
 import { payoutFormFromMethods } from "../../utils/payoutMethods";
+import { allocateSlugFromDisplayName } from "../../utils/artistSlugFromDisplayName";
 
 const createImage = (url: string): Promise<HTMLImageElement> =>
     new Promise((resolve, reject) => {
@@ -59,9 +61,17 @@ const getCroppedImageBlob = async (imageSrc: string, cropPixels: Area): Promise<
 
 export default function ArtistSetupProfile() {
     const navigate = useNavigate();
+    const { user } = useAuth();
 
     // Profile fields
     const [displayName, setDisplayName] = useState("");
+    const [artistSlug, setArtistSlug] = useState("");
+    const [displayNameStatus, setDisplayNameStatus] = useState<
+        "idle" | "checking" | "ok" | "taken" | "invalid" | "too_long" | "error"
+    >("idle");
+    const [slugStatus, setSlugStatus] = useState<"idle" | "checking" | "ok" | "bad" | "taken">("idle");
+    /** Display name last validated on blur (unique + slug generated) */
+    const confirmedDisplayNameRef = useRef("");
     const [bio, setBio] = useState("");
     const [portfolioUrl, setPortfolioUrl] = useState("");
     const [instagramUrl, setInstagramUrl] = useState("");
@@ -103,7 +113,18 @@ export default function ArtistSetupProfile() {
                 api.get("/api/artist/payout-methods"),
             ]);
             const profile = profileResponse.data.data.profile;
+            const dn = (profile.displayName || "").trim();
+            const sl = ((profile.artistSlug as string) || "").trim();
             setDisplayName(profile.displayName || "");
+            setArtistSlug(sl);
+            confirmedDisplayNameRef.current = dn;
+            if (dn.length >= 2 && sl.length >= 2) {
+                setDisplayNameStatus("ok");
+                setSlugStatus("ok");
+            } else {
+                setDisplayNameStatus("idle");
+                setSlugStatus("idle");
+            }
             setBio(profile.bio || "");
             setPortfolioUrl(profile.portfolioUrl || "");
             setInstagramUrl(profile.instagramUrl || "");
@@ -130,6 +151,57 @@ export default function ArtistSetupProfile() {
     useEffect(() => {
         fetchProfile();
     }, [fetchProfile]);
+
+    /** Pass `rawFromInput` from `onBlur` (e.currentTarget.value) — React may run blur before the last onChange commits, so state can be one character behind. */
+    const validateDisplayNameAndGenerateSlug = useCallback(async (rawFromInput: string) => {
+        const name = rawFromInput.trim();
+        if (name.length < 2) {
+            setDisplayNameStatus("invalid");
+            setSlugStatus("idle");
+            setArtistSlug("");
+            return;
+        }
+        if (name.length > 80) {
+            setDisplayNameStatus("too_long");
+            setSlugStatus("idle");
+            return;
+        }
+        if (name === confirmedDisplayNameRef.current && artistSlug.trim().length >= 2) {
+            setDisplayNameStatus("ok");
+            setSlugStatus("ok");
+            return;
+        }
+
+        setDisplayNameStatus("checking");
+        setSlugStatus("idle");
+        try {
+            const q = new URLSearchParams({ name });
+            if (user?.id) q.set("excludeUserId", user.id);
+            const dnRes = await api.get(`/api/artists/check-display-name?${q.toString()}`);
+            if (dnRes.data?.data?.available !== true) {
+                setDisplayNameStatus("taken");
+                setSlugStatus("idle");
+                setArtistSlug("");
+                return;
+            }
+            setDisplayNameStatus("ok");
+            setSlugStatus("checking");
+            const slug = await allocateSlugFromDisplayName(name, api, user?.id);
+            if (!slug) {
+                setSlugStatus("bad");
+                setArtistSlug("");
+                return;
+            }
+            setArtistSlug(slug);
+            setSlugStatus("ok");
+            confirmedDisplayNameRef.current = name;
+        } catch (err) {
+            console.error("check-display-name / slug allocation failed:", err);
+            setDisplayNameStatus("error");
+            setSlugStatus("idle");
+            setArtistSlug("");
+        }
+    }, [artistSlug, user?.id]);
 
     const handleDisplayPhotoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
@@ -185,6 +257,11 @@ export default function ArtistSetupProfile() {
         setSaving(true);
         setError(null);
         setSuccess(null);
+        if (displayNameStatus !== "ok" || slugStatus !== "ok" || artistSlug.trim().length < 2) {
+            setError("Confirm your public display name (click outside the field) so we can set your storefront URL.");
+            setSaving(false);
+            return;
+        }
         if (!hasValidPayoutDetails) {
             setError("Please add payout details. Enter either valid UPI details or valid bank details.");
             setSaving(false);
@@ -193,6 +270,7 @@ export default function ArtistSetupProfile() {
         try {
             const formData = new FormData();
             formData.append("displayName", displayName);
+            formData.append("artistSlug", artistSlug.trim().toLowerCase());
             formData.append("bio", bio);
             formData.append("portfolioUrl", portfolioUrl);
             formData.append("instagramUrl", instagramUrl);
@@ -232,7 +310,10 @@ export default function ArtistSetupProfile() {
     const hasValidBankDetails =
         !!bankAccountName.trim() && !!bankAccountNumber.trim() && !!bankIfsc.trim();
     const hasValidPayoutDetails = hasValidUpiDetails || hasValidBankDetails;
-    const canSubmit = !!displayName.trim() && !!displayPhotoPreview && hasValidPayoutDetails;
+    const slugOk = artistSlug.trim().length >= 2 && slugStatus === "ok";
+    const displayOk = displayName.trim().length >= 2 && displayNameStatus === "ok";
+    const canSubmit =
+        displayOk && slugOk && !!displayPhotoPreview && hasValidPayoutDetails;
 
     const activationPayoutMethod = (() => {
         if (preferredMethod === "UPI" && hasValidUpiDetails) return "UPI";
@@ -334,14 +415,106 @@ export default function ArtistSetupProfile() {
                                     {/* Display Name & Bio */}
                                     <div className="flex-1 space-y-6">
                                         <div className="space-y-2">
-                                            <label className="font-display text-[11px] font-black uppercase tracking-[1.5px] text-neutral-g4">Public Display Name *</label>
-                                            <input
-                                                type="text"
-                                                value={displayName}
-                                                onChange={(e) => setDisplayName(e.target.value)}
-                                                placeholder="e.g. Urban Rebel, Chrome Spirit"
-                                                className="w-full px-4 py-3 bg-neutral-g1 border-[2px] border-neutral-black rounded-[4px] font-body text-[14px] font-black placeholder:opacity-30 focus:bg-white focus:shadow-[4px_4px_0px_0px_rgba(255,222,0,1)] outline-none transition-all"
-                                            />
+                                            <label className="font-display text-[11px] font-black uppercase tracking-[1.5px] text-neutral-g4">
+                                                Public Display Name *
+                                            </label>
+                                            <p className="font-display text-[10px] font-bold text-neutral-g3 uppercase tracking-tight">
+                                                Must be unique. Click outside this field to check and generate your URL.
+                                            </p>
+                                            <div className="flex items-center gap-2">
+                                                <input
+                                                    type="text"
+                                                    value={displayName}
+                                                    onChange={(e) => {
+                                                        const v = e.target.value;
+                                                        setDisplayName(v);
+                                                        if (v.trim() !== confirmedDisplayNameRef.current) {
+                                                            setDisplayNameStatus("idle");
+                                                            setSlugStatus("idle");
+                                                        }
+                                                    }}
+                                                    onBlur={(e) => {
+                                                        const v = e.currentTarget.value;
+                                                        setDisplayName(v);
+                                                        void validateDisplayNameAndGenerateSlug(v);
+                                                    }}
+                                                    placeholder="e.g. Urban Rebel, Chrome Spirit"
+                                                    className="flex-1 min-w-0 px-4 py-3 bg-neutral-g1 border-[2px] border-neutral-black rounded-[4px] font-body text-[14px] font-black placeholder:opacity-30 focus:bg-white focus:shadow-[4px_4px_0px_0px_rgba(255,222,0,1)] outline-none transition-all"
+                                                />
+                                                {displayNameStatus === "checking" && (
+                                                    <Loader2
+                                                        className="w-5 h-5 shrink-0 text-primary animate-spin"
+                                                        aria-hidden
+                                                    />
+                                                )}
+                                                {displayNameStatus === "ok" && (
+                                                    <CheckCircle
+                                                        className="w-5 h-5 shrink-0 text-success"
+                                                        aria-hidden
+                                                    />
+                                                )}
+                                            </div>
+                                            {displayNameStatus === "taken" && (
+                                                <p className="font-display text-[10px] font-bold text-danger uppercase">
+                                                    This display name is already taken — try another
+                                                </p>
+                                            )}
+                                            {displayNameStatus === "invalid" && (
+                                                <p className="font-display text-[10px] font-bold text-danger uppercase">
+                                                    Enter at least 2 characters
+                                                </p>
+                                            )}
+                                            {displayNameStatus === "too_long" && (
+                                                <p className="font-display text-[10px] font-bold text-danger uppercase">
+                                                    Display name must be 80 characters or less
+                                                </p>
+                                            )}
+                                            {displayNameStatus === "error" && (
+                                                <p className="font-display text-[10px] font-bold text-danger uppercase leading-relaxed">
+                                                    Could not reach the server. Use an empty VITE_API_URL in dev so /api is
+                                                    proxied to your backend, or set VITE_API_URL to your API origin — then
+                                                    restart the dev server.
+                                                </p>
+                                            )}
+                                        </div>
+                                        <div className="space-y-2">
+                                            <label className="font-display text-[11px] font-black uppercase tracking-[1.5px] text-neutral-g4">
+                                                Storefront URL handle *
+                                            </label>
+                                            <p className="font-display text-[10px] font-bold text-neutral-g3 uppercase tracking-tight">
+                                                Generated automatically from your display name (no spaces).
+                                            </p>
+                                            <div className="flex items-center gap-2 flex-wrap">
+                                                <span className="font-display text-[11px] font-bold text-neutral-g3">/artists/</span>
+                                                <input
+                                                    type="text"
+                                                    readOnly
+                                                    value={artistSlug}
+                                                    placeholder="—"
+                                                    className="flex-1 min-w-[160px] px-4 py-3 bg-neutral-g2/80 border-[2px] border-neutral-black rounded-[4px] font-body text-[14px] font-black text-neutral-black cursor-default outline-none"
+                                                />
+                                                {slugStatus === "checking" && (
+                                                    <Loader2
+                                                        className="w-5 h-5 shrink-0 text-primary animate-spin"
+                                                        aria-hidden
+                                                    />
+                                                )}
+                                            </div>
+                                            {slugStatus === "checking" && displayNameStatus === "ok" && (
+                                                <p className="font-display text-[10px] font-bold text-neutral-g3 uppercase">
+                                                    Reserving handle…
+                                                </p>
+                                            )}
+                                            {slugStatus === "ok" && (
+                                                <p className="font-display text-[10px] font-bold text-success uppercase">
+                                                    Handle ready
+                                                </p>
+                                            )}
+                                            {slugStatus === "bad" && (
+                                                <p className="font-display text-[10px] font-bold text-danger uppercase">
+                                                    Could not reserve a URL for this name — try a different display name
+                                                </p>
+                                            )}
                                         </div>
                                         <div className="space-y-2">
                                             <label className="font-display text-[11px] font-black uppercase tracking-[1.5px] text-neutral-g4 flex justify-between">
@@ -494,6 +667,10 @@ export default function ArtistSetupProfile() {
                                     <div className="flex items-center justify-between">
                                         <span className="text-white/40">Profile Info</span>
                                         {displayName ? <CheckCircle className="w-3 h-3 text-success" /> : <span className="text-danger">Mandatory</span>}
+                                    </div>
+                                    <div className="flex items-center justify-between">
+                                        <span className="text-white/40">URL Handle</span>
+                                        {slugOk ? <CheckCircle className="w-3 h-3 text-success" /> : <span className="text-danger">Mandatory</span>}
                                     </div>
                                     <div className="flex items-center justify-between">
                                         <span className="text-white/40">Profile Photo</span>

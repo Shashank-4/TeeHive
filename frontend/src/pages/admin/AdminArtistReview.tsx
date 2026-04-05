@@ -102,8 +102,6 @@ export default function AdminArtistReview() {
     const [payoutMethods, setPayoutMethods] = useState<PayoutMethod[]>([]);
     const [payoutLoading, setPayoutLoading] = useState(false);
     const [payoutError, setPayoutError] = useState<string | null>(null);
-    const [payoutNotes, setPayoutNotes] = useState<Record<string, string>>({});
-    const [payoutActionLoading, setPayoutActionLoading] = useState<Record<string, boolean>>({});
 
     useEffect(() => {
         if (id) {
@@ -166,28 +164,6 @@ export default function AdminArtistReview() {
             console.error("Failed to reject:", err);
         } finally {
             setActionLoading(false);
-        }
-    };
-
-    const handlePayoutReview = async (
-        payoutMethodId: string,
-        reviewAction: "APPROVED" | "REJECTED" | "REQUIRES_RESUBMISSION"
-    ) => {
-        if (!artist) return;
-        if (reviewAction !== "APPROVED" && !payoutNotes[payoutMethodId]?.trim()) return;
-        setPayoutActionLoading((prev) => ({ ...prev, [payoutMethodId]: true }));
-        setPayoutError(null);
-        try {
-            await api.patch(`/api/admin/artists/${artist.id}/payout-methods/${payoutMethodId}/review`, {
-                action: reviewAction,
-                note: payoutNotes[payoutMethodId]?.trim() || undefined,
-            });
-            await fetchPayoutMethods();
-            setPayoutNotes((prev) => ({ ...prev, [payoutMethodId]: "" }));
-        } catch (err: any) {
-            setPayoutError(err.response?.data?.message || "Failed to review payout method.");
-        } finally {
-            setPayoutActionLoading((prev) => ({ ...prev, [payoutMethodId]: false }));
         }
     };
 
@@ -421,7 +397,7 @@ export default function AdminArtistReview() {
 
                         <div className="bg-white border-[3px] border-neutral-black p-8 rounded-[8px] shadow-[8px_8px_0px_0px_rgba(0,0,0,1)]">
                             <h3 className="font-display text-[12px] font-black uppercase tracking-[2px] text-primary mb-6 border-b-[1px] border-neutral-black/10 pb-4">
-                                Payout Method Review
+                                Payout methods (read-only)
                             </h3>
                             {payoutLoading ? (
                                 <div className="flex items-center gap-3 font-display text-[11px] font-black uppercase text-neutral-g4">
@@ -487,7 +463,8 @@ export default function AdminArtistReview() {
 
                                             {method.reviews?.length ? (
                                                 <div className="mt-4 border-t border-neutral-black/10 pt-4 space-y-2">
-                                                    {method.reviews.slice(0, 2).map((review) => (
+                                                    <p className="font-display text-[9px] font-black uppercase text-neutral-g3 mb-2">History</p>
+                                                    {method.reviews.slice(0, 3).map((review) => (
                                                         <div key={review.id} className="font-display text-[10px] font-bold uppercase text-neutral-g4">
                                                             {review.action.replaceAll("_", " ")} • {new Date(review.createdAt).toLocaleDateString("en-GB")}
                                                             {review.note ? ` • ${review.note}` : ""}
@@ -495,45 +472,6 @@ export default function AdminArtistReview() {
                                                     ))}
                                                 </div>
                                             ) : null}
-
-                                            {["PENDING_REVIEW", "REQUIRES_RESUBMISSION", "REJECTED"].includes(method.verificationStatus) && (
-                                                <div className="mt-5 border-t border-neutral-black/10 pt-5 space-y-4">
-                                                    <textarea
-                                                        value={payoutNotes[method.id] || ""}
-                                                        onChange={(e) =>
-                                                            setPayoutNotes((prev) => ({
-                                                                ...prev,
-                                                                [method.id]: e.target.value,
-                                                            }))
-                                                        }
-                                                        placeholder="Add finance note for rejection or resubmission..."
-                                                        className="w-full min-h-[96px] bg-white border-[2px] border-neutral-black rounded-[4px] p-4 font-display text-[11px] font-black uppercase outline-none"
-                                                    />
-                                                    <div className="grid grid-cols-1 gap-3">
-                                                        <button
-                                                            onClick={() => handlePayoutReview(method.id, "APPROVED")}
-                                                            disabled={payoutActionLoading[method.id]}
-                                                            className="w-full py-3 bg-success border-[2px] border-neutral-black text-white rounded-[4px] font-display text-[10px] font-black uppercase shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]"
-                                                        >
-                                                            Approve Verified Method
-                                                        </button>
-                                                        <button
-                                                            onClick={() => handlePayoutReview(method.id, "REQUIRES_RESUBMISSION")}
-                                                            disabled={payoutActionLoading[method.id] || !payoutNotes[method.id]?.trim()}
-                                                            className="w-full py-3 bg-primary border-[2px] border-neutral-black text-neutral-black rounded-[4px] font-display text-[10px] font-black uppercase shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] disabled:opacity-40"
-                                                        >
-                                                            Request Resubmission
-                                                        </button>
-                                                        <button
-                                                            onClick={() => handlePayoutReview(method.id, "REJECTED")}
-                                                            disabled={payoutActionLoading[method.id] || !payoutNotes[method.id]?.trim()}
-                                                            className="w-full py-3 bg-danger border-[2px] border-neutral-black text-white rounded-[4px] font-display text-[10px] font-black uppercase shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] disabled:opacity-40"
-                                                        >
-                                                            Reject Method
-                                                        </button>
-                                                    </div>
-                                                </div>
-                                            )}
                                         </div>
                                     ))}
                                 </div>

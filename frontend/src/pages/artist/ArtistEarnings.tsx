@@ -3,10 +3,12 @@ import {
     IndianRupee,
     Download,
     History,
-    HelpCircle
+    HelpCircle,
+    Loader2,
 } from "lucide-react";
 import Loader from "../../components/shared/Loader";
 import api from "../../api/axios";
+import { useNavigate } from "react-router-dom";
 
 type SummaryCard = {
     label: string;
@@ -26,9 +28,11 @@ const statusPillClass = (status: string) => {
 };
 
 export default function ArtistEarnings() {
+    const navigate = useNavigate();
     const [stats, setStats] = useState<any>(null);
     const [payouts, setPayouts] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
+    const [csvDownloading, setCsvDownloading] = useState(false);
 
     useEffect(() => {
         const fetchEarningsData = async () => {
@@ -46,6 +50,28 @@ export default function ArtistEarnings() {
         };
         fetchEarningsData();
     }, []);
+
+    const handleDownloadCsv = async () => {
+        try {
+            setCsvDownloading(true);
+            const res = await api.get("/api/artist/earnings/csv", { responseType: "blob" });
+            const disposition = res.headers["content-disposition"] as string | undefined;
+            const match = disposition?.match(/filename="?([^";]+)"?/i);
+            const filename = match?.[1] || `tehive-artist-earnings-${new Date().toISOString().slice(0, 10)}.csv`;
+            const blob = new Blob([res.data], { type: "text/csv;charset=utf-8" });
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement("a");
+            a.href = url;
+            a.download = filename;
+            a.click();
+            window.URL.revokeObjectURL(url);
+        } catch (e) {
+            console.error("CSV download failed:", e);
+            alert("Could not download the report. Please try again.");
+        } finally {
+            setCsvDownloading(false);
+        }
+    };
 
     const summaryCards: SummaryCard[] = [
         { label: "Total Earned", value: stats?.totalEarnings || 0, color: "bg-primary/20", emoji: "₹" },
@@ -67,8 +93,26 @@ export default function ArtistEarnings() {
             <div className="flex-1 px-4 sm:px-8 pb-12 w-full">
                 {/* Header Section */}
                 <div className="flex flex-col md:flex-row md:items-end justify-between mb-10 gap-6">
-                    <button className="flex items-center gap-3 px-6 py-3 bg-white border-[2px] border-neutral-black rounded-[4px] font-display text-[13px] font-black uppercase tracking-[1px] shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] hover:translate-x-[2px] hover:translate-y-[2px] hover:shadow-none transition-all">
-                        <Download className="w-4 h-4 text-primary" /> Download Report
+                    <div className="space-y-2">
+                        <h1 className="font-display text-[clamp(26px,4vw,40px)] font-black text-neutral-black uppercase tracking-tight leading-none">
+                            Earnings <span className="text-primary italic">ledger</span>
+                        </h1>
+                        <p className="font-display text-[12px] font-bold text-neutral-g4 uppercase tracking-wider max-w-lg">
+                            Summary totals and a downloadable CSV of every paid order line attributed to you.
+                        </p>
+                    </div>
+                    <button
+                        type="button"
+                        onClick={handleDownloadCsv}
+                        disabled={csvDownloading}
+                        className="flex items-center justify-center gap-3 px-6 py-3 bg-white border-[2px] border-neutral-black rounded-[4px] font-display text-[13px] font-black uppercase tracking-[1px] shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] hover:translate-x-[2px] hover:translate-y-[2px] hover:shadow-none transition-all disabled:opacity-50 shrink-0"
+                    >
+                        {csvDownloading ? (
+                            <Loader2 className="w-4 h-4 text-primary animate-spin" />
+                        ) : (
+                            <Download className="w-4 h-4 text-primary" />
+                        )}
+                        Download CSV report
                     </button>
                 </div>
 
@@ -158,11 +202,11 @@ export default function ArtistEarnings() {
                             </div>
                             <ul className="space-y-4">
                                 {[
-                                    { t: "The Cut", d: "You get 25% of the final unit sale price (including discounts) on every verified sale." },
-                                    { t: "Royalty Cycle", d: "Royalties for the previous month's verified sales are settled manually on the 10th day of the current month after reconciliation." },
-                                    { t: "Settlement Review", d: "Finance only steps in when payout validation fails, mismatches the beneficiary name, or needs resubmission." },
-                                    { t: "Payout Method", d: "Keep your UPI or bank details accurate so settlements are not delayed." },
-                                    { t: "TDS/Tax", d: "All payouts are inclusive of applicable taxes for Indian artists." }
+                                    { t: "The Cut", d: "You get 25% of the final line total (including discounts) on every paid order line for your products." },
+                                    { t: "Royalty Cycle", d: "Royalties for the previous month's paid sales are typically settled on the 10th of the current month after reconciliation." },
+                                    { t: "CSV report", d: "Use Download CSV report for a full export of order lines, amounts, and your share for accounting." },
+                                    { t: "Payout details", d: "Keep your UPI or bank details accurate on the Payout page so transfers are not delayed." },
+                                    { t: "TDS/Tax", d: "Tax treatment follows your agreement and applicable law; consult a professional for filing." },
                                 ].map((item, i) => (
                                     <li key={i} className="space-y-1">
                                         <div className="font-display text-[10px] font-black uppercase tracking-[1px]">{item.t}</div>
@@ -172,7 +216,11 @@ export default function ArtistEarnings() {
                             </ul>
                         </div>
 
-                        <div className="bg-white border-[2px] border-neutral-black rounded-[6px] p-6 shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] flex items-center gap-4 group cursor-pointer hover:bg-neutral-black hover:text-white transition-all">
+                        <button
+                            type="button"
+                            onClick={() => navigate("/artist/payout")}
+                            className="w-full text-left bg-white border-[2px] border-neutral-black rounded-[6px] p-6 shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] flex items-center gap-4 group cursor-pointer hover:bg-neutral-black hover:text-white transition-all"
+                        >
                             <div className="w-10 h-10 shrink-0 bg-neutral-g1 border-[2px] border-neutral-black flex items-center justify-center group-hover:bg-primary group-hover:border-white transition-all">
                                 <IndianRupee className="w-5 h-5 group-hover:text-neutral-black" />
                             </div>
@@ -180,7 +228,7 @@ export default function ArtistEarnings() {
                                 <div className="font-display text-[11px] font-black uppercase tracking-[1.5px]">Payout Settings</div>
                                 <div className="text-[10px] font-bold opacity-40 uppercase">Update UPI/Bank Info</div>
                             </div>
-                        </div>
+                        </button>
                     </div>
                 </div>
             </div>

@@ -87,13 +87,22 @@ export default function ArtistProductManager() {
     };
 
     const handleDelete = async (productId: string) => {
-        if (!confirm("Are you sure you want to archive this product?")) return;
+        if (
+            !confirm(
+                "Permanently delete this product? Mockup images will be removed from storage. You can use the same design on a new product afterward (unless this item was ever ordered)."
+            )
+        )
+            return;
         setActionLoading(productId);
         try {
             await api.delete(`/api/artist/products/${productId}`);
-            setProducts((prev) => prev.map((p) => p.id === productId ? { ...p, status: "ARCHIVED" } : p));
-        } catch (error) {
-            console.error("Failed to archive product:", error);
+            setProducts((prev) => prev.filter((p) => p.id !== productId));
+        } catch (error: unknown) {
+            console.error("Failed to delete product:", error);
+            const msg =
+                (error as { response?: { data?: { message?: string } } })?.response?.data?.message ||
+                "Could not delete this product.";
+            alert(msg);
         } finally {
             setActionLoading(null);
         }
@@ -310,7 +319,7 @@ export default function ArtistProductManager() {
                                                     disabled={actionLoading === product.id}
                                                     className="px-4 py-2 bg-white border-[1px] border-neutral-black rounded-[2px] text-danger font-display text-[9px] font-black uppercase tracking-[1px] hover:bg-danger hover:text-white transition-all disabled:opacity-50"
                                                 >
-                                                    Archive
+                                                    Delete
                                                 </button>
                                             </div>
                                         </td>

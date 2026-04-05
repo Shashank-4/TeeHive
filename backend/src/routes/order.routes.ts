@@ -446,8 +446,10 @@ router.post(
             });
 
             sendAdminReturnClaimNotification({
-                orderId: order.id,
-                customerName: user.name || "Customer",
+                orderIdFull: order.id,
+                orderRef: order.id.slice(0, 8).toUpperCase(),
+                customerName: user.name || user.displayName || "Customer",
+                customerEmail: user.email,
                 reason: reason.replaceAll("_", " "),
                 description,
             }).catch((emailError) => {

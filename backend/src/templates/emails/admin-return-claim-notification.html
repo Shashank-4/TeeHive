@@ -71,8 +71,10 @@
             <p>A customer has submitted a new return claim that needs admin review.</p>
             <div
                 style="background-color: #f9fafb; padding: 24px; border-radius: 8px; margin: 24px 0; border: 1px solid #e5e7eb;">
-                <p><strong>Order ID:</strong> {{OrderID}}</p>
+                <p><strong>Order reference:</strong> {{OrderID}}</p>
+                <p style="font-size: 12px; color: #6b7280; word-break: break-all;"><strong>Full order ID:</strong> {{OrderIdFull}}</p>
                 <p><strong>Customer:</strong> {{CustomerName}}</p>
+                <p><strong>Customer email:</strong> <a href="mailto:{{CustomerEmail}}" style="color: #111827;">{{CustomerEmail}}</a></p>
                 <p><strong>Claim reason:</strong> {{Reason}}</p>
                 <p><strong>Description:</strong> {{Description}}</p>
             </div>

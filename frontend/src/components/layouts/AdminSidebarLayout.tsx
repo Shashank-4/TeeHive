@@ -52,9 +52,9 @@ export default function AdminSidebarLayout() {
     const SidebarContent = () => (
         <div className="flex flex-col h-full bg-white">
             {/* Logo */}
-            <div className="flex items-center justify-between px-5 h-[72px] border-b-[2px] border-neutral-black shrink-0 overflow-hidden bg-white">
+            <div className="flex items-center justify-between gap-3 px-5 h-[72px] border-b-[2px] border-neutral-black shrink-0 overflow-hidden bg-white">
                 <div
-                    className="flex items-center gap-3 cursor-pointer group"
+                    className="flex items-center gap-3 cursor-pointer group min-w-0 flex-1"
                     onClick={() => navigate("/admin/dashboard")}
                 >
                     <div className="w-9 h-9 bg-neutral-black text-primary border-[2px] border-neutral-black rounded-[4px] flex items-center justify-center shrink-0 group-hover:scale-110 transition-transform">
@@ -72,8 +72,10 @@ export default function AdminSidebarLayout() {
                     )}
                 </div>
                 <button
+                    type="button"
+                    aria-label={sidebarOpen ? "Collapse sidebar" : "Expand sidebar"}
                     onClick={() => setSidebarOpen(!sidebarOpen)}
-                    className="hidden lg:flex items-center justify-center w-8 h-8 rounded-[4px] bg-neutral-g1 hover:bg-neutral-black hover:text-white border-[2px] border-neutral-black transition-all shrink-0 active:scale-90"
+                    className="hidden lg:flex items-center justify-center w-9 h-9 rounded-[4px] bg-neutral-g1 hover:bg-neutral-black hover:text-white border-[2px] border-neutral-black transition-all shrink-0 active:scale-90"
                 >
                     <ChevronLeft className={`w-4 h-4 transition-transform duration-300 ${!sidebarOpen ? "rotate-180" : ""}`} />
                 </button>

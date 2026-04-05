@@ -2,10 +2,8 @@ import { Request, Response, NextFunction } from "express";
 import {
     listAdminArtistPayoutMethodsService,
     listArtistPayoutMethodsService,
-    reviewArtistPayoutMethodService,
     saveArtistPayoutMethodsService,
 } from "../services/artistPayout.service";
-import { PayoutReviewAction } from "@prisma/client";
 
 export const getArtistPayoutMethodsHandler = async (
     _req: Request,
@@ -31,7 +29,7 @@ export const saveArtistPayoutMethodsHandler = async (
         const payload = await saveArtistPayoutMethodsService(artistId, req.body || {});
         res.status(200).json({
             status: "success",
-            message: "Payout methods saved and submitted for review.",
+            message: "Payout methods saved successfully.",
             data: payload,
         });
     } catch (error: any) {
@@ -64,45 +62,3 @@ export const getAdminArtistPayoutMethodsHandler = async (
     }
 };
 
-export const reviewArtistPayoutMethodHandler = async (
-    req: Request,
-    res: Response,
-    next: NextFunction
-) => {
-    try {
-        const { id, payoutMethodId } = req.params;
-        const { action, note } = req.body as {
-            action?: PayoutReviewAction;
-            note?: string;
-        };
-
-        if (!action || !["APPROVED", "REJECTED", "REQUIRES_RESUBMISSION"].includes(action)) {
-            return res.status(400).json({
-                status: "fail",
-                message: "A valid review action is required.",
-            });
-        }
-
-        const method = await reviewArtistPayoutMethodService({
-            artistId: id,
-            payoutMethodId,
-            reviewerAdminId: res.locals.user.id,
-            action,
-            note,
-        });
-
-        res.status(200).json({
-            status: "success",
-            message: "Payout method review recorded.",
-            data: { method },
-        });
-    } catch (error: any) {
-        if (
-            error?.message === "Payout method not found" ||
-            error?.message?.includes("review note is required")
-        ) {
-            return res.status(400).json({ status: "fail", message: error.message });
-        }
-        next(error);
-    }
-};

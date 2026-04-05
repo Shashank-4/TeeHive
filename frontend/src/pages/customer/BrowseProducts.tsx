@@ -1,7 +1,5 @@
 import { useState, useEffect } from "react";
 import {
-    Search,
-    Heart,
     ChevronDown,
     Star,
 } from "lucide-react";
@@ -10,6 +8,11 @@ import Loader from "../../components/shared/Loader";
 import ImageWithSkeleton from "../../components/shared/ImageWithSkeleton";
 import api from "../../api/axios";
 import { useCart } from "../../context/CartContext";
+import { BEE_BADGE } from "../../constants/brand";
+import { artistPublicPath } from "../../utils/artistRoutes";
+import { frontMockupUrl, backMockupUrl } from "../../utils/productMockup";
+import ArtistRatingInline from "../../components/shared/ArtistRatingInline";
+import BannerTeehiveMarquee from "../../components/shared/BannerTeehiveMarquee";
 
 interface Product {
     id: string;
@@ -21,13 +24,18 @@ interface Product {
     compareAtPrice?: number;
     category: string;
     tshirtColor: string;
+    primaryColor?: string;
     availableColors?: string[];
+    colorMockups?: Record<string, { front: string; back?: string }> | null;
     mockupImageUrl: string;
     backMockupImageUrl?: string;
     primaryView?: "front" | "back";
     artist: {
         id: string;
         name: string;
+        artistSlug?: string | null;
+        artistRating?: number;
+        reviewCount?: number;
     };
 }
 
@@ -41,7 +49,6 @@ interface Pagination {
 export default function BrowseProducts() {
     const [searchParams, setSearchParams] = useSearchParams();
     const [sortBy, setSortBy] = useState(searchParams.get("sort") || "newest");
-    const [searchQuery, setSearchQuery] = useState(searchParams.get("search") || "");
     const [selectedCategory, setSelectedCategory] = useState(searchParams.get("category") || "all");
 
     const [products, setProducts] = useState<Product[]>([]);
@@ -50,27 +57,16 @@ export default function BrowseProducts() {
     const [isLoading, setIsLoading] = useState(true);
     const [page, setPage] = useState(1);
     const [addedId, setAddedId] = useState<string | null>(null);
-    const [bannerUrl, setBannerUrl] = useState("/assets/banners/shop_banner.jpg");
     const { addItem } = useCart();
 
     useEffect(() => {
         const fetchData = async () => {
             try {
-                const [catRes, configRes] = await Promise.allSettled([
-                    api.get("/api/categories"),
-                    api.get("/api/config/site_banners")
-                ]);
-
-                if (catRes.status === "fulfilled") {
-                    const catNames = catRes.value.data.data.categories.map((c: any) => c.name);
-                    setCategories(["all", ...catNames]);
-                }
-
-                if (configRes.status === "fulfilled" && configRes.value.data?.data?.config?.shopBanner) {
-                    setBannerUrl(configRes.value.data.data.config.shopBanner);
-                }
+                const catRes = await api.get("/api/categories");
+                const catNames = catRes.data.data.categories.map((c: any) => c.name);
+                setCategories(["all", ...catNames]);
             } catch (err) {
-                console.error("Failed to fetch initial shop data:", err);
+                console.error("Failed to fetch categories:", err);
             }
         };
         fetchData();
@@ -94,7 +90,7 @@ export default function BrowseProducts() {
             const params = new URLSearchParams();
             const cat = searchParams.get("category") || selectedCategory;
             const sort = searchParams.get("sort") || sortBy;
-            const q = searchParams.get("search") || searchQuery;
+            const q = searchParams.get("search") || "";
 
             if (cat !== "all") params.set("category", cat);
             if (sort) params.set("sort", sort);
@@ -112,15 +108,6 @@ export default function BrowseProducts() {
         }
     };
 
-    const handleSearch = (e: React.FormEvent) => {
-        e.preventDefault();
-        setPage(1);
-        const newParams = new URLSearchParams(searchParams);
-        if (searchQuery) newParams.set("search", searchQuery);
-        else newParams.delete("search");
-        setSearchParams(newParams);
-    };
-
     const handleCategoryChange = (cat: string) => {
         setSelectedCategory(cat);
         setPage(1);
@@ -133,14 +120,31 @@ export default function BrowseProducts() {
     const handleQuickAdd = (product: Product) => {
         const colors =
             product.availableColors?.length ? product.availableColors : [product.tshirtColor];
+        const pickColor = product.primaryColor || product.tshirtColor;
+        const baseMock = {
+            mockupImageUrl: product.mockupImageUrl,
+            backMockupImageUrl: product.backMockupImageUrl,
+            colorMockups: product.colorMockups,
+            primaryColor: product.primaryColor,
+            tshirtColor: product.tshirtColor,
+        };
+        const useBack = product.primaryView === "back";
+        const img = useBack ? backMockupUrl(baseMock, pickColor) : frontMockupUrl(baseMock, pickColor);
         addItem({
             productId: product.id,
             name: product.name,
             price: product.price,
             quantity: 1,
             size: "M",
-            color: product.tshirtColor,
-            image: product.mockupImageUrl,
+            color: pickColor,
+            image: img,
+            mockupImageUrl: product.mockupImageUrl,
+            backMockupImageUrl: product.backMockupImageUrl,
+            defaultProductColor: product.tshirtColor,
+            primaryColor: product.primaryColor,
+            primaryView: product.primaryView,
+            mockupView: useBack ? "back" : "front",
+            colorMockups: product.colorMockups ?? undefined,
             artistName: product.artist.name,
             availableColors: colors,
         });
@@ -151,53 +155,19 @@ export default function BrowseProducts() {
     return (
         <div className="bg-neutral-white min-h-screen">
             {/* ── HEADER ── */}
-            <div className="bg-neutral-black border-b-[1.5px] border-neutral-black py-16 px-8 relative overflow-hidden min-h-[400px] flex items-center">
-                {/* Background Banner */}
-                <div className="absolute inset-0">
-                    <ImageWithSkeleton
-                        src={bannerUrl}
-                        alt=""
-                        className="w-full h-full object-cover opacity-40"
-                        loading="eager"
-                        fetchPriority="high"
-                        wrapperClassName="w-full h-full"
-                    />
-                    <div className="absolute inset-0 bg-gradient-to-t from-neutral-black via-neutral-black/40 to-transparent"></div>
-                </div>
-
-                <div className="absolute inset-0 flex items-center justify-center text-[18vw] font-display font-black text-white/[0.03] tracking-[-5px] select-none whitespace-nowrap">
-                    COLLECTIONS COLLECTIONS
-                </div>
-                <div className="relative z-10 max-w-4xl mx-auto text-center">
-                    <div className="font-display text-[11px] font-extrabold tracking-[4px] uppercase text-primary mb-4 flex items-center justify-center gap-2">
-                        <span className="w-1.5 h-1.5 bg-primary rounded-full"></span>
+            <div className="relative overflow-hidden bg-neutral-black border-b-[1.5px] border-neutral-black py-10 md:py-12 px-6 sm:px-8">
+                <BannerTeehiveMarquee />
+                <div className="relative z-10 max-w-[1600px] mx-auto text-left">
+                    <div className="font-display text-[11px] font-extrabold tracking-[4px] uppercase text-primary mb-3 flex items-center gap-2">
+                        <span aria-hidden>{BEE_BADGE}</span>
                         Design Discovery
                     </div>
-                    <h1 className="font-display text-[clamp(40px,6vw,80px)] font-black text-white leading-none tracking-[1px] mb-6">
+                    <h1 className="font-display text-[clamp(32px,5vw,64px)] font-black text-white leading-none tracking-[1px] mb-4">
                         EXPLORE THE <span className="text-primary italic">HIVE</span>
                     </h1>
-                    <p className="text-[clamp(14px,1.2vw,16px)] text-white/70 leading-[1.6] max-w-xl mx-auto mb-10">
+                    <p className="text-[clamp(14px,1.2vw,17px)] text-white/65 leading-relaxed max-w-xl">
                         From minimal icons to abstract masterpieces. Support independent creators with every piece you wear.
                     </p>
-
-                    {/* Search */}
-                    <form onSubmit={handleSearch} className="max-w-xl mx-auto relative group">
-                        <div className="flex items-center gap-0 border-2 border-white/20 bg-white/5 rounded-[4px] focus-within:border-primary transition-all overflow-hidden backdrop-blur-sm">
-                            <div className="pl-5 pr-3">
-                                <Search className="w-5 h-5 text-white/30 group-focus-within:text-primary transition-colors" />
-                            </div>
-                            <input
-                                type="text"
-                                placeholder="Search products, artists, or vibes..."
-                                value={searchQuery}
-                                onChange={(e) => setSearchQuery(e.target.value)}
-                                className="flex-1 bg-transparent border-none outline-none py-4 text-white font-body placeholder:text-white/20 text-[15px]"
-                            />
-                            <button type="submit" className="bg-primary hover:bg-white text-neutral-black font-display font-black text-[12px] tracking-[1px] uppercase px-8 py-4 transition-colors shrink-0">
-                                Search
-                            </button>
-                        </div>
-                    </form>
                 </div>
             </div>
 
@@ -278,57 +248,81 @@ export default function BrowseProducts() {
                         <div className="text-[64px] mb-4 opacity-20">🔎</div>
                         <h3 className="font-display text-[20px] font-black tracking-[0.5px] text-neutral-black mb-2 uppercase">No designs found</h3>
                         <p className="text-neutral-g4 text-[14px] mb-8">Try adjusting your filters or search terms.</p>
-                        <button onClick={() => { setSearchQuery(""); setSelectedCategory("all"); setSearchParams(new URLSearchParams()); }} className="bg-neutral-black text-white px-8 py-3.5 font-display text-[13px] font-extrabold tracking-[1px] uppercase rounded-[4px] hover:bg-primary hover:text-neutral-black transition-colors">
+                        <button onClick={() => { setSelectedCategory("all"); setSearchParams(new URLSearchParams()); }} className="bg-neutral-black text-white px-8 py-3.5 font-display text-[13px] font-extrabold tracking-[1px] uppercase rounded-[4px] hover:bg-primary hover:text-neutral-black transition-colors">
                             Clear all filters
                         </button>
                     </div>
                 ) : (
-                    <div className="grid grid-cols-2 lg:grid-cols-4 gap-px bg-neutral-g2 border border-neutral-g2">
+                    <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-6">
                         {products.map((product) => (
-                            <div key={product.id} className="bg-white group cursor-pointer relative overflow-hidden transition-all hover:z-10 hover:shadow-[0_12px_48px_rgba(0,0,0,0.12)]">
-                                <Link to={`/products/${product.id}`} className="no-underline block">
-                                    <div className="aspect-square bg-neutral-g1 flex items-center justify-center overflow-hidden relative group-hover:bg-neutral-g2 transition-colors">
-                                        <ImageWithSkeleton
-                                            src={
-                                                product.primaryView === "back"
-                                                    ? product.backMockupImageUrl || product.mockupImageUrl
-                                                    : product.mockupImageUrl
-                                            }
-                                            alt={product.name}
-                                            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
-                                            wrapperClassName="w-full h-full"
-                                        />
-                                        {product.isDiscounted && (
-                                            <div className="absolute top-4 left-4 bg-danger text-white font-display text-[10px] font-black px-2 py-1 uppercase tracking-[1px] shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] z-10">
-                                                -{product.discountPercent}%
-                                            </div>
-                                        )}
-                                        <div className="absolute right-4 top-4 translate-x-12 opacity-0 group-hover:translate-x-0 group-hover:opacity-100 transition-all">
-                                            <button className="w-10 h-10 bg-white border border-neutral-g2 rounded-[4px] flex items-center justify-center hover:bg-danger hover:text-white transition-colors" onClick={(e) => { e.preventDefault(); e.stopPropagation(); }}>
-                                                <Heart className="w-5 h-5" />
-                                            </button>
+                            <div
+                                key={product.id}
+                                className="bg-white border-[1.5px] border-neutral-g2 rounded-[4px] overflow-hidden group transition-all hover:shadow-[0_12px_40px_rgba(0,0,0,0.08)] hover:border-neutral-black"
+                            >
+                                <Link to={`/products/${product.id}`} className="block aspect-square overflow-hidden bg-neutral-g1 relative">
+                                    <ImageWithSkeleton
+                                        src={
+                                            product.primaryView === "back"
+                                                ? product.backMockupImageUrl || product.mockupImageUrl
+                                                : product.mockupImageUrl
+                                        }
+                                        alt={product.name}
+                                        className="w-full h-full object-cover group-hover:scale-105 transition-transform"
+                                        wrapperClassName="w-full h-full"
+                                    />
+                                    {product.isDiscounted && (
+                                        <div className="absolute top-3 left-3 bg-danger text-white font-display text-[10px] font-black px-2 py-1 uppercase tracking-[1px] shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] z-10">
+                                            -{product.discountPercent}%
                                         </div>
-                                    </div>
-                                    <div className="p-4 pt-5 pb-2">
-                                        <div className="font-display text-[10px] font-bold tracking-[1.5px] uppercase text-primary mb-1">{product.artist.name}</div>
-                                        <h3 className="font-display text-[16px] font-bold text-neutral-black mb-3 leading-[1.2] tracking-[0.2px] truncate">{product.name}</h3>
-                                        <div className="flex items-center justify-between mb-4">
-                                            <div className="flex items-baseline gap-2">
-                                                <span className="font-display text-[18px] font-black text-neutral-black">₹{product.price.toLocaleString('en-IN')}</span>
-                                                {product.isDiscounted && (
-                                                    <span className="font-display text-[12px] font-bold text-neutral-g3 line-through">₹{product.originalPrice?.toLocaleString('en-IN')}</span>
-                                                )}
-                                            </div>
-                                            <span className="font-display text-[9px] font-bold tracking-[1px] uppercase text-neutral-g3 bg-neutral-g1 px-1.5 py-0.5 rounded-[2px]">{product.category}</span>
-                                        </div>
-                                    </div>
+                                    )}
                                 </Link>
-                                <button
-                                    onClick={() => handleQuickAdd(product)}
-                                    className={`w-full py-3 font-display text-[12px] font-extrabold tracking-[1px] uppercase rounded-[3px] border-[1.5px] transition-all ${addedId === product.id ? "bg-success text-white border-success" : "bg-primary text-neutral-black border-primary hover:bg-neutral-black hover:text-white hover:border-neutral-black"}`}
-                                >
-                                    {addedId === product.id ? "✓ Added!" : "Add to Cart"}
-                                </button>
+
+                                <div className="p-4">
+                                    <Link
+                                        to={artistPublicPath(product.artist)}
+                                        className="font-display text-[10px] font-bold tracking-[1.5px] uppercase text-neutral-g4 mb-1 block hover:text-neutral-black transition-colors no-underline"
+                                    >
+                                        {product.artist.name}
+                                    </Link>
+                                    <div className="mb-2">
+                                        <ArtistRatingInline
+                                            rating={product.artist.artistRating ?? 0}
+                                            reviewCount={product.artist.reviewCount ?? 0}
+                                            compact
+                                        />
+                                    </div>
+                                    <Link to={`/products/${product.id}`} className="no-underline block">
+                                        <h3 className="font-display text-[15px] font-bold text-neutral-black mb-3 truncate hover:text-primary transition-colors">
+                                            {product.name}
+                                        </h3>
+                                    </Link>
+                                    <div className="flex items-center justify-between mb-4 gap-2">
+                                        <div className="flex items-baseline gap-2 min-w-0">
+                                            <span className="font-display text-[16px] font-black text-neutral-black shrink-0">
+                                                ₹{product.price.toLocaleString("en-IN")}
+                                            </span>
+                                            {product.isDiscounted && (
+                                                <span className="font-display text-[11px] font-bold text-neutral-g3 line-through truncate">
+                                                    ₹{product.originalPrice?.toLocaleString("en-IN")}
+                                                </span>
+                                            )}
+                                        </div>
+                                        <span className="font-display text-[9px] font-bold tracking-[1px] uppercase text-neutral-g3 bg-neutral-g1 px-1.5 py-0.5 shrink-0">
+                                            {product.category}
+                                        </span>
+                                    </div>
+                                    <button
+                                        type="button"
+                                        onClick={() => handleQuickAdd(product)}
+                                        className={`w-full py-2.5 font-display text-[11px] font-extrabold tracking-[1px] uppercase rounded-[3px] transition-all border-[1.5px] ${
+                                            addedId === product.id
+                                                ? "bg-success text-white border-success"
+                                                : "bg-neutral-black text-white border-neutral-black hover:bg-primary hover:text-neutral-black hover:border-primary"
+                                        }`}
+                                    >
+                                        {addedId === product.id ? "Added!" : "+ Add to Cart"}
+                                    </button>
+                                </div>
                             </div>
                         ))}
                     </div>
@@ -357,6 +351,6 @@ export default function BrowseProducts() {
                     </div>
                 )}
             </div>
-        </div >
+        </div>
     );
 }
