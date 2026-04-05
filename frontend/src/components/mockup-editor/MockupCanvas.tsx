@@ -108,6 +108,8 @@ const MockupCanvas = forwardRef<MockupCanvasHandle, MockupCanvasProps>((
     const backTransformRef = useRef<DesignTransform | null>(null);
     const currentViewRef = useRef<ViewType>(currentView);
     const containerRef = useRef<HTMLDivElement>(null);
+    /** Bumps when scene reload is requested; stale async image loads must not insert layers. */
+    const sceneGenerationRef = useRef(0);
 
     // Track props in refs for stable closures (color as hex string for filters / export)
     const tshirtColorRef = useRef<string>(tshirtColor);
@@ -242,7 +244,8 @@ const MockupCanvas = forwardRef<MockupCanvasHandle, MockupCanvasProps>((
         canvas.on("object:rotating", (e) => { if (e.target) { enforceConstraints(e.target); saveTransform(e.target); } });
         canvas.on("object:modified", (e) => { if (e.target) { saveTransform(e.target); } });
 
-        loadFullScene(canvas, currentView);
+        // Initial paint is handled only by the view/color effect below (avoids racing default
+        // white shirt vs global color mockup when URLs load shortly after mount).
 
         return () => {
             canvas.dispose();
@@ -254,13 +257,14 @@ const MockupCanvas = forwardRef<MockupCanvasHandle, MockupCanvasProps>((
     useEffect(() => {
         const canvas = fabricRef.current;
         if (!canvas) return;
+        const gen = ++sceneGenerationRef.current;
         setIsLoading(true);
         clearCanvas(canvas);
         canvas.requestRenderAll();
 
         setTimeout(() => {
-            loadFullScene(canvas, currentView).then(() => {
-                setIsLoading(false);
+            loadFullScene(canvas, currentView, gen).then(() => {
+                if (gen === sceneGenerationRef.current) setIsLoading(false);
             });
         }, 0);
     }, [currentView, tshirtColor, colorBaseUrl, colorBackBaseUrl, shadowMapUrl, displacementMapUrl, shadowIntensity]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -303,13 +307,16 @@ const MockupCanvas = forwardRef<MockupCanvasHandle, MockupCanvasProps>((
         canvas.getObjects().filter((o) => (o as any).id === id).forEach((o) => canvas.remove(o));
     }
 
-    async function loadFullScene(canvas: fabric.Canvas, view: ViewType) {
-        await loadBaseLayer(canvas, view);
+    /** `sceneGen` — when set, ignore completion if a newer scene load started (stale image fetches). */
+    async function loadFullScene(canvas: fabric.Canvas, view: ViewType, sceneGen: number | null = null) {
+        await loadBaseLayer(canvas, view, sceneGen);
+        if (sceneGen != null && sceneGen !== sceneGenerationRef.current) return;
         const designUrl = view === "front" ? frontDesignUrl : backDesignUrl;
         const printArea = view === "front" ? PRINT_AREA_FRONT : PRINT_AREA_BACK;
         if (designUrl) {
-            await loadDesignLayer(canvas, designUrl, view, printArea);
+            await loadDesignLayer(canvas, designUrl, view, printArea, sceneGen);
         }
+        if (sceneGen != null && sceneGen !== sceneGenerationRef.current) return;
         updateGuides(canvas, showGuides, printArea);
     }
 
@@ -318,7 +325,7 @@ const MockupCanvas = forwardRef<MockupCanvasHandle, MockupCanvasProps>((
      * Uses colorBackBaseUrl for back view, colorBaseUrl for front view.
      * Falls back to local white mockups with BlendColor filter.
      */
-    async function loadBaseLayer(canvas: fabric.Canvas, view: ViewType) {
+    async function loadBaseLayer(canvas: fabric.Canvas, view: ViewType, sceneGen: number | null = null) {
         removeById(canvas, "tshirt-base");
 
         let imageUrl: string;
@@ -344,6 +351,7 @@ const MockupCanvas = forwardRef<MockupCanvasHandle, MockupCanvasProps>((
 
         try {
             const img = await fabric.FabricImage.fromURL(imageUrl, { crossOrigin: "anonymous" });
+            if (sceneGen != null && sceneGen !== sceneGenerationRef.current) return;
             if (!img) throw new Error("Image failed to load");
 
             const padding = 20;
@@ -393,7 +401,8 @@ const MockupCanvas = forwardRef<MockupCanvasHandle, MockupCanvasProps>((
         canvas: fabric.Canvas,
         designUrl: string,
         view: ViewType,
-        printArea: typeof PRINT_AREA_FRONT
+        printArea: typeof PRINT_AREA_FRONT,
+        sceneGen: number | null = null
     ) {
         removeById(canvas, "user-design");
 
@@ -405,6 +414,7 @@ const MockupCanvas = forwardRef<MockupCanvasHandle, MockupCanvasProps>((
             // Flat mode: render the design without displacement warping.
             const fabricImg = await fabric.FabricImage.fromURL(proxyUrl, { crossOrigin: "anonymous" });
 
+            if (sceneGen != null && sceneGen !== sceneGenerationRef.current) return;
             if (!fabricImg) return;
 
             // Apply subtle blur for "printed on fabric" look
@@ -524,7 +534,7 @@ const MockupCanvas = forwardRef<MockupCanvasHandle, MockupCanvasProps>((
 
             if (originalView !== view) {
                 clearCanvas(canvas);
-                await loadFullScene(canvas, view);
+                await loadFullScene(canvas, view, null);
             }
 
             const guide = canvas.getObjects().find((o) => (o as any).id === "print-guide");
@@ -542,7 +552,7 @@ const MockupCanvas = forwardRef<MockupCanvasHandle, MockupCanvasProps>((
 
             if (originalView !== view) {
                 clearCanvas(canvas);
-                await loadFullScene(canvas, originalView);
+                await loadFullScene(canvas, originalView, null);
             } else if (guide) {
                 guide.visible = !!guideWasVisible;
                 canvas.requestRenderAll();
@@ -573,7 +583,7 @@ const MockupCanvas = forwardRef<MockupCanvasHandle, MockupCanvasProps>((
             currentViewRef.current = opts.view;
 
             clearCanvas(canvas);
-            await loadFullScene(canvas, opts.view);
+            await loadFullScene(canvas, opts.view, null);
 
             const guide = canvas.getObjects().find((o) => (o as any).id === "print-guide");
             if (guide) {
@@ -595,7 +605,7 @@ const MockupCanvas = forwardRef<MockupCanvasHandle, MockupCanvasProps>((
             currentViewRef.current = backup.v;
 
             clearCanvas(canvas);
-            await loadFullScene(canvas, backup.v);
+            await loadFullScene(canvas, backup.v, null);
 
             const res = await fetch(dataUrl);
             return res.blob();

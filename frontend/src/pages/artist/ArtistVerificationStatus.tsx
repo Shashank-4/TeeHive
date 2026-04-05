@@ -13,7 +13,7 @@ import {
 } from "lucide-react";
 
 export default function ArtistVerificationStatus() {
-    const { user } = useAuth();
+    const { user, refreshUser } = useAuth();
     const navigate = useNavigate();
     const [status, setStatus] = useState<string>(user?.verificationStatus || "UNVERIFIED");
     const [rejectionNote, setRejectionNote] = useState<string>("");
@@ -28,6 +28,8 @@ export default function ArtistVerificationStatus() {
                 setStatus(profile.verificationStatus);
                 setRejectionNote(profile.verificationNote || "");
                 setCanResubmit(profile.canResubmitVerification || false);
+                // Keep AuthContext in sync (layout uses user.verificationStatus for /artist/dashboard guard).
+                await refreshUser();
             } catch (err) {
                 console.error("Failed to fetch status:", err);
             } finally {
@@ -35,7 +37,7 @@ export default function ArtistVerificationStatus() {
             }
         };
         fetchStatus();
-    }, []);
+    }, [refreshUser]);
 
     if (loading) {
         return (
@@ -100,7 +102,14 @@ export default function ArtistVerificationStatus() {
                             </p>
                         </div>
                         <button
-                            onClick={() => navigate("/artist/dashboard")}
+                            type="button"
+                            onClick={async () => {
+                                await refreshUser();
+                                // Let AuthContext re-render before navigating so ArtistSidebarLayout sees VERIFIED.
+                                setTimeout(() => {
+                                    navigate("/artist/dashboard", { replace: true });
+                                }, 0);
+                            }}
                             className="w-full flex items-center justify-center gap-3 px-8 py-4 bg-primary text-neutral-black border-[2px] border-neutral-black rounded-[4px] font-display text-[16px] font-black uppercase shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] hover:translate-x-[2px] hover:translate-y-[2px] hover:shadow-none transition-all group"
                         >
                             Go to Dashboard

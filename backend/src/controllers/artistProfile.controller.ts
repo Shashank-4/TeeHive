@@ -5,7 +5,7 @@ import {
     submitForVerificationService,
 } from "../services/artistProfile.service";
 import { sendArtistApprovalEmail } from "../services/email.service";
-import { PrismaClient } from "@prisma/client";
+import { Prisma, PrismaClient } from "@prisma/client";
 
 const prisma = new PrismaClient();
 const DEFAULT_ARTIST_DASHBOARD_CONFIG = {
@@ -48,6 +48,7 @@ export const updateArtistProfileHandler = async (
         const userId = res.locals.user.id;
         const {
             displayName,
+            artistSlug,
             bio,
             portfolioUrl,
             instagramUrl,
@@ -66,6 +67,7 @@ export const updateArtistProfileHandler = async (
             userId,
             {
                 displayName,
+                artistSlug,
                 bio,
                 portfolioUrl,
                 instagramUrl,
@@ -83,6 +85,16 @@ export const updateArtistProfileHandler = async (
         });
     } catch (err: any) {
         if (err.message.includes("Invalid file type") || err.message.includes("File too large")) {
+            return res.status(400).json({ status: "fail", message: err.message });
+        }
+        if (
+            err.message.includes("cannot be empty") ||
+            err.message.includes("already taken") ||
+            err.message.includes("handle") ||
+            err.message.includes("Display name must") ||
+            err.message.includes("reserved") ||
+            err.message.includes("conflicts")
+        ) {
             return res.status(400).json({ status: "fail", message: err.message });
         }
         next(err);
@@ -110,6 +122,7 @@ export const submitVerificationHandler = async (
         if (
             err.message.includes("at least 3 designs") ||
             err.message.includes("complete your profile") ||
+            err.message.includes("storefront handle") ||
             err.message.includes("already verified") ||
             err.message.includes("already under review")
         ) {
@@ -121,7 +134,7 @@ export const submitVerificationHandler = async (
 
 /**
  * PATCH /api/artist/profile — Partially update profile (JSON body, no file uploads)
- * Used for saving lightweight non-file profile fields
+ * Whitelisted fields only (avoid unvalidated mass assignment).
  */
 export const patchArtistProfileHandler = async (
     req: Request,
@@ -130,15 +143,20 @@ export const patchArtistProfileHandler = async (
 ) => {
     try {
         const userId = res.locals.user.id;
-        const { payoutDetails, ...rest } = req.body;
+        const { payoutDetails } = req.body;
 
-        const updateData: any = { ...rest };
+        const updateData: { payoutDetails?: Prisma.InputJsonValue } = {};
         if (payoutDetails !== undefined) {
-            updateData.payoutDetails = payoutDetails;
+            updateData.payoutDetails = payoutDetails as Prisma.InputJsonValue;
         }
 
-        const { PrismaClient } = await import("@prisma/client");
-        const prisma = new PrismaClient();
+        if (Object.keys(updateData).length === 0) {
+            return res.status(400).json({
+                status: "fail",
+                message: "No allowed fields to update",
+            });
+        }
+
         const updatedUser = await prisma.user.update({
             where: { id: userId },
             data: updateData,

@@ -11,6 +11,8 @@ import {
     publishProductService,
     getArtistStatsService,
     getArtistOrdersService,
+    getArtistRevenueSeriesService,
+    buildArtistEarningsCsv,
     uploadMockupToR2,
     getDefaultProductStock,
 } from "../services/product.service";
@@ -438,7 +440,7 @@ export const updateProductHandler = async (
     }
 };
 
-// ---------- Artist: Delete/archive product ----------
+// ---------- Artist: Delete product ----------
 export const deleteProductHandler = async (
     req: Request,
     res: Response,
@@ -450,10 +452,13 @@ export const deleteProductHandler = async (
 
         await deleteProductService(id, user.id);
 
-        res.status(200).json({ status: "success", message: "Product archived" });
+        res.status(200).json({ status: "success", message: "Product deleted" });
     } catch (error: any) {
         if (error.message?.includes("not found") || error.message?.includes("does not belong")) {
             return res.status(404).json({ status: "fail", message: error.message });
+        }
+        if (error.message?.includes("cannot be deleted")) {
+            return res.status(400).json({ status: "fail", message: error.message });
         }
         next(error);
     }
@@ -508,6 +513,41 @@ export const getArtistOrdersHandler = async (
         const user = res.locals.user;
         const orders = await getArtistOrdersService(user.id);
         res.status(200).json({ status: "success", data: { orders } });
+    } catch (error) {
+        next(error);
+    }
+};
+
+const REVENUE_RANGES = new Set(["7d", "30d", "365d"]);
+
+export const getArtistRevenueSeriesHandler = async (
+    req: Request,
+    res: Response,
+    next: NextFunction
+) => {
+    try {
+        const user = res.locals.user;
+        const raw = String(req.query.range || "30d");
+        const range = REVENUE_RANGES.has(raw) ? (raw as "7d" | "30d" | "365d") : "30d";
+        const series = await getArtistRevenueSeriesService(user.id, range);
+        res.status(200).json({ status: "success", data: { range, ...series } });
+    } catch (error) {
+        next(error);
+    }
+};
+
+export const getArtistEarningsCsvHandler = async (
+    _req: Request,
+    res: Response,
+    next: NextFunction
+) => {
+    try {
+        const user = res.locals.user;
+        const csv = await buildArtistEarningsCsv(user.id);
+        const filename = `tehive-artist-earnings-${new Date().toISOString().slice(0, 10)}.csv`;
+        res.setHeader("Content-Type", "text/csv; charset=utf-8");
+        res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
+        res.status(200).send("\uFEFF" + csv);
     } catch (error) {
         next(error);
     }

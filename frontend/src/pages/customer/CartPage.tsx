@@ -14,11 +14,24 @@ import {
 import { useCart } from "../../context/CartContext";
 import { Button } from "../../components/ui/Button";
 import GstInclusiveNote from "../../components/shared/GstInclusiveNote";
+import ImageWithSkeleton from "../../components/shared/ImageWithSkeleton";
+import {
+    cartItemThumbnail,
+    cartLineHasBackMockup,
+    canonicalHex,
+} from "../../utils/productMockup";
 
 const CART_SIZES = ["XS", "S", "M", "L", "XL", "XXL"] as const;
 
 export default function Cart() {
-    const { items, removeItem, updateQuantity, updateItemVariant, subtotal } = useCart();
+    const {
+        items,
+        removeItem,
+        updateQuantity,
+        updateItemVariant,
+        updateItemMockupView,
+        subtotal,
+    } = useCart();
 
     const shipping = subtotal > 3000 ? 0 : 100;
     const total = subtotal + shipping;
@@ -99,19 +112,72 @@ export default function Cart() {
                     {/* Cart Items */}
                     <div className="space-y-4">
                         <div className="bg-neutral-white border-[3px] border-neutral-black rounded-[4px] overflow-hidden">
-                            <div className="divide-y-[3px] divide-neutral-black">
-                                {items.map((item) => (
-                                    <div key={`${item.productId}-${item.size}-${item.color}`} className="p-8">
-                                        <div className="flex flex-col sm:flex-row gap-8">
-                                            <Link to={`/products/${item.productId}`} className="shrink-0 aspect-[3/4] w-36 border-[2.5px] border-neutral-black rounded-[2px] overflow-hidden bg-neutral-g1 shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]">
-                                                <img
-                                                    src={item.image}
+                            <div>
+                                {items.map((item) => {
+                                    const thumbSrc = cartItemThumbnail(item);
+                                    const showViewToggle = cartLineHasBackMockup(item);
+                                    const view = item.mockupView === "back" ? "back" : "front";
+                                    return (
+                                    <div
+                                        key={`${item.productId}-${item.size}-${item.color}`}
+                                        className="p-6 sm:p-8 border-b-[3px] border-neutral-black last:border-b-0 bg-white"
+                                    >
+                                        <div className="grid grid-cols-1 sm:grid-cols-[minmax(0,160px)_1fr] gap-6 sm:gap-10 items-start">
+                                            <div className="mx-auto sm:mx-0 w-full max-w-[200px] sm:max-w-none shrink-0 flex flex-col gap-2">
+                                            <Link
+                                                to={`/products/${item.productId}`}
+                                                className="aspect-[3/4] border-[3px] border-neutral-black rounded-[2px] overflow-hidden bg-neutral-g1 shadow-[6px_6px_0px_0px_rgba(0,0,0,1)] block"
+                                            >
+                                                <ImageWithSkeleton
+                                                    src={thumbSrc}
                                                     alt={item.name}
-                                                    className="w-full h-full object-cover hover:scale-105 transition-transform"
+                                                    className="w-full h-full object-cover hover:scale-[1.02] transition-transform duration-300"
+                                                    wrapperClassName="w-full h-full min-h-[200px] sm:min-h-0"
                                                 />
                                             </Link>
+                                            {showViewToggle && (
+                                                <div className="flex rounded-[2px] border-[2px] border-neutral-black overflow-hidden font-display text-[9px] font-black uppercase tracking-[0.12em]">
+                                                    <button
+                                                        type="button"
+                                                        onClick={() =>
+                                                            updateItemMockupView(
+                                                                item.productId,
+                                                                item.size,
+                                                                item.color,
+                                                                "front"
+                                                            )
+                                                        }
+                                                        className={`flex-1 py-2 transition-colors ${
+                                                            view === "front"
+                                                                ? "bg-primary text-neutral-black"
+                                                                : "bg-white text-neutral-g3 hover:text-neutral-black"
+                                                        }`}
+                                                    >
+                                                        Front
+                                                    </button>
+                                                    <button
+                                                        type="button"
+                                                        onClick={() =>
+                                                            updateItemMockupView(
+                                                                item.productId,
+                                                                item.size,
+                                                                item.color,
+                                                                "back"
+                                                            )
+                                                        }
+                                                        className={`flex-1 py-2 border-l-[2px] border-neutral-black transition-colors ${
+                                                            view === "back"
+                                                                ? "bg-primary text-neutral-black"
+                                                                : "bg-white text-neutral-g3 hover:text-neutral-black"
+                                                        }`}
+                                                    >
+                                                        Back
+                                                    </button>
+                                                </div>
+                                            )}
+                                            </div>
 
-                                            <div className="flex-1 flex flex-col justify-between py-2">
+                                            <div className="flex-1 flex flex-col justify-between min-w-0 pt-0 sm:pt-1">
                                                 <div className="flex justify-between items-start">
                                                     <div>
                                                         <div className="font-display text-[11px] font-black tracking-[2px] uppercase text-primary mb-1 italic">{item.artistName}</div>
@@ -169,7 +235,7 @@ export default function Cart() {
                                                                                 )
                                                                             }
                                                                             className={`w-8 h-8 rounded-full border-[2px] shrink-0 transition-transform ${
-                                                                                item.color === hex
+                                                                                item.color === canonicalHex(hex)
                                                                                     ? "border-neutral-black ring-2 ring-primary ring-offset-2 scale-110"
                                                                                     : "border-neutral-g2 hover:border-neutral-black"
                                                                             }`}
@@ -218,7 +284,8 @@ export default function Cart() {
                                             </div>
                                         </div>
                                     </div>
-                                ))}
+                                    );
+                                })}
                             </div>
                         </div>
                     </div>

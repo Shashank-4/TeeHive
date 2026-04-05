@@ -100,7 +100,12 @@ export default function AdminOrders() {
         }
     };
 
-    useEffect(() => { fetchOrders(); }, []);
+    useEffect(() => {
+        const q = new URLSearchParams(window.location.search).get("search")?.trim() || "";
+        if (q) setSearchQuery(q);
+        fetchOrders(1, q, statusFilter);
+        // eslint-disable-next-line react-hooks/exhaustive-deps -- initial load; URL ?search= pre-fills filter
+    }, []);
 
     const handleSearch = (e: React.FormEvent) => { e.preventDefault(); fetchOrders(1, searchQuery, statusFilter); };
     const handleStatusFilterChange = (e: React.ChangeEvent<HTMLSelectElement>) => { const v = e.target.value; setStatusFilter(v); fetchOrders(1, searchQuery, v); };

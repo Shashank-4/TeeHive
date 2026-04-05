@@ -7,6 +7,10 @@ import api from "../api/axios";
 import { useCart } from "../context/CartContext";
 import { useAuth } from "../context/AuthContext";
 import LatestDropsShowcase from "../components/home/LatestDropsShowcase";
+import { BEE_BADGE } from "../constants/brand";
+import { artistPublicPath } from "../utils/artistRoutes";
+import { frontMockupUrl, backMockupUrl } from "../utils/productMockup";
+import ArtistRatingInline from "../components/shared/ArtistRatingInline";
 
 interface Product {
     id: string;
@@ -17,10 +21,18 @@ interface Product {
     backMockupImageUrl?: string;
     primaryView?: "front" | "back";
     tshirtColor: string;
+    primaryColor?: string;
     availableColors?: string[];
     categories?: string[];
     category: string;
-    artist: { id: string; name: string };
+    colorMockups?: Record<string, { front: string; back?: string }> | null;
+    artist: {
+        id: string;
+        name: string;
+        artistSlug?: string | null;
+        artistRating?: number;
+        reviewCount?: number;
+    };
 }
 
 interface Category {
@@ -33,10 +45,13 @@ interface ArtistSummary {
     id: string;
     name: string;
     displayName?: string | null;
+    artistSlug?: string | null;
     displayPhotoUrl?: string | null;
     bio?: string;
     styles?: string[];
     productCount?: number;
+    artistRating?: number;
+    reviewCount?: number;
 }
 
 interface CustomerHomeConfig {
@@ -141,7 +156,7 @@ function HomePage() {
                 ]);
                 if (productsRes.status === "fulfilled") setFeaturedProducts(productsRes.value.data.data.products || []);
                 if (latestRes.status === "fulfilled") {
-                    const curated = latestRes.value.data.data.products || [];
+                    const curated = (latestRes.value.data.data.products || []).slice(0, 10);
                     if (curated.length > 0) {
                         setLatestDropProducts(curated);
                     } else if (productsRes.status === "fulfilled") {
@@ -178,18 +193,31 @@ function HomePage() {
     const handleQuickAdd = (product: Product) => {
         const colors =
             product.availableColors?.length ? product.availableColors : [product.tshirtColor];
-        const displayImage =
-            product.primaryView === "back"
-                ? product.backMockupImageUrl || product.mockupImageUrl
-                : product.mockupImageUrl;
+        const pickColor = product.primaryColor || product.tshirtColor;
+        const baseMock = {
+            mockupImageUrl: product.mockupImageUrl,
+            backMockupImageUrl: product.backMockupImageUrl,
+            colorMockups: product.colorMockups,
+            primaryColor: product.primaryColor,
+            tshirtColor: product.tshirtColor,
+        };
+        const useBack = product.primaryView === "back";
+        const img = useBack ? backMockupUrl(baseMock, pickColor) : frontMockupUrl(baseMock, pickColor);
         addItem({
             productId: product.id,
             name: product.name,
             price: product.price,
             quantity: 1,
             size: "M",
-            color: product.tshirtColor,
-            image: displayImage,
+            color: pickColor,
+            image: img,
+            mockupImageUrl: product.mockupImageUrl,
+            backMockupImageUrl: product.backMockupImageUrl,
+            defaultProductColor: product.tshirtColor,
+            primaryColor: product.primaryColor,
+            primaryView: product.primaryView,
+            mockupView: useBack ? "back" : "front",
+            colorMockups: product.colorMockups ?? undefined,
             artistName: product.artist.name,
             availableColors: colors,
         });
@@ -244,13 +272,13 @@ function HomePage() {
             {config.showHeroSection && (
                 <section className="grid grid-cols-1 lg:grid-cols-2 min-h-[600px] border-b-[3px] border-neutral-black relative overflow-hidden">
                     {/* Left – Main Hero */}
-                    <div className="bg-white flex relative overflow-hidden group">
+                    <div className="bg-white flex relative overflow-hidden">
                         {/* Background Decoration */}
                         {banners.heroBgImage ? (
                             <ImageWithSkeleton
                                 src={banners.heroBgImage}
                                 wrapperLayout="absolute-fill"
-                                className="h-full w-full object-cover object-center select-none"
+                                className="h-full w-full min-h-full object-cover object-center object-[50%_42%] select-none scale-[1.14] origin-center brightness-[1.14] contrast-[1.06] saturate-[1.08]"
                                 alt=""
                                 loading="eager"
                                 fetchPriority="high"
@@ -265,10 +293,10 @@ function HomePage() {
 
                         <div className="relative z-10 space-y-8 max-w-[620px] p-12 md:p-8">
                             <div className="inline-flex items-center gap-2 bg-neutral-black text-primary font-display text-[10px] font-black tracking-[2.5px] uppercase px-4 py-2 rounded-[4px] shadow-[4px_4px_0px_0px_rgba(0,0,0,0.1)]">
-                                <Sparkles className="w-3.5 h-3.5" /> INDIA'S ARTIST-FIRST MARKETPLACE
+                                <span aria-hidden>{BEE_BADGE}</span> INDIA'S ARTIST-FIRST MARKETPLACE
                             </div>
 
-                            <h1 className="font-display text-[clamp(56px,8vw,100px)] font-black text-white leading-[0.85] tracking-light uppercase">
+                            <h1 className="font-display text-[clamp(56px,8vw,100px)] font-black text-white leading-[0.85] tracking-light uppercase [text-shadow:0_4px_32px_rgba(0,0,0,0.55),0_2px_12px_rgba(0,0,0,0.4)]">
                                 Wear <span className="text-primary italic">Art.</span><br />
                                 <span className="relative tracking-light">
                                     Break The<span className="italic tracking-light text-primary ml-5">Basic.</span>
@@ -276,7 +304,7 @@ function HomePage() {
                                 </span>
                             </h1>
 
-                            <p className="font-display text-[15px] md:text-[18px] font-bold text-white/40 leading-relaxed max-w-[500px] tracking-wide">
+                            <p className="font-display text-[15px] md:text-[18px] font-bold text-white/75 leading-relaxed max-w-[500px] tracking-wide [text-shadow:0_2px_16px_rgba(0,0,0,0.45)]">
                                 {config.heroSubtitle}
                             </p>
 
@@ -289,14 +317,24 @@ function HomePage() {
                                         <div className="font-display text-5xl font-black text-primary leading-none">
                                             {artists.length || "120"}
                                         </div>
-                                        <div className="font-display md:text-[12px] font-bold text-neutral-g4 uppercase tracking-widest mt-1">Independent Artists</div>
+                                        <div
+                                            className={`font-display md:text-[12px] font-bold uppercase tracking-widest mt-1 ${banners.heroBgImage ? "text-white/80 [text-shadow:0_1px_10px_rgba(0,0,0,0.5)]" : "text-neutral-g4"}`}
+                                        >
+                                            Independent Artists
+                                        </div>
                                     </div>
-                                    <div className="h-10 w-[2px] bg-neutral-black/10 hidden md:block"></div>
+                                    <div
+                                        className={`h-10 w-[2px] hidden md:block ${banners.heroBgImage ? "bg-white/25" : "bg-neutral-black/10"}`}
+                                    />
                                     <div>
                                         <div className="font-display text-5xl font-black text-primary leading-none">
                                             {featuredProducts.length || "420"}
                                         </div>
-                                        <div className="font-display text-[12px] font-bold text-neutral-g4 uppercase tracking-widest mt-1">Original Designs</div>
+                                        <div
+                                            className={`font-display text-[12px] font-bold uppercase tracking-widest mt-1 ${banners.heroBgImage ? "text-white/80 [text-shadow:0_1px_10px_rgba(0,0,0,0.5)]" : "text-neutral-g4"}`}
+                                        >
+                                            Original Designs
+                                        </div>
                                     </div>
                                 </div>
                             </div>
@@ -308,7 +346,7 @@ function HomePage() {
                         {[
                             {
                                 img: banners.heroFreshDesigns,
-                                tag: "✨ NEW_RELEASES",
+                                tag: `${BEE_BADGE} NEW_RELEASES`,
                                 title: "Fresh Designs\nEvery Day",
                                 link: "/products?latestDrops=true&sort=newest",
                                 btn: "Explore",
@@ -317,7 +355,7 @@ function HomePage() {
                             },
                             {
                                 img: banners.heroBrowseArtists,
-                                tag: "★ PERSONNEL_REGISTRY",
+                                tag: `${BEE_BADGE} PERSONNEL_REGISTRY`,
                                 title: "Meet Independent\nIndian Artists",
                                 link: "/artists",
                                 btn: "Browse",
@@ -347,6 +385,7 @@ function HomePage() {
                                 </div>
 
                                 <div className="relative z-10 w-full transform transition-all group-hover:-translate-y-2">
+                                    
                                     <div className="font-display text-[32px] font-black text-white leading-[0.9] mb-2 whitespace-pre-line group-hover:italic transition-all uppercase italic [text-shadow:4px_4px_0px_rgba(0,0,0,1)]">
 
                                         {block.title}
@@ -375,7 +414,10 @@ function HomePage() {
                         <div className="flex flex-col md:flex-row items-end justify-between gap-8 border-b-[3px] border-neutral-black pb-12">
                             <div className="md:w-2/3 space-y-6">
                                 <div className="inline-flex items-center gap-2 bg-neutral-black text-white px-4 py-1.5 rounded-[4px] font-display text-[10px] font-black uppercase tracking-[2px]">
-                                    <Sparkles className="w-4 h-4 text-primary" /> Active Broadcast
+                                    <span className="text-primary" aria-hidden>
+                                        {BEE_BADGE}
+                                    </span>{" "}
+                                    Active Broadcast
                                 </div>
                                 <h2 className="font-display text-[48px] md:text-[72px] font-black text-neutral-black leading-[0.9] tracking-light uppercase">
                                     {specialOffer.title}
@@ -428,7 +470,7 @@ function HomePage() {
                                                     </div>
                                                 </div>
                                                 <div className="w-full pt-6 flex flex-col items-center text-center">
-                                                    <Link to={`/artists/${product.artist.id}`} className="font-display text-[12px] font-black tracking-[2px] uppercase text-neutral-black/60 hover:text-neutral-black transition-colors mb-2 no-underline">
+                                                    <Link to={artistPublicPath(product.artist)} className="font-display text-[12px] font-black tracking-[2px] uppercase text-neutral-black/60 hover:text-neutral-black transition-colors mb-2 no-underline">
                                                         {product.artist.name}
                                                     </Link>
                                                     <h4 className="font-display text-[22px] font-black text-neutral-black leading-tight uppercase tracking-tight mb-2 truncate max-w-full italic px-2">
@@ -467,7 +509,7 @@ function HomePage() {
                     <div className="flex flex-col md:flex-row items-end justify-between gap-10 mb-16">
                         <div className="max-w-[600px] space-y-4">
                             <div className="inline-flex items-center gap-2 bg-primary text-neutral-black px-4 py-1 rounded-[4px] font-display text-[10px] font-black uppercase tracking-[2px]">
-                                <Sparkles className="w-3.5 h-3.5" /> Discovery Node
+                                <span aria-hidden>{BEE_BADGE}</span> Discovery Node
                             </div>
                             <h2 className="font-display text-[48px] md:text-[64px] font-black text-white leading-none tracking-tight uppercase">
                                 Decode Your <span className="text-primary italic">Vibe.</span>
@@ -584,7 +626,7 @@ function HomePage() {
                     <div className="grid grid-cols-1 lg:grid-cols-2 gap-24 items-center relative z-10">
                         <div className="space-y-10">
                             <div className="inline-flex items-center gap-2 bg-primary text-neutral-black px-4 py-1 rounded-[4px] font-display text-[11px] font-black uppercase tracking-[3px]">
-                                <Palette className="w-4 h-4" /> Global Personnel Registry
+                                <span aria-hidden>{BEE_BADGE}</span> Global Personnel Registry
                             </div>
                             <h2 className="font-display text-[56px] md:text-[80px] font-black text-white leading-[0.85] tracking-tight uppercase">
                                 Meet The <span className="text-primary italic">Mind</span> Behind The Art.
@@ -606,14 +648,14 @@ function HomePage() {
                         </div>
 
                         <div className="grid grid-cols-2 sm:grid-cols-3 gap-6">
-                            {(artists.length > 0 ? artists.slice(0, 6) : Array.from({ length: 6 }, (_, i) => ({ id: String(i), name: `Node_${i + 1}`, styles: ["Art"], productCount: 0 } as ArtistSummary))).map((artist, idx) => {
+                            {(artists.length > 0 ? artists.slice(0, 6) : Array.from({ length: 6 }, (_, i) => ({ id: String(i), name: `Node_${i + 1}`, styles: ["Art"], productCount: 0, artistSlug: null } as ArtistSummary))).map((artist, idx) => {
                                 const label = (artist.displayName || artist.name || "?").trim();
                                 const initial = (label.charAt(0) || "?").toUpperCase();
                                 const photo = artist.displayPhotoUrl;
                                 return (
                                     <Link
                                         key={artist.id}
-                                        to={`/artists/${artist.id}`}
+                                        to={artistPublicPath(artist)}
                                         className={`bg-white/5 border-[2px] border-white/10 p-5 no-underline transition-all hover:bg-primary group rounded-[4px] flex flex-col min-h-[200px] sm:min-h-[220px] group ${idx % 2 === 0 ? "translate-y-6" : "-translate-y-6"}`}
                                     >
                                         <ArtistHomeTilePhoto photoUrl={photo} initial={initial} />
@@ -623,6 +665,14 @@ function HomePage() {
                                             </div>
                                             <div className="font-display text-[10px] font-black text-primary group-hover:text-neutral-black/60 uppercase tracking-[2px]">
                                                 {artist.styles?.[0] || "GENERAL_ARTIST"}
+                                            </div>
+                                            <div className="pt-1 group-hover:[&_.text-neutral-g3]:text-neutral-black/50">
+                                                <ArtistRatingInline
+                                                    rating={artist.artistRating ?? 0}
+                                                    reviewCount={artist.reviewCount ?? 0}
+                                                    compact
+                                                    className="text-white/80 group-hover:text-neutral-black/70"
+                                                />
                                             </div>
                                         </div>
                                     </Link>

@@ -38,7 +38,6 @@ import ArtistProductManager from "./pages/artist/ArtistProductManager";
 import ArtistOrders from "./pages/artist/ArtistOrders"
 import ArtistPayout from "./pages/artist/ArtistPayout";
 import ArtistEarnings from "./pages/artist/ArtistEarnings";
-import ArtistReviews from "./pages/artist/ArtistReviews";
 import AdminReviews from "./pages/admin/AdminReviews";
 import ForgotPassword from "./pages/auth/ForgotPassword";
 import ResetPassword from "./pages/auth/ResetPassword";
@@ -54,7 +53,7 @@ const router: RouteObject[] = [
             { path: "products", element: <BrowseProducts /> },
             { path: "hive50", element: <Hive50Page /> },
             { path: "artists", element: <BrowseArtists /> },
-            { path: "artists/:artistId", element: <ArtistStorefront /> },
+            { path: "artists/:artistHandle", element: <ArtistStorefront /> },
             { path: "cart", element: <Cart /> },
             { path: "order/checkout", element: <Checkout /> },
             { path: "order/confirmation", element: <OrderConfirmation /> },
@@ -81,7 +80,6 @@ const router: RouteObject[] = [
             { path: "orders", element: <ArtistOrders /> },
             { path: "payout", element: <ArtistPayout /> },
             { path: "earnings", element: <ArtistEarnings /> },
-            { path: "reviews", element: <ArtistReviews /> },
         ],
     },
 

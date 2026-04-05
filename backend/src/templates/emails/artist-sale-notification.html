@@ -43,19 +43,6 @@
             font-size: 12px;
         }
 
-        .otp-box {
-            background-color: #f9fafb;
-            border: 2px dashed #fbbf24;
-            border-radius: 8px;
-            padding: 24px;
-            margin: 24px 0;
-            text-align: center;
-            font-size: 32px;
-            font-weight: bold;
-            letter-spacing: 4px;
-            color: #111827;
-        }
-
         .button {
             display: inline-block;
             padding: 12px 24px;
@@ -65,7 +52,40 @@
             border-radius: 4px;
             font-weight: bold;
             text-transform: uppercase;
-            margin-top: 16px;
+            margin-top: 8px;
+            margin-right: 8px;
+        }
+
+        .items-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 13px;
+            margin: 16px 0;
+        }
+
+        .items-table th,
+        .items-table td {
+            border: 1px solid #e5e7eb;
+            padding: 10px 8px;
+            text-align: left;
+            vertical-align: top;
+        }
+
+        .items-table th {
+            background: #f9fafb;
+            font-size: 11px;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+
+        .items-table a {
+            color: #111827;
+            font-weight: 600;
+        }
+
+        .muted {
+            color: #6b7280;
+            font-size: 12px;
         }
     </style>
 </head>
@@ -78,18 +98,47 @@
         <div class="content">
             <h1
                 style="font-size: 24px; font-weight: 800; text-transform: uppercase; letter-spacing: 2px; margin-bottom: 24px; text-align: center;">
-                Your design just sold 🐝</h1>
+                Your work was purchased 🐝</h1>
 
             <p>Hi {{ArtistName}},</p>
-            <p>One of your designs has been purchased.</p>
-            <p><strong>Product:</strong> {{ProductName}}</p>
-            <p>Your work is getting traction inside the Hive.</p>
-            <div style="text-align: center; margin: 32px 0;">
-                <a href="{{ArtistDashboard}}" class="button">Check Dashboard</a>
+            <p>Great news — an order including your design(s) was just paid.</p>
+
+            <div
+                style="background-color: #f9fafb; padding: 20px; border-radius: 8px; margin: 20px 0; border: 1px solid #e5e7eb;">
+                <p style="margin: 0 0 8px 0;"><strong>Order reference:</strong> {{OrderRef}}</p>
+                <p class="muted" style="margin: 0; word-break: break-all;">Full order ID: {{OrderIdFull}}</p>
+            </div>
+
+            <h2 style="font-size: 14px; text-transform: uppercase; letter-spacing: 1px; margin: 24px 0 8px 0;">Your items in this order</h2>
+            <table class="items-table" role="presentation">
+                <thead>
+                    <tr>
+                        <th>Product</th>
+                        <th>Qty</th>
+                        <th>Variant</th>
+                        <th>Line total</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {{#each LineItems}}
+                    <tr>
+                        <td><a href="{{ProductUrl}}">{{Name}}</a></td>
+                        <td>{{Quantity}}</td>
+                        <td>{{Size}} / {{Color}}</td>
+                        <td>₹{{LineTotal}}</td>
+                    </tr>
+                    {{/each}}
+                </tbody>
+            </table>
+
+            <p>See all of your sales and statuses in <strong>Artist → Orders</strong>.</p>
+
+            <div style="text-align: center; margin: 28px 0 8px 0;">
+                <a href="{{ArtistOrdersUrl}}" class="button">View orders</a>
+                <a href="{{ArtistDashboardUrl}}" class="button">Dashboard</a>
             </div>
             <p>Keep building. Momentum compounds.</p>
             <p>– TeeHive</p>
-
         </div>
         <div class="footer">
             <p>© 2026 TeeHive. All rights reserved.</p>

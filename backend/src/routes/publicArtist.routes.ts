@@ -1,8 +1,30 @@
 import { Router, Request, Response } from "express";
 import { PrismaClient } from "@prisma/client";
+import {
+    isUuidParam,
+    isReservedArtistSlug,
+    isValidArtistSlugFormat,
+    normalizeArtistSlug,
+} from "../utils/artistSlug";
 
 const router = Router();
 const prisma = new PrismaClient();
+
+function artistPublicWhere(param: string) {
+    const trimmed = param.trim();
+    const base = {
+        isArtist: true,
+        verificationStatus: "VERIFIED" as const,
+    };
+    if (isUuidParam(trimmed)) {
+        return { ...base, id: trimmed };
+    }
+    const slug = normalizeArtistSlug(trimmed);
+    return {
+        ...base,
+        artistSlug: { equals: slug, mode: "insensitive" as const },
+    };
+}
 
 // Public: List all verified artists with their product count
 router.get("/", async (req: Request, res: Response) => {
@@ -20,6 +42,7 @@ router.get("/", async (req: Request, res: Response) => {
             where.OR = [
                 { name: { contains: search, mode: "insensitive" } },
                 { displayName: { contains: search, mode: "insensitive" } },
+                { artistSlug: { contains: search.toLowerCase(), mode: "insensitive" } },
             ];
         }
 
@@ -30,6 +53,7 @@ router.get("/", async (req: Request, res: Response) => {
                     id: true,
                     name: true,
                     displayName: true,
+                    artistSlug: true,
                     displayPhotoUrl: true,
                     coverPhotoUrl: true,
                     bio: true,
@@ -74,21 +98,103 @@ router.get("/", async (req: Request, res: Response) => {
     }
 });
 
-// Public: Get a single artist's public profile with their products
-router.get("/:artistId", async (req: Request, res: Response) => {
+/** Public: check if storefront slug is available (optional excludeUserId for edit flow) */
+router.get("/check-slug", async (req: Request, res: Response) => {
     try {
-        const { artistId } = req.params;
+        const raw = (req.query.slug as string) || "";
+        const slug = normalizeArtistSlug(raw);
+        const excludeUserId = (req.query.excludeUserId as string) || undefined;
+
+        if (!slug || slug.length < 2) {
+            return res.status(200).json({
+                status: "success",
+                data: { available: false, reason: "invalid" },
+            });
+        }
+
+        if (!isValidArtistSlugFormat(slug)) {
+            return res.status(200).json({
+                status: "success",
+                data: { available: false, reason: "invalid" },
+            });
+        }
+
+        if (isReservedArtistSlug(slug)) {
+            return res.status(200).json({
+                status: "success",
+                data: { available: false, reason: "reserved" },
+            });
+        }
+
+        const taken = await prisma.user.findFirst({
+            where: {
+                artistSlug: { equals: slug, mode: "insensitive" },
+                ...(excludeUserId ? { id: { not: excludeUserId } } : {}),
+            },
+            select: { id: true },
+        });
+
+        res.json({
+            status: "success",
+            data: { available: !taken },
+        });
+    } catch (error) {
+        console.error("Error checking slug:", error);
+        res.status(500).json({ error: "Failed to check slug" });
+    }
+});
+
+/** Public: check if display name is unique (case-insensitive; optional excludeUserId for edit) */
+router.get("/check-display-name", async (req: Request, res: Response) => {
+    try {
+        const raw = (req.query.name as string) || "";
+        const name = raw.trim();
+        const excludeUserId = (req.query.excludeUserId as string) || undefined;
+
+        if (!name || name.length < 2) {
+            return res.status(200).json({
+                status: "success",
+                data: { available: false, reason: "invalid" },
+            });
+        }
+
+        if (name.length > 80) {
+            return res.status(200).json({
+                status: "success",
+                data: { available: false, reason: "too_long" },
+            });
+        }
+
+        const taken = await prisma.user.findFirst({
+            where: {
+                displayName: { equals: name, mode: "insensitive" },
+                ...(excludeUserId ? { id: { not: excludeUserId } } : {}),
+            },
+            select: { id: true },
+        });
+
+        res.json({
+            status: "success",
+            data: { available: !taken },
+        });
+    } catch (error) {
+        console.error("Error checking display name:", error);
+        res.status(500).json({ error: "Failed to check display name" });
+    }
+});
+
+// Public: Get a single artist's public profile with their products (by UUID or artistSlug)
+router.get("/:artistParam", async (req: Request, res: Response) => {
+    try {
+        const { artistParam } = req.params;
 
         const artist = await prisma.user.findFirst({
-            where: {
-                id: artistId,
-                isArtist: true,
-                verificationStatus: "VERIFIED",
-            },
+            where: artistPublicWhere(artistParam),
             select: {
                 id: true,
                 name: true,
                 displayName: true,
+                artistSlug: true,
                 displayPhotoUrl: true,
                 coverPhotoUrl: true,
                 bio: true,
@@ -111,7 +217,9 @@ router.get("/:artistId", async (req: Request, res: Response) => {
                         primaryView: true,
                         primaryColor: true,
                         tshirtColor: true,
+                        availableColors: true,
                         categories: true,
+                        colorMockups: true,
                     },
                     orderBy: { createdAt: "desc" },
                 },

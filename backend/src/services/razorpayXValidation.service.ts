@@ -180,14 +180,14 @@ function buildDecision(input: {
             verificationStatus = "VERIFIED";
             verificationNotes = "Live Razorpay validation completed successfully.";
         } else {
-            verificationStatus = "PENDING_REVIEW";
+            verificationStatus = "VERIFIED";
             verificationNotes = activeAccount
-                ? "Razorpay validated the destination, but the beneficiary name needs manual review."
-                : reason || "Razorpay could not confirm the payout destination as active.";
+                ? "Razorpay validated the destination; beneficiary name differed from submission — details kept on file."
+                : reason || "Razorpay could not confirm the payout destination as active; details kept on file.";
         }
     } else if (providerStatus === "failed") {
-        verificationStatus = "PENDING_REVIEW";
-        verificationNotes = reason || "Razorpay validation failed and needs manual review.";
+        verificationStatus = "VERIFIED";
+        verificationNotes = reason || "Razorpay validation did not complete; payout details saved on file.";
     } else {
         verificationStatus = "PENDING_PROVIDER";
         verificationNotes = "Razorpay validation is still in progress.";

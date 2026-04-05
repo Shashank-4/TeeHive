@@ -1,7 +1,8 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import api from "../../api/axios";
 import Toast from "../../components/shared/Toast";
+import { useAuth } from "../../context/AuthContext";
 import {
     Camera,
     Upload,
@@ -10,6 +11,7 @@ import {
     Link2,
     Save,
     AlertCircle,
+    CheckCircle,
     Loader2,
     ImageIcon,
     CreditCard,
@@ -17,6 +19,7 @@ import {
     ArrowLeft,
 } from "lucide-react";
 import { payoutFormFromMethods } from "../../utils/payoutMethods";
+import { allocateSlugFromDisplayName } from "../../utils/artistSlugFromDisplayName";
 
 interface Design {
     id: string;
@@ -27,9 +30,17 @@ interface Design {
 
 export default function ArtistEditProfile() {
     const navigate = useNavigate();
+    const { user } = useAuth();
 
     // Profile fields
     const [displayName, setDisplayName] = useState("");
+    const [artistSlug, setArtistSlug] = useState("");
+    const [displayNameStatus, setDisplayNameStatus] = useState<
+        "idle" | "checking" | "ok" | "taken" | "invalid" | "too_long" | "error"
+    >("idle");
+    const [slugStatus, setSlugStatus] = useState<"idle" | "checking" | "ok" | "bad" | "taken">("idle");
+    const confirmedDisplayNameRef = useRef("");
+    const profileSnapshotRef = useRef({ displayName: "", artistSlug: "" });
     const [bio, setBio] = useState("");
     const [portfolioUrl, setPortfolioUrl] = useState("");
     const [instagramUrl, setInstagramUrl] = useState("");
@@ -71,7 +82,19 @@ export default function ArtistEditProfile() {
                 api.get("/api/artist/payout-methods"),
             ]);
             const profile = profileResponse.data.data.profile;
+            const dn = (profile.displayName || "").trim();
+            const sl = ((profile.artistSlug as string) || "").trim();
             setDisplayName(profile.displayName || "");
+            setArtistSlug(sl);
+            profileSnapshotRef.current = { displayName: dn, artistSlug: sl };
+            confirmedDisplayNameRef.current = dn;
+            if (dn.length >= 2 && sl.length >= 2) {
+                setDisplayNameStatus("ok");
+                setSlugStatus("ok");
+            } else {
+                setDisplayNameStatus("idle");
+                setSlugStatus("idle");
+            }
             setBio(profile.bio || "");
             setPortfolioUrl(profile.portfolioUrl || "");
             setInstagramUrl(profile.instagramUrl || "");
@@ -100,6 +123,57 @@ export default function ArtistEditProfile() {
         fetchProfile();
     }, [fetchProfile]);
 
+    /** Use value from blur event so validation is not one keystroke behind React state. */
+    const validateDisplayNameAndGenerateSlug = useCallback(async (rawFromInput: string) => {
+        const name = rawFromInput.trim();
+        if (name.length < 2) {
+            setDisplayNameStatus("invalid");
+            setSlugStatus("idle");
+            setArtistSlug("");
+            return;
+        }
+        if (name.length > 80) {
+            setDisplayNameStatus("too_long");
+            setSlugStatus("idle");
+            return;
+        }
+        if (name === confirmedDisplayNameRef.current && artistSlug.trim().length >= 2) {
+            setDisplayNameStatus("ok");
+            setSlugStatus("ok");
+            return;
+        }
+
+        setDisplayNameStatus("checking");
+        setSlugStatus("idle");
+        try {
+            const q = new URLSearchParams({ name });
+            if (user?.id) q.set("excludeUserId", user.id);
+            const dnRes = await api.get(`/api/artists/check-display-name?${q.toString()}`);
+            if (dnRes.data?.data?.available !== true) {
+                setDisplayNameStatus("taken");
+                setSlugStatus("idle");
+                setArtistSlug("");
+                return;
+            }
+            setDisplayNameStatus("ok");
+            setSlugStatus("checking");
+            const slug = await allocateSlugFromDisplayName(name, api, user?.id);
+            if (!slug) {
+                setSlugStatus("bad");
+                setArtistSlug("");
+                return;
+            }
+            setArtistSlug(slug);
+            setSlugStatus("ok");
+            confirmedDisplayNameRef.current = name;
+        } catch (err) {
+            console.error("check-display-name / slug allocation failed:", err);
+            setDisplayNameStatus("error");
+            setSlugStatus("idle");
+            setArtistSlug("");
+        }
+    }, [artistSlug, user?.id]);
+
     const handleDisplayPhotoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
         if (file) {
@@ -119,9 +193,32 @@ export default function ArtistEditProfile() {
     const handleSaveProfile = async () => {
         setSaving(true);
         setError(null);
+        const slug = artistSlug.trim().toLowerCase();
+        const nameTrim = displayName.trim();
+        const nameChanged = nameTrim !== profileSnapshotRef.current.displayName;
+        if (nameChanged) {
+            if (displayNameStatus !== "ok" || slugStatus !== "ok" || slug.length < 2) {
+                setError(
+                    "Click outside the display name field to confirm it’s unique and refresh your storefront URL."
+                );
+                setToast({
+                    message: "Confirm your display name (click outside the field) before saving.",
+                    type: "error",
+                });
+                setSaving(false);
+                return;
+            }
+        }
+        if (slug.length >= 2 && slugStatus !== "ok") {
+            setError("Storefront URL handle is not ready. Confirm your display name first.");
+            setToast({ message: "Confirm your display name before saving.", type: "error" });
+            setSaving(false);
+            return;
+        }
         try {
             const formData = new FormData();
             formData.append("displayName", displayName);
+            if (slug.length >= 2) formData.append("artistSlug", slug);
             formData.append("bio", bio);
             formData.append("portfolioUrl", portfolioUrl);
             formData.append("instagramUrl", instagramUrl);
@@ -148,6 +245,12 @@ export default function ArtistEditProfile() {
             setDisplayPhotoFile(null);
             setCoverPhotoFile(null);
             setToast({ message: "Profile updated successfully!", type: "success" });
+            const dn = displayName.trim();
+            const sl = artistSlug.trim();
+            profileSnapshotRef.current = { displayName: dn, artistSlug: sl };
+            confirmedDisplayNameRef.current = dn;
+            setDisplayNameStatus("ok");
+            setSlugStatus(sl.length >= 2 ? "ok" : "idle");
         } catch (err: any) {
             setError(err.response?.data?.message || "Failed to save profile");
             setToast({ message: err.response?.data?.message || "Failed to save profile", type: "error" });
@@ -278,14 +381,105 @@ export default function ArtistEditProfile() {
                                     {/* Display Name & Bio */}
                                     <div className="flex-1 space-y-6">
                                         <div className="space-y-2">
-                                            <label className="font-display text-[11px] font-black uppercase tracking-[1.5px] text-neutral-g4">Public Display Name</label>
-                                            <input
-                                                type="text"
-                                                value={displayName}
-                                                onChange={(e) => setDisplayName(e.target.value)}
-                                                placeholder="e.g. Urban Rebel, Chrome Spirit"
-                                                className="w-full px-4 py-3 bg-neutral-g1 border-[2px] border-neutral-black rounded-[4px] font-body text-[14px] font-black placeholder:opacity-30 focus:bg-white focus:shadow-[4px_4px_0px_0px_rgba(255,222,0,1)] outline-none transition-all"
-                                            />
+                                            <label className="font-display text-[11px] font-black uppercase tracking-[1.5px] text-neutral-g4">
+                                                Public Display Name
+                                            </label>
+                                            <p className="font-display text-[10px] font-bold text-neutral-g3 uppercase tracking-tight">
+                                                Must be unique. Click outside to check and update your URL.
+                                            </p>
+                                            <div className="flex items-center gap-2">
+                                                <input
+                                                    type="text"
+                                                    value={displayName}
+                                                    onChange={(e) => {
+                                                        const v = e.target.value;
+                                                        setDisplayName(v);
+                                                        if (v.trim() !== confirmedDisplayNameRef.current) {
+                                                            setDisplayNameStatus("idle");
+                                                            setSlugStatus("idle");
+                                                        }
+                                                    }}
+                                                    onBlur={(e) => {
+                                                        const v = e.currentTarget.value;
+                                                        setDisplayName(v);
+                                                        void validateDisplayNameAndGenerateSlug(v);
+                                                    }}
+                                                    placeholder="e.g. Urban Rebel, Chrome Spirit"
+                                                    className="flex-1 min-w-0 px-4 py-3 bg-neutral-g1 border-[2px] border-neutral-black rounded-[4px] font-body text-[14px] font-black placeholder:opacity-30 focus:bg-white focus:shadow-[4px_4px_0px_0px_rgba(255,222,0,1)] outline-none transition-all"
+                                                />
+                                                {displayNameStatus === "checking" && (
+                                                    <Loader2
+                                                        className="w-5 h-5 shrink-0 text-primary animate-spin"
+                                                        aria-hidden
+                                                    />
+                                                )}
+                                                {displayNameStatus === "ok" && (
+                                                    <CheckCircle
+                                                        className="w-5 h-5 shrink-0 text-success"
+                                                        aria-hidden
+                                                    />
+                                                )}
+                                            </div>
+                                            {displayNameStatus === "taken" && (
+                                                <p className="font-display text-[10px] font-bold text-danger uppercase">
+                                                    This display name is already taken
+                                                </p>
+                                            )}
+                                            {displayNameStatus === "invalid" && (
+                                                <p className="font-display text-[10px] font-bold text-danger uppercase">
+                                                    Enter at least 2 characters
+                                                </p>
+                                            )}
+                                            {displayNameStatus === "too_long" && (
+                                                <p className="font-display text-[10px] font-bold text-danger uppercase">
+                                                    Max 80 characters
+                                                </p>
+                                            )}
+                                            {displayNameStatus === "error" && (
+                                                <p className="font-display text-[10px] font-bold text-danger uppercase leading-relaxed">
+                                                    Could not reach the server. In dev, clear VITE_API_URL (use Vite proxy)
+                                                    or set it to your running API — restart dev server.
+                                                </p>
+                                            )}
+                                        </div>
+                                        <div className="space-y-2">
+                                            <label className="font-display text-[11px] font-black uppercase tracking-[1.5px] text-neutral-g4">
+                                                Storefront URL handle
+                                            </label>
+                                            <p className="font-display text-[10px] font-bold text-neutral-g3 uppercase tracking-tight">
+                                                Generated from your display name (read-only).
+                                            </p>
+                                            <div className="flex items-center gap-2 flex-wrap">
+                                                <span className="font-display text-[11px] font-bold text-neutral-g3">/artists/</span>
+                                                <input
+                                                    type="text"
+                                                    readOnly
+                                                    value={artistSlug}
+                                                    placeholder="—"
+                                                    className="flex-1 min-w-[160px] px-4 py-3 bg-neutral-g2/80 border-[2px] border-neutral-black rounded-[4px] font-body text-[14px] font-black cursor-default outline-none"
+                                                />
+                                                {slugStatus === "checking" && (
+                                                    <Loader2
+                                                        className="w-5 h-5 shrink-0 text-primary animate-spin"
+                                                        aria-hidden
+                                                    />
+                                                )}
+                                            </div>
+                                            {slugStatus === "checking" && displayNameStatus === "ok" && (
+                                                <p className="font-display text-[10px] font-bold text-neutral-g3 uppercase">
+                                                    Reserving handle…
+                                                </p>
+                                            )}
+                                            {slugStatus === "ok" && (
+                                                <p className="font-display text-[10px] font-bold text-success uppercase">
+                                                    Handle ready
+                                                </p>
+                                            )}
+                                            {slugStatus === "bad" && (
+                                                <p className="font-display text-[10px] font-bold text-danger uppercase">
+                                                    Could not reserve a URL — try a different display name
+                                                </p>
+                                            )}
                                         </div>
                                         <div className="space-y-2">
                                             <label className="font-display text-[11px] font-black uppercase tracking-[1.5px] text-neutral-g4 flex justify-between">

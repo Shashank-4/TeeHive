@@ -5,6 +5,11 @@ import {
     sendAdminOrderNotification,
     sendArtistSaleNotificationEmail,
     sendOrderConfirmationEmail,
+    frontendBaseUrl,
+    productPublicUrl,
+    artistStorefrontUrl,
+    type OrderEmailLineItem,
+    type ArtistSaleLineItem,
 } from "../services/email.service";
 import { markOrderPaidAfterInventoryCheck } from "../services/orderInventory.service";
 
@@ -73,16 +78,29 @@ function verifySignature(rawBody: Buffer, signature: string) {
     );
 }
 
+function formatInr(n: number): string {
+    return n.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
 async function notifyOrderStakeholders(orderId: string) {
     const order = await prisma.order.findUnique({
         where: { id: orderId },
         include: {
             user: true,
+            shippingAddress: true,
             items: {
                 include: {
                     product: {
                         include: {
-                            artist: true,
+                            artist: {
+                                select: {
+                                    id: true,
+                                    email: true,
+                                    name: true,
+                                    displayName: true,
+                                    artistSlug: true,
+                                },
+                            },
                         },
                     },
                 },
@@ -92,44 +110,106 @@ async function notifyOrderStakeholders(orderId: string) {
 
     if (!order?.user) return;
 
-    const productSummary = order.items
-        .map((item) => `${item.quantity}x ${item.product.name}`)
-        .join(", ");
+    const base = frontendBaseUrl();
+    const orderRef = order.id.slice(0, 8).toUpperCase();
+    const adminOrdersLink = `${base}/admin/orders?search=${encodeURIComponent(order.id)}`;
 
-    sendOrderConfirmationEmail(order.user.email, order.user.name || "Customer", {
-        orderId: order.id.slice(0, 8).toUpperCase(),
-        items: productSummary,
-        total: order.totalAmount.toFixed(2),
+    const lineItems: OrderEmailLineItem[] = order.items.map((item) => {
+        const artist = item.product.artist;
+        const artistName = artist?.displayName || artist?.name || "Creator";
+        const artistUrl = artist ? artistStorefrontUrl(artist) : `${base}/artists`;
+        return {
+            Name: item.product.name,
+            ProductUrl: productPublicUrl(item.product.id),
+            Quantity: item.quantity,
+            Size: item.size,
+            Color: item.color,
+            LineTotal: formatInr(item.price * item.quantity),
+            ArtistName: artistName,
+            ArtistUrl: artistUrl,
+        };
+    });
+
+    const ship = order.shippingAddress;
+    const discountAmt = order.discountAmount || 0;
+    const hasDiscount = discountAmt > 0.009;
+
+    const shippingBlock = ship
+        ? {
+              ShippingName: ship.name,
+              ShippingLine1: ship.line1,
+              ShippingLine2: ship.line2 || "",
+              ShippingCity: ship.city,
+              ShippingState: ship.state,
+              ShippingPostal: ship.postalCode,
+              ShippingCountry: ship.country,
+              ShippingPhone: ship.phone || "",
+          }
+        : {};
+
+    sendOrderConfirmationEmail(order.user.email, order.user.name || order.user.displayName || "Customer", {
+        OrderRef: orderRef,
+        OrderIdFull: order.id,
+        Amount: formatInr(order.totalAmount),
+        Subtotal: formatInr(order.subtotalAmount),
+        Shipping: formatInr(order.shippingAmount),
+        HasDiscount: hasDiscount,
+        Discount: formatInr(discountAmt),
+        LineItems: lineItems,
+        ...shippingBlock,
+        OrdersUrl: `${base}/orders`,
+        ShopUrl: `${base}/products`,
     }).catch((err) => console.error("Error sending order confirmation:", err));
 
     sendAdminOrderNotification({
-        orderId: order.id.slice(0, 8).toUpperCase(),
-        customerName: order.user.name || order.user.displayName || "Customer",
-        total: order.totalAmount.toFixed(2),
+        OrderRef: orderRef,
+        OrderIdFull: order.id,
+        CustomerName: order.user.name || order.user.displayName || "Customer",
+        CustomerEmail: order.user.email,
+        Amount: formatInr(order.totalAmount),
+        Subtotal: formatInr(order.subtotalAmount),
+        Shipping: formatInr(order.shippingAmount),
+        HasDiscount: hasDiscount,
+        Discount: formatInr(discountAmt),
+        LineItems: lineItems,
+        ...shippingBlock,
+        AdminPanelLink: adminOrdersLink,
     }).catch((err) => console.error("Error sending admin notification:", err));
 
-    const artistMap = new Map<string, { email: string; name: string; productName: string }>();
-    order.items.forEach((item) => {
+    const artistMap = new Map<
+        string,
+        { email: string; name: string; items: ArtistSaleLineItem[] }
+    >();
+
+    for (const item of order.items) {
         const artist = item.product?.artist;
-        if (artist?.email && !artistMap.has(artist.id)) {
-            artistMap.set(artist.id, {
-                email: artist.email,
-                name: artist.displayName || artist.name || "Artist",
-                productName: item.product.name,
-            });
+        if (!artist?.email) continue;
+        const row: ArtistSaleLineItem = {
+            Name: item.product.name,
+            ProductUrl: productPublicUrl(item.product.id),
+            Quantity: item.quantity,
+            Size: item.size,
+            Color: item.color,
+            LineTotal: formatInr(item.price * item.quantity),
+        };
+        const label = artist.displayName || artist.name || "Creator";
+        const existing = artistMap.get(artist.id);
+        if (existing) {
+            existing.items.push(row);
+        } else {
+            artistMap.set(artist.id, { email: artist.email, name: label, items: [row] });
         }
-    });
+    }
 
     artistMap.forEach((artistData) => {
-        sendArtistSaleNotificationEmail(
-            artistData.email,
-            artistData.name,
-            artistData.productName
-        ).catch((err) =>
-            console.error(
-                `[Email] Failed to send sale notification to ${artistData.email}:`,
-                err
-            )
+        sendArtistSaleNotificationEmail(artistData.email, artistData.name, {
+            OrderRef: orderRef,
+            OrderIdFull: order.id,
+            LineItems: artistData.items,
+            ArtistOrdersUrl: `${base}/artist/orders`,
+            ArtistDashboardUrl: `${base}/artist/dashboard`,
+        }).catch((err) =>
+            console.error(`[Email] Failed to send sale notification to ${artistData.email}:`, err)
         );
     });
 }

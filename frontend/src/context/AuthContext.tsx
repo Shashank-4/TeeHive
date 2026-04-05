@@ -1,6 +1,7 @@
 import {
     createContext,
     useContext,
+    useCallback,
     useEffect,
     useState,
     type ReactNode,
@@ -32,6 +33,8 @@ interface AuthContextType {
     resendOtp: (email: string) => Promise<void>;
     googleAuth: (token: string, isArtist?: boolean) => Promise<void>;
     signOut: () => void;
+    /** Re-fetch session from /api/users/me (e.g. after verification status changes on the server). */
+    refreshUser: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -99,6 +102,17 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         setUser(null);
     };
 
+    const refreshUser = useCallback(async () => {
+        try {
+            const response = await api.get<{ data: { user: User } }>(
+                "/api/users/me"
+            );
+            setUser(response.data.data.user);
+        } catch {
+            setUser(null);
+        }
+    }, []);
+
     const value = {
         user,
         isAuthenticated: !!user,
@@ -109,6 +123,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         resendOtp,
         googleAuth,
         signOut,
+        refreshUser,
     };
 
     return (

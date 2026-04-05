@@ -146,10 +146,10 @@ export const getDesignsByArtistService = async (artistId: string) => {
             include: {
                 products: {
                     where: {
-                        status: { not: "ARCHIVED" }
+                        status: { in: ["DRAFT", "PUBLISHED"] },
                     },
-                    select: { id: true }
-                }
+                    select: { id: true },
+                },
             },
             orderBy: {
                 createdAt: "desc",

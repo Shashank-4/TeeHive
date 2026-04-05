@@ -43,19 +43,6 @@
             font-size: 12px;
         }
 
-        .otp-box {
-            background-color: #f9fafb;
-            border: 2px dashed #fbbf24;
-            border-radius: 8px;
-            padding: 24px;
-            margin: 24px 0;
-            text-align: center;
-            font-size: 32px;
-            font-weight: bold;
-            letter-spacing: 4px;
-            color: #111827;
-        }
-
         .button {
             display: inline-block;
             padding: 12px 24px;
@@ -65,7 +52,40 @@
             border-radius: 4px;
             font-weight: bold;
             text-transform: uppercase;
-            margin-top: 16px;
+            margin-top: 8px;
+            margin-right: 8px;
+        }
+
+        .items-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 13px;
+            margin: 16px 0;
+        }
+
+        .items-table th,
+        .items-table td {
+            border: 1px solid #e5e7eb;
+            padding: 10px 8px;
+            text-align: left;
+            vertical-align: top;
+        }
+
+        .items-table th {
+            background: #f9fafb;
+            font-size: 11px;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+
+        .items-table a {
+            color: #111827;
+            font-weight: 600;
+        }
+
+        .muted {
+            color: #6b7280;
+            font-size: 12px;
         }
     </style>
 </head>
@@ -82,17 +102,68 @@
 
             <p>Hey {{Name}},</p>
             <p>Your order is confirmed — and it means more than you think.</p>
+
             <div
-                style="background-color: #f9fafb; padding: 24px; border-radius: 8px; margin: 24px 0; border: 1px solid #e5e7eb;">
-                <p><strong>Order ID:</strong> {{OrderID}}</p>
-                <p><strong>Items:</strong> {{ProductSummary}}</p>
-                <p><strong>Total:</strong> ₹{{Amount}}</p>
+                style="background-color: #f9fafb; padding: 20px; border-radius: 8px; margin: 20px 0; border: 1px solid #e5e7eb;">
+                <p style="margin: 0 0 8px 0;"><strong>Order reference:</strong> {{OrderRef}}</p>
+                <p class="muted" style="margin: 0 0 12px 0; word-break: break-all;">Full order ID (for support): {{OrderIdFull}}</p>
+                <p style="margin: 0 0 4px 0;"><strong>Subtotal:</strong> ₹{{Subtotal}}</p>
+                {{#if HasDiscount}}
+                <p style="margin: 0 0 4px 0;"><strong>Discount:</strong> −₹{{Discount}}</p>
+                {{/if}}
+                <p style="margin: 0 0 4px 0;"><strong>Shipping:</strong> ₹{{Shipping}}</p>
+                <p style="margin: 12px 0 0 0; font-size: 18px;"><strong>Total paid:</strong> ₹{{Amount}}</p>
             </div>
-            <p>Every order fuels a creator inside the Hive. You didn’t just buy a product — you supported an artist.</p>
-            <p>We’re preparing your order now. You’ll hear from us soon. Tracking link will be shared soon.</p>
+
+            <h2 style="font-size: 14px; text-transform: uppercase; letter-spacing: 1px; margin: 24px 0 8px 0;">Items</h2>
+            <table class="items-table" role="presentation">
+                <thead>
+                    <tr>
+                        <th>Product</th>
+                        <th>Qty</th>
+                        <th>Variant</th>
+                        <th>Artist</th>
+                        <th>Line total</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {{#each LineItems}}
+                    <tr>
+                        <td><a href="{{ProductUrl}}">{{Name}}</a></td>
+                        <td>{{Quantity}}</td>
+                        <td>{{Size}} / {{Color}}</td>
+                        <td><a href="{{ArtistUrl}}">{{ArtistName}}</a></td>
+                        <td>₹{{LineTotal}}</td>
+                    </tr>
+                    {{/each}}
+                </tbody>
+            </table>
+
+            {{#if ShippingName}}
+            <h2 style="font-size: 14px; text-transform: uppercase; letter-spacing: 1px; margin: 24px 0 8px 0;">Shipping address</h2>
+            <div
+                style="background-color: #f9fafb; padding: 16px; border-radius: 8px; border: 1px solid #e5e7eb; font-size: 14px;">
+                <p style="margin: 0 0 4px 0;"><strong>{{ShippingName}}</strong></p>
+                <p style="margin: 0;">{{ShippingLine1}}</p>
+                {{#if ShippingLine2}}
+                <p style="margin: 0;">{{ShippingLine2}}</p>
+                {{/if}}
+                <p style="margin: 8px 0 0 0;">{{ShippingCity}}, {{ShippingState}} {{ShippingPostal}}</p>
+                <p style="margin: 0;">{{ShippingCountry}}</p>
+                {{#if ShippingPhone}}
+                <p style="margin: 8px 0 0 0;">Phone: {{ShippingPhone}}</p>
+                {{/if}}
+            </div>
+            {{/if}}
+
+            <p style="margin-top: 24px;">Every order fuels a creator inside the Hive. We’re preparing your order now; tracking will be shared when it ships.</p>
             <p>Thanks for backing the Hive 🍯</p>
             <p>– TeeHive</p>
 
+            <div style="text-align: center; margin: 28px 0 8px 0;">
+                <a href="{{OrdersUrl}}" class="button">View your orders</a>
+                <a href="{{ShopUrl}}" class="button">Continue shopping</a>
+            </div>
         </div>
         <div class="footer">
             <p>© 2026 TeeHive. All rights reserved.</p>

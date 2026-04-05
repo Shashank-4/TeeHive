@@ -8,10 +8,7 @@ import {
     toggleResubmissionHandler,
     rejectDesignHandler,
 } from "../controllers/adminArtist.controller";
-import {
-    getAdminArtistPayoutMethodsHandler,
-    reviewArtistPayoutMethodHandler,
-} from "../controllers/artistPayout.controller";
+import { getAdminArtistPayoutMethodsHandler } from "../controllers/artistPayout.controller";
 import { getDashboardStatsHandler } from "../controllers/adminStats.controller";
 import { listUsersHandler, updateUserRoleHandler } from "../controllers/adminUsers.controller";
 import { 
@@ -46,7 +43,6 @@ router.get("/artists/:id", getArtistDetailHandler);
 router.get("/artists/:id/payout-methods", getAdminArtistPayoutMethodsHandler);
 router.patch("/artists/:id/verify", verifyArtistHandler);
 router.patch("/artists/:id/resubmit", toggleResubmissionHandler);
-router.patch("/artists/:id/payout-methods/:payoutMethodId/review", reviewArtistPayoutMethodHandler);
 router.patch("/designs/:id/reject", rejectDesignHandler);
 
 // ── User Management ──
