@@ -97,6 +97,23 @@ export default function LatestDropsShowcase({ products, isLoading }: LatestDrops
         [go]
     );
 
+    /**
+     * Map each product index → display offset from center using modular wrap (0, +1, -1, +2, -2),
+     * deduping when n is small. Ensures at last slide, the next tiles to the right are 0, 1 — not
+     * the “shortest path” half-circle jump.
+     */
+    const indexToDist = useMemo(() => {
+        const m = new Map<number, number>();
+        if (n === 0) return m;
+        const order = [0, 1, -1, 2, -2];
+        for (const d of order) {
+            if (Math.abs(d) > VISIBLE_RADIUS) continue;
+            const idx = (activeIndex + d + n) % n;
+            if (!m.has(idx)) m.set(idx, d);
+        }
+        return m;
+    }, [activeIndex, n]);
+
     if (isLoading) {
         return (
             <section className="relative min-h-[50vh] flex flex-col py-12 md:py-16 px-5 md:px-12 overflow-hidden">
@@ -222,16 +239,15 @@ export default function LatestDropsShowcase({ products, isLoading }: LatestDrops
                                 aria-label="Latest product drops"
                             >
                                 {items.map((product, i) => {
-                                    const dist = i - activeIndex;
+                                    const dist = indexToDist.get(i);
+                                    if (dist === undefined) return null;
                                     const abs = Math.abs(dist);
                                     const isActive = dist === 0;
 
-                                    if (abs > VISIBLE_RADIUS) return null;
-
                                     const scale =
                                         isActive ? 1 : abs === 1 ? 0.82 : 0.68;
-                                    const opacity =
-                                        isActive ? 1 : abs === 1 ? 0.92 : 0.76;
+                                    /** Full opacity on neighbors so nothing reads as a ghost under the center card. */
+                                    const opacity = isActive ? 1 : abs === 1 ? 1 : 0.9;
                                     /** Cumulative X from center so each ring clears the previous tile + gap. */
                                     const translateX = (() => {
                                         if (isActive) return "0px";
@@ -251,7 +267,7 @@ export default function LatestDropsShowcase({ products, isLoading }: LatestDrops
                                     const frameClass = [
                                         "isolate absolute left-1/2 top-1/2 rounded-2xl transition-all duration-500 ease-out",
                                         isActive
-                                            ? "overflow-visible flex flex-col w-[min(88vw,300px)] sm:w-[min(80vw,340px)] md:w-[min(68vw,380px)] lg:w-[420px] z-20 bg-white6 shadow-[0_24px_56px_-14px_rgba(0,0,0,0.22)]"
+                                            ? "overflow-visible w-[min(88vw,300px)] sm:w-[min(80vw,340px)] md:w-[min(68vw,380px)] lg:w-[420px] z-[35] bg-transparent shadow-[0_24px_56px_-14px_rgba(0,0,0,0.22)]"
                                             : "overflow-hidden aspect-[4/5] w-[min(46vw,200px)] sm:w-[210px] md:w-[240px] z-10 bg-neutral-g1 shadow-[0_14px_36px_-10px_rgba(0,0,0,0.14)]",
                                     ].join(" ");
 
@@ -261,24 +277,26 @@ export default function LatestDropsShowcase({ products, isLoading }: LatestDrops
                                         transformStyle: "preserve-3d",
                                     };
 
-                                    const imgClass =
+                                    const imgClassActive =
                                         "absolute inset-0 h-full w-full object-cover object-[50%_36%] origin-[50%_38%] scale-[1.2] mix-blend-multiply contrast-[1.03] transition-transform duration-500 ease-out";
+                                    const imgClassSide =
+                                        "absolute inset-0 h-full w-full object-cover object-[50%_36%] origin-[50%_38%] scale-[1.2] mix-blend-multiply contrast-[1.03]";
                                     const inner =
                                         src ? (
                                             <ImageWithSkeleton
                                                 src={src}
                                                 alt=""
-                                                className={imgClass}
+                                                className={isActive ? imgClassActive : imgClassSide}
                                                 wrapperClassName={
                                                     isActive
-                                                        ? "h-full w-full overflow-hidden bg-neutral-g1 rounded-t-2xl"
+                                                        ? "h-full w-full overflow-hidden bg-neutral-g1 rounded-2xl"
                                                         : "h-full w-full overflow-hidden bg-neutral-g1"
                                                 }
                                             />
                                         ) : (
                                             <div
                                                 className={`w-full h-full flex items-center justify-center bg-neutral-g1 text-5xl font-black text-neutral-g2 italic ${
-                                                    isActive ? "rounded-t-2xl" : "rounded-2xl"
+                                                    isActive ? "rounded-2xl" : "rounded-2xl"
                                                 }`}
                                             >
                                                 ART
@@ -289,19 +307,20 @@ export default function LatestDropsShowcase({ products, isLoading }: LatestDrops
                                         return (
                                             <div
                                                 key={product.id}
-                                                className={`${frameClass} z-20`}
+                                                className={`${frameClass} group/card`}
                                                 style={frameStyle}
                                                 aria-current="true"
                                             >
-                                                <div className="relative w-full aspect-[4/5] shrink-0 bg-neutral-g1 rounded-t-2xl overflow-visible">
+                                                {/* Flow height = image only; details are absolute so no faint “empty” strip when hidden */}
+                                                <div className="relative w-full aspect-[4/5] shrink-0 bg-neutral-g1 rounded-2xl overflow-hidden transition-[border-radius] duration-300 group-hover/card:rounded-b-none group-hover/card:rounded-t-2xl">
                                                     <Link
                                                         to={`/products/${product.id}`}
-                                                        className="absolute inset-0 z-10 block no-underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-neutral-black rounded-t-2xl"
+                                                        className="absolute inset-0 z-10 block no-underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-neutral-black rounded-2xl group-hover/card:rounded-t-2xl group-hover/card:rounded-b-none"
                                                         aria-label={`${product.name}, open product page`}
                                                     >
                                                         <div
                                                             key={centerBounceKey}
-                                                            className={`absolute inset-0 overflow-visible origin-[50%_42%] ${
+                                                            className={`absolute inset-0 overflow-hidden origin-[50%_42%] ${
                                                                 centerBounceKey > 0
                                                                     ? "animate-carousel-center-bounce"
                                                                     : ""
@@ -311,7 +330,7 @@ export default function LatestDropsShowcase({ products, isLoading }: LatestDrops
                                                         </div>
                                                     </Link>
                                                 </div>
-                                                <div className="relative z-20 flex flex-col gap-2 p-3 md:p-3.5 bg-white rounded-b-2xl border-t-2 border-neutral-black">
+                                                <div className="absolute left-0 right-0 top-full z-[45] flex flex-col gap-2 p-3 md:p-3.5 bg-white rounded-b-2xl border-2 border-t-0 border-neutral-black shadow-[0_16px_40px_-12px_rgba(0,0,0,0.25)] invisible opacity-0 translate-y-1 pointer-events-none transition-all duration-300 group-hover/card:visible group-hover/card:opacity-100 group-hover/card:translate-y-0 group-hover/card:pointer-events-auto group-focus-within/card:visible group-focus-within/card:opacity-100 group-focus-within/card:translate-y-0 group-focus-within/card:pointer-events-auto">
                                                     <h3 className="font-display text-[13px] md:text-sm font-black text-neutral-black uppercase tracking-tight leading-snug line-clamp-2">
                                                         <Link
                                                             to={`/products/${product.id}`}
@@ -356,7 +375,7 @@ export default function LatestDropsShowcase({ products, isLoading }: LatestDrops
                                         <button
                                             key={product.id}
                                             type="button"
-                                            className={`${frameClass} z-10 cursor-pointer p-0 text-left`}
+                                            className={`${frameClass} z-10 cursor-pointer p-0 text-left overflow-hidden`}
                                             style={frameStyle}
                                             aria-label={`Show ${product.name} in carousel`}
                                             onClick={() => setActiveIndex(i)}

@@ -1,6 +1,8 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import {
     ChevronDown,
+    ChevronLeft,
+    ChevronRight,
     Star,
 } from "lucide-react";
 import { Link, useSearchParams } from "react-router-dom";
@@ -58,6 +60,13 @@ export default function BrowseProducts() {
     const [page, setPage] = useState(1);
     const [addedId, setAddedId] = useState<string | null>(null);
     const { addItem } = useCart();
+    const shopCategoryScrollRef = useRef<HTMLDivElement>(null);
+
+    const scrollShopCategories = (dir: number) => {
+        const el = shopCategoryScrollRef.current;
+        if (!el) return;
+        el.scrollBy({ left: dir * 220, behavior: "smooth" });
+    };
 
     useEffect(() => {
         const fetchData = async () => {
@@ -194,27 +203,45 @@ export default function BrowseProducts() {
                 )}
                 {/* ── TOOLBAR ── */}
                 <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6 mb-10 pb-6 border-b-[1.5px] border-neutral-g2">
-                    {/* Category Selector */}
-                    <div className="flex items-center gap-2 overflow-x-auto scrollbar-hide pb-2 lg:pb-0">
-                        {categories.map((category) => (
-                            <button
-                                key={category}
-                                onClick={() => handleCategoryChange(category)}
-                                className={`px-5 py-2.5 rounded-[3px] font-display text-[11px] font-extrabold tracking-[1px] uppercase border-[1.5px] transition-all whitespace-nowrap ${selectedCategory === category
-                                    ? "bg-neutral-black text-primary border-neutral-black"
-                                    : "bg-transparent border-neutral-g2 text-neutral-g4 hover:border-neutral-black hover:text-neutral-black"
-                                    }`}
-                            >
-                                {category}
-                            </button>
-                        ))}
+                    {/* Category Selector — scroll + arrows */}
+                    <div className="flex items-center gap-2 min-w-0 flex-1 pb-2 lg:pb-0">
+                        <button
+                            type="button"
+                            onClick={() => scrollShopCategories(-1)}
+                            className="shrink-0 w-10 h-10 md:w-11 md:h-11 border-[1.5px] border-neutral-g2 rounded-[4px] bg-white text-neutral-black flex items-center justify-center hover:bg-primary hover:border-neutral-black transition-all"
+                            aria-label="Scroll categories left"
+                        >
+                            <ChevronLeft className="w-5 h-5" />
+                        </button>
+                        <div
+                            ref={shopCategoryScrollRef}
+                            className="flex flex-1 min-w-0 items-center gap-2 overflow-x-auto scrollbar-hide"
+                        >
+                            {categories.map((category) => (
+                                <button
+                                    key={category}
+                                    type="button"
+                                    onClick={() => handleCategoryChange(category)}
+                                    className={`shrink-0 px-5 py-2.5 rounded-[3px] font-display text-[11px] font-extrabold tracking-[1px] uppercase border-[1.5px] transition-all whitespace-nowrap ${selectedCategory === category
+                                        ? "bg-neutral-black text-primary border-neutral-black"
+                                        : "bg-transparent border-neutral-g2 text-neutral-g4 hover:border-neutral-black hover:text-neutral-black"
+                                        }`}
+                                >
+                                    {category}
+                                </button>
+                            ))}
+                        </div>
+                        <button
+                            type="button"
+                            onClick={() => scrollShopCategories(1)}
+                            className="shrink-0 w-10 h-10 md:w-11 md:h-11 border-[1.5px] border-neutral-g2 rounded-[4px] bg-white text-neutral-black flex items-center justify-center hover:bg-primary hover:border-neutral-black transition-all"
+                            aria-label="Scroll categories right"
+                        >
+                            <ChevronRight className="w-5 h-5" />
+                        </button>
                     </div>
 
-                    <div className="flex items-center gap-3">
-                        <div className="hidden sm:block text-[12px] font-display font-bold text-neutral-g3 tracking-[0.5px] mr-4 uppercase">
-                            {pagination ? pagination.total : 0} DESIGNS FOUND
-                        </div>
-
+                    <div className="flex items-center gap-3 shrink-0">
                         <div className="relative group">
                             <select
                                 value={sortBy}

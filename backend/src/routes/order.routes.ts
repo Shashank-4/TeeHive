@@ -24,8 +24,8 @@ const upload = multer({
     storage: multer.memoryStorage(),
     limits: { fileSize: 8 * 1024 * 1024, files: 3 },
 });
-const SHIPPING_FLAT_RATE = 100;
-const FREE_SHIPPING_THRESHOLD = 3000;
+/** Delivery charge is always zero (free shipping on all orders). */
+const SHIPPING_AMOUNT = 0;
 const ARTIST_COMMISSION_RATE = 0.25;
 
 type CheckoutItemInput = {
@@ -228,7 +228,7 @@ async function buildCheckoutDraft(items: CheckoutItemInput[], couponCode?: strin
     }
 
     const discountedSubtotal = subtotal - discountAmount;
-    const shippingAmount = discountedSubtotal > FREE_SHIPPING_THRESHOLD ? 0 : SHIPPING_FLAT_RATE;
+    const shippingAmount = SHIPPING_AMOUNT;
     const totalAmount = discountedSubtotal + shippingAmount;
 
     return {

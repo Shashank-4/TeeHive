@@ -6,7 +6,12 @@ interface CustomerHomeConfig {
     showHeroSection: boolean;
     heroTitle: string;
     heroSubtitle: string;
-    heroButtonText: string;
+    heroTileFreshTitle?: string;
+    heroTileFreshButton?: string;
+    heroTileFreshLink?: string;
+    heroTileArtistsTitle?: string;
+    heroTileArtistsButton?: string;
+    heroTileArtistsLink?: string;
     showCategoriesSection: boolean;
     showFeaturedProducts: boolean;
     showTrendingArtists: boolean;
@@ -57,11 +62,19 @@ interface CouponConfig {
     createdAt: string;
 }
 
+const SUBTITLE_DEFAULT =
+    "Behind every design is a real Indian creator with a dream. Your purchase puts money directly in their hands — not a factory, not a corporation. Just art and the people who make it.";
+
 const DEFAULT_HOME_CONFIG: CustomerHomeConfig = {
     showHeroSection: true,
-    heroTitle: "Empowering Creators. Wear Your Passion.",
-    heroSubtitle: "Design, sell, and wear unique high-quality print-on-demand apparel crafted by independent artists worldwide.",
-    heroButtonText: "Start Shopping",
+    heroTitle: "",
+    heroSubtitle: SUBTITLE_DEFAULT,
+    heroTileFreshTitle: "Fresh Designs\nEvery Day",
+    heroTileFreshButton: "Explore",
+    heroTileFreshLink: "/products?latestDrops=true&sort=newest",
+    heroTileArtistsTitle: "Meet Independent\nIndian Artists",
+    heroTileArtistsButton: "Browse",
+    heroTileArtistsLink: "/artists",
     showCategoriesSection: true,
     showFeaturedProducts: true,
     showTrendingArtists: true,
@@ -137,7 +150,10 @@ export default function AdminConfig() {
             ]);
 
             if (homeRes.status === "fulfilled" && homeRes.value.data?.data?.config) {
-                setHomeConfig({ ...DEFAULT_HOME_CONFIG, ...homeRes.value.data.data.config });
+                const c = { ...homeRes.value.data.data.config } as Record<string, unknown>;
+                delete c.heroButtonText;
+                delete c.heroButtonLink;
+                setHomeConfig({ ...DEFAULT_HOME_CONFIG, ...c });
             }
             if (artistRes.status === "fulfilled" && artistRes.value.data?.data?.config) {
                 setArtistConfig({ ...DEFAULT_ARTIST_CONFIG, ...artistRes.value.data.data.config });
@@ -183,7 +199,10 @@ export default function AdminConfig() {
 
                 if (activeTab === "home") {
                     key = "customer_home";
-                    value = homeConfig;
+                    const v = { ...homeConfig } as Record<string, unknown>;
+                    delete v.heroButtonText;
+                    delete v.heroButtonLink;
+                    value = v;
                 } else if (activeTab === "artist") {
                     key = "artist_dashboard";
                     value = artistConfig;
@@ -362,12 +381,15 @@ export default function AdminConfig() {
                                         {homeConfig.showHeroSection && (
                                             <div className="grid grid-cols-1 gap-6 pl-10 border-l-[2px] border-neutral-black/5">
                                                 <div className="space-y-2">
-                                                    <label className="font-display text-[10px] font-black uppercase tracking-[2px] text-neutral-g4 px-1">Global Headline</label>
-                                                    <input
-                                                        type="text"
+                                                    <label className="font-display text-[10px] font-black uppercase tracking-[2px] text-neutral-g4 px-1">
+                                                        Global Headline (two lines — use line break between)
+                                                    </label>
+                                                    <textarea
                                                         value={homeConfig.heroTitle}
                                                         onChange={(e) => setHomeConfig({ ...homeConfig, heroTitle: e.target.value })}
-                                                        className="w-full px-5 py-4 bg-neutral-g1 border-[2px] border-neutral-black rounded-[4px] font-display text-[16px] font-black uppercase tracking-[1px] outline-none focus:bg-white transition-all italic"
+                                                        rows={2}
+                                                        placeholder={"Wear Art.\nBreak The Basic."}
+                                                        className="w-full px-5 py-4 bg-neutral-g1 border-[2px] border-neutral-black rounded-[4px] font-display text-[16px] font-black uppercase tracking-[1px] outline-none focus:bg-white transition-all italic resize-y min-h-[88px]"
                                                     />
                                                 </div>
                                                 <div className="space-y-2">
@@ -379,14 +401,99 @@ export default function AdminConfig() {
                                                         className="w-full px-5 py-4 bg-neutral-g1 border-[2px] border-neutral-black rounded-[4px] font-display text-[13px] font-bold text-neutral-black uppercase tracking-[1px] outline-none focus:bg-white transition-all resize-none"
                                                     />
                                                 </div>
-                                                <div className="max-w-xs space-y-2">
-                                                    <label className="font-display text-[10px] font-black uppercase tracking-[2px] text-neutral-g4 px-1">Primary Action Command</label>
-                                                    <input
-                                                        type="text"
-                                                        value={homeConfig.heroButtonText}
-                                                        onChange={(e) => setHomeConfig({ ...homeConfig, heroButtonText: e.target.value })}
-                                                        className="w-full px-5 py-3 bg-neutral-g1 border-[2px] border-neutral-black rounded-[4px] font-display text-[11px] font-black uppercase tracking-[2px] outline-none focus:bg-white transition-all text-center"
-                                                    />
+
+                                                <div className="space-y-4 pt-4 border-t-[2px] border-neutral-black/10">
+                                                    <p className="font-display text-[10px] font-black uppercase tracking-[2px] text-neutral-g4 px-1">
+                                                        Hero right column — top tile (fresh designs)
+                                                    </p>
+                                                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                                        <div className="space-y-2 md:col-span-1">
+                                                            <label className="font-display text-[9px] font-black uppercase tracking-[2px] text-neutral-g4 px-1">
+                                                                Title (line break allowed)
+                                                            </label>
+                                                            <textarea
+                                                                value={homeConfig.heroTileFreshTitle ?? ""}
+                                                                onChange={(e) =>
+                                                                    setHomeConfig({ ...homeConfig, heroTileFreshTitle: e.target.value })
+                                                                }
+                                                                rows={2}
+                                                                className="w-full px-4 py-3 bg-neutral-g1 border-[2px] border-neutral-black rounded-[4px] font-display text-[12px] font-bold outline-none focus:bg-white transition-all resize-y min-h-[72px]"
+                                                            />
+                                                        </div>
+                                                        <div className="space-y-2">
+                                                            <label className="font-display text-[9px] font-black uppercase tracking-[2px] text-neutral-g4 px-1">
+                                                                Button
+                                                            </label>
+                                                            <input
+                                                                type="text"
+                                                                value={homeConfig.heroTileFreshButton ?? ""}
+                                                                onChange={(e) =>
+                                                                    setHomeConfig({ ...homeConfig, heroTileFreshButton: e.target.value })
+                                                                }
+                                                                className="w-full px-4 py-3 bg-neutral-g1 border-[2px] border-neutral-black rounded-[4px] font-display text-[11px] font-black uppercase tracking-[2px] outline-none focus:bg-white transition-all"
+                                                            />
+                                                        </div>
+                                                        <div className="space-y-2">
+                                                            <label className="font-display text-[9px] font-black uppercase tracking-[2px] text-neutral-g4 px-1">
+                                                                Link
+                                                            </label>
+                                                            <input
+                                                                type="text"
+                                                                value={homeConfig.heroTileFreshLink ?? ""}
+                                                                onChange={(e) =>
+                                                                    setHomeConfig({ ...homeConfig, heroTileFreshLink: e.target.value })
+                                                                }
+                                                                className="w-full px-4 py-3 bg-neutral-g1 border-[2px] border-neutral-black rounded-[4px] font-display text-[11px] font-bold outline-none focus:bg-white transition-all"
+                                                            />
+                                                        </div>
+                                                    </div>
+                                                </div>
+
+                                                <div className="space-y-4 pt-4 border-t-[2px] border-neutral-black/10">
+                                                    <p className="font-display text-[10px] font-black uppercase tracking-[2px] text-neutral-g4 px-1">
+                                                        Hero right column — bottom tile (artists)
+                                                    </p>
+                                                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                                        <div className="space-y-2 md:col-span-1">
+                                                            <label className="font-display text-[9px] font-black uppercase tracking-[2px] text-neutral-g4 px-1">
+                                                                Title (line break allowed)
+                                                            </label>
+                                                            <textarea
+                                                                value={homeConfig.heroTileArtistsTitle ?? ""}
+                                                                onChange={(e) =>
+                                                                    setHomeConfig({ ...homeConfig, heroTileArtistsTitle: e.target.value })
+                                                                }
+                                                                rows={2}
+                                                                className="w-full px-4 py-3 bg-neutral-g1 border-[2px] border-neutral-black rounded-[4px] font-display text-[12px] font-bold outline-none focus:bg-white transition-all resize-y min-h-[72px]"
+                                                            />
+                                                        </div>
+                                                        <div className="space-y-2">
+                                                            <label className="font-display text-[9px] font-black uppercase tracking-[2px] text-neutral-g4 px-1">
+                                                                Button
+                                                            </label>
+                                                            <input
+                                                                type="text"
+                                                                value={homeConfig.heroTileArtistsButton ?? ""}
+                                                                onChange={(e) =>
+                                                                    setHomeConfig({ ...homeConfig, heroTileArtistsButton: e.target.value })
+                                                                }
+                                                                className="w-full px-4 py-3 bg-neutral-g1 border-[2px] border-neutral-black rounded-[4px] font-display text-[11px] font-black uppercase tracking-[2px] outline-none focus:bg-white transition-all"
+                                                            />
+                                                        </div>
+                                                        <div className="space-y-2">
+                                                            <label className="font-display text-[9px] font-black uppercase tracking-[2px] text-neutral-g4 px-1">
+                                                                Link
+                                                            </label>
+                                                            <input
+                                                                type="text"
+                                                                value={homeConfig.heroTileArtistsLink ?? ""}
+                                                                onChange={(e) =>
+                                                                    setHomeConfig({ ...homeConfig, heroTileArtistsLink: e.target.value })
+                                                                }
+                                                                className="w-full px-4 py-3 bg-neutral-g1 border-[2px] border-neutral-black rounded-[4px] font-display text-[11px] font-bold outline-none focus:bg-white transition-all"
+                                                            />
+                                                        </div>
+                                                    </div>
                                                 </div>
                                             </div>
                                         )}
