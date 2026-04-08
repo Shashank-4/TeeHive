@@ -13,31 +13,35 @@ export default function Footer() {
             <div className="absolute top-0 left-[-5%] text-[300px] font-display font-black text-neutral-black/[0.03] select-none leading-none -z-0 pointer-events-none uppercase">HIVE</div>
 
             <div className="relative z-10 space-y-24">
-                {/* ── NEWSLETTER STRIP ── */}
+                {/* ── CONTACT STRIP (same layout as former newsletter band) ── */}
                 <section className="bg-neutral-black text-white p-12 md:p-16 rounded-[6px] border-[3px] border-neutral-black shadow-[12px_12px_0px_0px_rgba(255,222,0,1)] flex flex-col lg:flex-row items-center justify-between gap-12 group hover:shadow-none hover:translate-x-3 hover:translate-y-3 transition-all duration-300">
                     <div className="space-y-4 max-w-[500px]">
                         <div className="inline-flex items-center gap-2 bg-primary text-neutral-black px-3 py-1 rounded-[4px] font-display text-[9px] font-black uppercase tracking-[2px]">
-                            <Mail className="w-3 h-3" /> COMM_FEED_AUTH
+                            <Mail className="w-3 h-3" /> Contact
                         </div>
                         <h2 className="font-display text-[42px] md:text-[52px] font-black tracking-tight leading-none uppercase">
-                            STAY IN THE <span className="text-primary italic">LOOP.</span>
+                            GET IN <span className="text-primary italic">TOUCH.</span>
                         </h2>
-                        <p className="font-display text-[14px] font-bold text-white/40 uppercase tracking-[2px]">
-                            SYNCHRONIZE WITH NEW DROPS, ARTIST SPOTLIGHTS & EXCLUSIVE EARLY ACCESS CODES.
+                        <p className="font-display text-[14px] font-bold text-white/50 leading-relaxed">
+                            Questions about an order, a design, or working with us? Send us an email and we will get back to you.
                         </p>
                     </div>
-                    <form className="flex w-full lg:w-auto flex-1 max-w-[480px] group/form" onSubmit={(e) => e.preventDefault()}>
-                        <div className="flex-1 relative">
-                            <input
-                                type="email"
-                                placeholder="JOIN_COMM_CHANNEL@DOMAIN"
-                                className="w-full bg-white text-neutral-black border-[3.5px] border-white rounded-[4px] border-r-0 rounded-r-none px-6 py-5 font-display text-[13px] font-black uppercase tracking-[1px] outline-none placeholder:text-neutral-g3 focus:border-primary transition-all"
-                            />
+                    <div className="flex w-full lg:w-auto flex-1 max-w-[480px] group/form">
+                        <div className="flex-1 flex items-stretch min-h-[60px] bg-white text-neutral-black border-[3.5px] border-white rounded-[4px] border-r-0 rounded-r-none px-6 py-5 font-display text-[13px] font-bold outline-none">
+                            <a
+                                href="mailto:contact@teehive.co.in"
+                                className="text-neutral-black hover:text-primary transition-colors break-all no-underline self-center"
+                            >
+                                contact@teehive.co.in
+                            </a>
                         </div>
-                        <button type="submit" className="bg-primary text-neutral-black border-[3.5px] border-primary border-l-0 rounded-r-[4px] px-8 font-display text-[14px] font-black tracking-[2px] uppercase whitespace-nowrap hover:bg-white hover:text-neutral-black hover:border-white transition-all group-hover/form:translate-x-1 duration-300 inline-flex items-center gap-2 shadow-[4px_0_12px_rgba(255,222,0,0.3)]">
-                            AUTHORIZE <ArrowRight className="w-4 h-4" />
-                        </button>
-                    </form>
+                        <a
+                            href="mailto:contact@teehive.co.in"
+                            className="bg-primary text-neutral-black border-[3.5px] border-primary border-l-0 rounded-r-[4px] px-8 font-display text-[14px] font-black tracking-[2px] uppercase whitespace-nowrap hover:bg-white hover:text-neutral-black hover:border-white transition-all group-hover/form:translate-x-1 duration-300 inline-flex items-center justify-center gap-2 shadow-[4px_0_12px_rgba(255,222,0,0.3)] no-underline"
+                        >
+                            Email us <ArrowRight className="w-4 h-4" />
+                        </a>
+                    </div>
                 </section>
 
                 {/* ── MAIN FOOTER ── */}

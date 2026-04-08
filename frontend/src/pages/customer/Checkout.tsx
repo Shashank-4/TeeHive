@@ -45,9 +45,7 @@ export default function Checkout() {
     const discountAmount = appliedCoupon ? Math.round(subtotal * (appliedCoupon.discountPercent / 100)) : 0;
     const discountedSubtotal = subtotal - discountAmount;
     
-    // Calculate shipping based on discounted total
-    const shipping = discountedSubtotal > 3000 ? 0 : 100;
-    const total = discountedSubtotal + shipping;
+    const total = discountedSubtotal;
 
     const handleApplyCoupon = async () => {
         if (!couponCode) return;
@@ -261,7 +259,7 @@ export default function Checkout() {
 
     if (!isAuthenticated) {
         return (
-            <div className="min-h-[70vh] flex flex-col items-center justify-center px-8">
+            <div className="min-h-[calc(100dvh-5rem)] min-h-[70vh] flex flex-col items-center justify-center pl-[max(1.25rem,env(safe-area-inset-left))] pr-[max(1.25rem,env(safe-area-inset-right))]">
                 <div className="text-[64px] mb-6 grayscale opacity-20">👤</div>
                 <h2 className="font-display text-[24px] font-black text-neutral-black mb-4 uppercase tracking-[0.5px]">Please sign in to checkout</h2>
                 <Link to="/login" className="bg-neutral-black text-white px-8 py-3.5 font-display text-[12px] font-black uppercase tracking-[1px] rounded-[4px] hover:bg-primary hover:text-neutral-black transition-all no-underline">
@@ -273,7 +271,7 @@ export default function Checkout() {
 
     if (items.length === 0) {
         return (
-            <div className="min-h-[70vh] flex flex-col items-center justify-center px-8">
+            <div className="min-h-[calc(100dvh-5rem)] min-h-[70vh] flex flex-col items-center justify-center pl-[max(1.25rem,env(safe-area-inset-left))] pr-[max(1.25rem,env(safe-area-inset-right))]">
                 <div className="w-20 h-20 rounded-full bg-neutral-g1 flex items-center justify-center mb-6 border border-neutral-g2 shadow-sm">
                     <ShoppingBag className="w-10 h-10 text-neutral-g3" />
                 </div>
@@ -292,46 +290,54 @@ export default function Checkout() {
     ];
 
     return (
-        <div className="bg-neutral-white min-h-screen py-10 w-full px-8">
-            <div className="w-full">
+        <div className="bg-neutral-white w-full min-h-[calc(100dvh-4.5rem)] pb-[max(1.5rem,env(safe-area-inset-bottom))]">
+            <div className="w-full max-w-[min(100vw,1600px)] mx-auto pl-[max(1rem,env(safe-area-inset-left))] pr-[max(1rem,env(safe-area-inset-right))] pt-[clamp(0.75rem,2.5vh,1.75rem)]">
                 {/* Back */}
-                <Link to="/cart" className="inline-flex items-center gap-2 text-neutral-g4 hover:text-neutral-black mb-10 no-underline">
-                    <ArrowLeft className="w-4 h-4" />
-                    <span className="font-display text-[11px] font-extrabold uppercase tracking-[1.5px]">Return to Bag</span>
+                <Link to="/cart" className="inline-flex items-center gap-2 text-neutral-g4 hover:text-neutral-black mb-[clamp(0.75rem,2vh,1.5rem)] no-underline">
+                    <ArrowLeft className="w-4 h-4 shrink-0" />
+                    <span className="font-display text-[11px] font-extrabold uppercase tracking-[1.5px]">Return to bag</span>
                 </Link>
 
-                <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6 mb-12 pb-6 border-b-[1.5px] border-neutral-black">
-                    <h1 className="font-display text-[clamp(28px,4vw,44px)] font-black text-neutral-black leading-none uppercase tracking-[-0.5px]">
-                        CHECKOUT <span className="text-primary italic">— SECURE PORTAL</span>
+                <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 mb-[clamp(1rem,3vh,2rem)] pb-4 sm:pb-5 border-b-[1.5px] border-neutral-black">
+                    <h1 className="font-display text-[clamp(1.375rem,4.5vw,2.75rem)] font-black text-neutral-black leading-tight uppercase tracking-[-0.5px]">
+                        Checkout <span className="text-primary italic">— secure</span>
                     </h1>
 
                     {/* Progress */}
-                    <nav aria-label="Progress" className="hidden sm:block">
-                        <ol role="list" className="flex items-center gap-12">
+                    <nav aria-label="Progress" className="hidden sm:block shrink-0">
+                        <ol role="list" className="flex items-center gap-[clamp(1rem,4vw,3rem)]">
                             {steps.map((s, idx) => (
                                 <li key={s.id} className="flex items-center gap-3">
-                                    <div className={`w-9 h-9 border-[1.5px] border-neutral-black rounded-full flex items-center justify-center transition-all ${step === s.id || (step === "payment" && s.id === "shipping") ? "bg-primary shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]" : "bg-neutral-g1"}`}>
+                                    <div className={`w-9 h-9 border-[1.5px] border-neutral-black rounded-full flex items-center justify-center transition-all shrink-0 ${step === s.id || (step === "payment" && s.id === "shipping") ? "bg-primary shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]" : "bg-neutral-g1"}`}>
                                         {step === "payment" && s.id === "shipping" ? <Check className="w-5 h-5" /> : <s.icon className="w-4 h-4" />}
                                     </div>
                                     <span className={`font-display text-[11px] font-black uppercase tracking-[1px] ${step === s.id ? "text-neutral-black" : "text-neutral-g3"}`}>{s.title}</span>
-                                    {idx === 0 && <div className="w-12 h-[1.5px] bg-neutral-black hidden md:block"></div>}
+                                    {idx === 0 && <div className="w-8 sm:w-12 h-[1.5px] bg-neutral-black hidden md:block shrink-0"></div>}
                                 </li>
                             ))}
                         </ol>
                     </nav>
                 </div>
 
-                <div className="lg:grid lg:grid-cols-12 lg:gap-x-12 lg:items-start max-w-[1600px] mx-auto">
+                <div className="lg:grid lg:grid-cols-12 lg:gap-x-[clamp(1rem,3vw,2.5rem)] xl:gap-x-12 lg:items-start lg:pb-4">
                     <div className="lg:col-span-7">
                         {step === "shipping" ? (
                             <form
                                 onSubmit={handleShippingSubmit}
-                                className="bg-white border-[1.5px] border-neutral-black p-8 rounded-[2px] shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]"
+                                className="bg-white border-[1.5px] border-neutral-black p-[clamp(1rem,3vw,2rem)] rounded-[2px] shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]"
                             >
-                                <h2 className="font-display text-[18px] font-black text-neutral-black uppercase tracking-[1px] mb-8 flex items-center gap-3">
-                                    <Truck className="w-5 h-5 text-primary" /> Delivery Address
-                                </h2>
-                                <div className="grid grid-cols-1 gap-y-6 gap-x-6 sm:grid-cols-2">
+                                <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between sm:gap-6 mb-[clamp(1rem,3vh,1.5rem)] pb-4 border-b-[1.5px] border-neutral-g1">
+                                    <h2 className="font-display text-[clamp(1rem,2.5vw,1.125rem)] font-black text-neutral-black uppercase tracking-[1px] flex items-center gap-3 min-w-0">
+                                        <Truck className="w-5 h-5 text-primary shrink-0" /> Delivery address
+                                    </h2>
+                                    <button
+                                        type="submit"
+                                        className="bg-primary text-neutral-black px-[clamp(1.25rem,3vw,2.25rem)] py-[clamp(0.65rem,1.8vh,0.9rem)] font-display text-[clamp(12px,2.2vw,14px)] font-black uppercase tracking-[1px] border-[1.5px] border-neutral-black shadow-[6px_6px_0px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-1 hover:translate-y-1 transition-all shrink-0 self-end sm:self-auto w-full sm:w-auto"
+                                    >
+                                        Continue to payment
+                                    </button>
+                                </div>
+                                <div className="grid grid-cols-1 gap-y-[clamp(0.75rem,2vh,1.5rem)] gap-x-6 sm:grid-cols-2">
                                     {[
                                         { id: "firstName", label: "First Name", type: "text", span: false, auto: "given-name" as const },
                                         { id: "lastName", label: "Last Name", type: "text", span: false, auto: "family-name" as const },
@@ -408,23 +414,14 @@ export default function Checkout() {
                                         />
                                     </div>
                                 </div>
-
-                                <div className="mt-10 flex justify-end pt-8 border-t-[1.5px] border-neutral-g1">
-                                    <button
-                                        type="submit"
-                                        className="bg-primary text-neutral-black px-10 py-4 font-display text-[14px] font-black uppercase tracking-[1px] border-[1.5px] border-neutral-black shadow-[6px_6px_0px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-1 hover:translate-y-1 transition-all"
-                                    >
-                                        Proceed to Checkout
-                                    </button>
-                                </div>
                             </form>
                         ) : (
-                            <div className="bg-white border-[1.5px] border-neutral-black p-8 rounded-[2px] shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]">
-                                <h2 className="font-display text-[18px] font-black text-neutral-black uppercase tracking-[1px] mb-8 flex items-center gap-3">
-                                    <Check className="w-5 h-5 text-primary" /> Review & Confirm
+                            <div className="bg-white border-[1.5px] border-neutral-black p-[clamp(1rem,3vw,2rem)] rounded-[2px] shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]">
+                                <h2 className="font-display text-[clamp(1rem,2.5vw,1.125rem)] font-black text-neutral-black uppercase tracking-[1px] mb-[clamp(1rem,3vh,2rem)] flex items-center gap-3">
+                                    <Check className="w-5 h-5 text-primary shrink-0" /> Review & pay
                                 </h2>
 
-                                <div className="bg-neutral-g1 border-[1.5px] border-neutral-black rounded-[2px] p-6 mb-10 group transition-all hover:bg-white">
+                                <div className="bg-neutral-g1 border-[1.5px] border-neutral-black rounded-[2px] p-[clamp(1rem,2.5vw,1.5rem)] mb-[clamp(1rem,3vh,2.5rem)] group transition-all hover:bg-white">
                                     <div className="flex justify-between items-start mb-4">
                                         <h3 className="font-display text-[12px] font-black text-neutral-black uppercase tracking-[1px]">Shipping Destination</h3>
                                         <button
@@ -461,12 +458,12 @@ export default function Checkout() {
                                     <button
                                         onClick={handleCheckout}
                                         disabled={isLoading}
-                                        className="w-full h-[68px] bg-primary border-[1.5px] border-neutral-black font-display text-[18px] font-black uppercase tracking-[1.5px] shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] active:shadow-none active:translate-x-1 active:translate-y-1 transition-all flex items-center justify-center gap-3"
+                                        className="w-full min-h-[clamp(3.25rem,12vw,4.25rem)] py-3 bg-primary border-[1.5px] border-neutral-black font-display text-[clamp(15px,3.5vw,18px)] font-black uppercase tracking-[1.5px] shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] active:shadow-none active:translate-x-1 active:translate-y-1 transition-all flex items-center justify-center gap-3"
                                     >
                                         {isLoading ? (
-                                            <><Loader size="w-6 h-6 border-2" /> Processing Order...</>
+                                            <><Loader size="w-6 h-6 border-2" /> Processing…</>
                                         ) : (
-                                            `Authorize Payment — ₹${total.toLocaleString('en-IN')}`
+                                            `Pay ₹${total.toLocaleString("en-IN")}`
                                         )}
                                     </button>
 
@@ -484,17 +481,17 @@ export default function Checkout() {
                         )}
                     </div>
 
-                    {/* Order Summary Sidebar */}
-                    <div className="lg:col-span-5 mt-10 lg:mt-0 lg:sticky lg:top-[160px]">
+                    {/* Order summary — sticky within viewport below navbar */}
+                    <div className="lg:col-span-5 mt-8 lg:mt-0 lg:sticky lg:top-[max(5.5rem,env(safe-area-inset-top))] lg:max-h-[calc(100dvh-6.5rem)] lg:overflow-y-auto lg:overscroll-y-contain lg:self-start [scrollbar-gutter:stable]">
                         <div className="bg-white border-[1.5px] border-neutral-black rounded-[2px] overflow-hidden shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]">
-                            <div className="p-8">
-                                <h2 className="font-display text-[16px] font-black text-neutral-black uppercase tracking-[1px] mb-8 pb-4 border-b border-neutral-g1">
-                                    Order Preview <span className="text-neutral-g3 text-[12px] font-bold lowercase tracking-normal">({items.length} items)</span>
+                            <div className="p-[clamp(1rem,3vw,2rem)]">
+                                <h2 className="font-display text-[clamp(14px,2.5vw,16px)] font-black text-neutral-black uppercase tracking-[1px] mb-[clamp(0.75rem,2vh,2rem)] pb-4 border-b border-neutral-g1">
+                                    Your order <span className="text-neutral-g3 text-[12px] font-bold normal-case tracking-normal">({items.length} items)</span>
                                 </h2>
-                                <div className="divide-y-[1.5px] divide-neutral-g1">
+                                <div className="divide-y-[1.5px] divide-neutral-g1 max-h-[min(45vh,24rem)] overflow-y-auto lg:max-h-none lg:overflow-visible pr-1 -mr-1">
                                     {items.map((item) => (
-                                        <div key={`${item.productId}-${item.size}-${item.color}`} className="py-5 flex gap-5">
-                                            <div className="flex-shrink-0 w-20 h-24 border border-neutral-g2 rounded-[2px] overflow-hidden bg-neutral-g1">
+                                        <div key={`${item.productId}-${item.size}-${item.color}`} className="py-4 flex gap-4">
+                                            <div className="flex-shrink-0 w-[clamp(4rem,18vw,5rem)] h-[clamp(4.5rem,20vw,6rem)] border border-neutral-g2 rounded-[2px] overflow-hidden bg-neutral-g1">
                                                 <img
                                                     src={cartItemThumbnail(item)}
                                                     alt={item.name}
@@ -568,11 +565,9 @@ export default function Checkout() {
                                         </div>
                                     )}
 
-                                    <div className="flex justify-between font-display text-[12px] font-bold uppercase text-neutral-g4">
-                                        <span>Logistics</span>
-                                        <span className={shipping === 0 ? "text-success font-black" : "text-neutral-black text-[13px]"}>
-                                            {shipping === 0 ? "FREE" : `₹${shipping.toLocaleString('en-IN')}`}
-                                        </span>
+                                    <div className="flex justify-between font-display text-[12px] font-bold text-neutral-g4">
+                                        <span>Shipping</span>
+                                        <span className="text-success font-black text-[13px]">Free</span>
                                     </div>
                                     <div className="pt-1">
                                         <GstInclusiveNote />

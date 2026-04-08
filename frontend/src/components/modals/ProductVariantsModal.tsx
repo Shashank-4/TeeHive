@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { X, Loader2, Save } from "lucide-react";
+import { PRODUCT_SIZES } from "../../constants/productSizes";
 import api from "../../api/axios";
 
 interface ProductVariantsModalProps {
@@ -16,7 +17,7 @@ interface Variant {
     stockStatus: "IN_STOCK" | "LOW_STOCK" | "OUT_OF_STOCK";
 }
 
-const SIZES = ["S", "M", "L", "XL", "2XL"];
+const SIZES = [...PRODUCT_SIZES];
 
 export default function ProductVariantsModal({ isOpen, onClose, productId, productTitle, onSaveSuccess }: ProductVariantsModalProps) {
     const [variants, setVariants] = useState<Variant[]>([]);

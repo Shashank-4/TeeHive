@@ -10,6 +10,34 @@ import {
 const router = Router();
 const prisma = new PrismaClient();
 
+const PAID_ORDER_STATUSES = ["PAID", "SHIPPED", "DELIVERED"] as const;
+
+/**
+ * Many verified artists sell before setting a profile photo; use their newest published
+ * product mockup so listings (e.g. home “top by sales”) still show a visual.
+ */
+async function withDisplayPhotoFallback<
+    T extends { id: string; displayPhotoUrl: string | null },
+>(rows: T[]): Promise<T[]> {
+    if (rows.length === 0) return rows;
+    const ids = rows.map((r) => r.id);
+    const products = await prisma.product.findMany({
+        where: { artistId: { in: ids }, status: "PUBLISHED" },
+        select: { artistId: true, mockupImageUrl: true, createdAt: true },
+        orderBy: { createdAt: "desc" },
+    });
+    const mockupByArtist = new Map<string, string>();
+    for (const p of products) {
+        if (p.mockupImageUrl && !mockupByArtist.has(p.artistId)) {
+            mockupByArtist.set(p.artistId, p.mockupImageUrl);
+        }
+    }
+    return rows.map((r) => ({
+        ...r,
+        displayPhotoUrl: r.displayPhotoUrl || mockupByArtist.get(r.id) || null,
+    }));
+}
+
 function artistPublicWhere(param: string) {
     const trimmed = param.trim();
     const base = {
@@ -32,11 +60,14 @@ router.get("/", async (req: Request, res: Response) => {
         const page = parseInt(req.query.page as string) || 1;
         const limit = parseInt(req.query.limit as string) || 20;
         const search = (req.query.search as string) || "";
+        const sortRaw = String(req.query.sort || "").toLowerCase();
 
-        const where: any = {
+        const baseWhere: any = {
             isArtist: true,
             verificationStatus: "VERIFIED",
         };
+
+        const where: any = { ...baseWhere };
 
         if (search) {
             where.OR = [
@@ -46,29 +77,120 @@ router.get("/", async (req: Request, res: Response) => {
             ];
         }
 
+        const artistSelect = {
+            id: true,
+            name: true,
+            displayName: true,
+            artistSlug: true,
+            displayPhotoUrl: true,
+            coverPhotoUrl: true,
+            bio: true,
+            instagramUrl: true,
+            portfolioUrl: true,
+            artistRating: true,
+            reviewCount: true,
+            _count: {
+                select: {
+                    products: {
+                        where: { status: "PUBLISHED" as const },
+                    },
+                },
+            },
+        } as const;
+
+        if (sortRaw === "sales" && !search) {
+            const sold = await prisma.orderItem.groupBy({
+                by: ["artistId"],
+                where: {
+                    artistId: { not: null },
+                    order: { status: { in: [...PAID_ORDER_STATUSES] } },
+                },
+                _sum: { quantity: true },
+                orderBy: { _sum: { quantity: "desc" } },
+                skip: Math.max(0, (page - 1) * limit),
+                take: limit,
+            });
+
+            const ids = sold.map((s) => s.artistId).filter((id): id is string => Boolean(id));
+
+            /** No paid orders yet — show verified artists who have published products (catalog depth first). */
+            if (ids.length === 0) {
+                const withCatalog = await prisma.user.findMany({
+                    where: {
+                        ...baseWhere,
+                        products: { some: { status: "PUBLISHED" } },
+                    },
+                    select: artistSelect,
+                });
+                withCatalog.sort(
+                    (a, b) => (b._count.products ?? 0) - (a._count.products ?? 0)
+                );
+                const total = withCatalog.length;
+                const pageRows = withCatalog.slice(
+                    Math.max(0, (page - 1) * limit),
+                    Math.max(0, (page - 1) * limit) + limit
+                );
+                const rowsWithPhotos = await withDisplayPhotoFallback(pageRows);
+                return res.json({
+                    status: "success",
+                    data: {
+                        artists: rowsWithPhotos.map((a) => ({
+                            ...a,
+                            productCount: a._count.products,
+                            _count: undefined,
+                        })),
+                        pagination: {
+                            page,
+                            limit,
+                            total,
+                            totalPages: Math.ceil(total / limit) || 1,
+                        },
+                    },
+                });
+            }
+
+            const rows = await prisma.user.findMany({
+                where: { ...baseWhere, id: { in: ids } },
+                select: artistSelect,
+            });
+
+            const orderMap = new Map(ids.map((id, i) => [id, i]));
+            rows.sort((a, b) => (orderMap.get(a.id) ?? 0) - (orderMap.get(b.id) ?? 0));
+
+            const rowsWithPhotos = await withDisplayPhotoFallback(rows);
+
+            const totalSoldGroups = await prisma.orderItem.groupBy({
+                by: ["artistId"],
+                where: {
+                    artistId: { not: null },
+                    order: { status: { in: [...PAID_ORDER_STATUSES] } },
+                },
+                _sum: { quantity: true },
+            });
+            const total = totalSoldGroups.filter((g) => g.artistId).length;
+
+            return res.json({
+                status: "success",
+                data: {
+                    artists: rowsWithPhotos.map((a) => ({
+                        ...a,
+                        productCount: a._count.products,
+                        _count: undefined,
+                    })),
+                    pagination: {
+                        page,
+                        limit,
+                        total,
+                        totalPages: Math.ceil(total / limit) || 1,
+                    },
+                },
+            });
+        }
+
         const [artists, total] = await Promise.all([
             prisma.user.findMany({
                 where,
-                select: {
-                    id: true,
-                    name: true,
-                    displayName: true,
-                    artistSlug: true,
-                    displayPhotoUrl: true,
-                    coverPhotoUrl: true,
-                    bio: true,
-                    instagramUrl: true,
-                    portfolioUrl: true,
-                    artistRating: true,
-                    reviewCount: true,
-                    _count: {
-                        select: {
-                            products: {
-                                where: { status: "PUBLISHED" },
-                            },
-                        },
-                    },
-                },
+                select: artistSelect,
                 orderBy: { createdAt: "desc" },
                 skip: (page - 1) * limit,
                 take: limit,
@@ -76,10 +198,12 @@ router.get("/", async (req: Request, res: Response) => {
             prisma.user.count({ where }),
         ]);
 
+        const artistsWithPhotos = await withDisplayPhotoFallback(artists);
+
         res.json({
             status: "success",
             data: {
-                artists: artists.map((a) => ({
+                artists: artistsWithPhotos.map((a) => ({
                     ...a,
                     productCount: a._count.products,
                     _count: undefined,

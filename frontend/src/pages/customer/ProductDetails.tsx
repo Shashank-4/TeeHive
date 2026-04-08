@@ -16,6 +16,8 @@ import { useCart } from "../../context/CartContext";
 import Loader from "../../components/shared/Loader";
 import StockStatusPill from "../../components/shared/StockStatusPill";
 import ImageWithSkeleton from "../../components/shared/ImageWithSkeleton";
+import SizeGuideModal from "../../components/shared/SizeGuideModal";
+import { PRODUCT_SIZES } from "../../constants/productSizes";
 import GstInclusiveNote from "../../components/shared/GstInclusiveNote";
 import ReturnPolicyNote from "../../components/shared/ReturnPolicyNote";
 import { BEE_BADGE } from "../../constants/brand";
@@ -77,7 +79,7 @@ export default function ProductDetails() {
     const [sizeGuideOpen, setSizeGuideOpen] = useState(false);
     const { addItem } = useCart();
 
-    const sizes = ["XS", "S", "M", "L", "XL", "XXL"];
+    const sizes = PRODUCT_SIZES;
 
     const [matrix, setMatrix] = useState<Record<string, Record<string, string>> | null>(null);
 
@@ -418,7 +420,7 @@ export default function ProductDetails() {
                                 <h3 className="font-display text-[11px] font-black tracking-[1.5px] uppercase text-neutral-black">
                                     Select Fabric Color
                                 </h3>
-                                <div className="flex flex-wrap gap-2.5 sm:gap-3">
+                                <div className="flex flex-wrap ml-1 gap-2.5 sm:gap-3">
                                     {(product.availableColors?.length ? product.availableColors : [product.tshirtColor]).map((colorHex) => (
                                         <button
                                             key={colorHex}
@@ -456,7 +458,7 @@ export default function ProductDetails() {
                                                 type="button"
                                                 disabled={soldOut}
                                                 onClick={() => setSelectedSize(size)}
-                                                className={`w-[58px] h-[44px] sm:w-[62px] sm:h-[48px] rounded-[2px] border-[1.5px] font-display text-[13px] font-black transition-all ${selectedSize === size
+                                                className={`min-w-[46px] h-[44px] px-1.5 sm:min-w-[52px] sm:h-[48px] rounded-[2px] border-[1.5px] font-display text-[11px] sm:text-[12px] font-black transition-all ${selectedSize === size
                                                     ? "border-neutral-black bg-primary text-neutral-black shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] -translate-x-0.5 -translate-y-0.5"
                                                     : soldOut ? "border-neutral-g1 bg-neutral-g1 text-neutral-g2 opacity-50 cursor-not-allowed line-through" : "border-neutral-g2 text-neutral-g3 hover:border-neutral-black hover:text-neutral-black"
                                                     }`}
@@ -562,36 +564,7 @@ export default function ProductDetails() {
                 </div>
             </div>
 
-            {sizeGuideOpen && (
-                <div
-                    className="fixed inset-0 z-[200] flex items-center justify-center bg-neutral-black/80 p-4"
-                    role="dialog"
-                    aria-modal="true"
-                    aria-label="Size guide"
-                    onClick={() => setSizeGuideOpen(false)}
-                >
-                    <div
-                        className="relative max-w-3xl w-full max-h-[90vh] overflow-auto bg-white border-[3px] border-neutral-black rounded-[4px] shadow-[12px_12px_0px_0px_rgba(0,0,0,1)] p-4 sm:p-6"
-                        onClick={(e) => e.stopPropagation()}
-                    >
-                        <button
-                            type="button"
-                            onClick={() => setSizeGuideOpen(false)}
-                            className="absolute top-3 right-3 font-display text-[11px] font-black uppercase tracking-[1px] px-3 py-1.5 border-[2px] border-neutral-black bg-primary hover:bg-white transition-colors"
-                        >
-                            Close
-                        </button>
-                        <h2 className="font-display text-[18px] font-black uppercase tracking-tight mb-4 pr-20">
-                            Size guide
-                        </h2>
-                        <img
-                            src="/assets/size-guide.png"
-                            alt="T-shirt size guide"
-                            className="w-full h-auto object-contain rounded-[2px] border border-neutral-g2"
-                        />
-                    </div>
-                </div>
-            )}
+            <SizeGuideModal open={sizeGuideOpen} onClose={() => setSizeGuideOpen(false)} />
         </div>
     );
 }

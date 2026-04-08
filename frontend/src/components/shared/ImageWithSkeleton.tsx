@@ -20,6 +20,8 @@ export default function ImageWithSkeleton({
     wrapperLayout = "relative",
     loading = "lazy",
     decoding = "async",
+    onLoad: onLoadProp,
+    onError: onErrorProp,
     ...imgProps
 }: ImageWithSkeletonProps) {
     const [isLoaded, setIsLoaded] = useState(false);
@@ -59,8 +61,14 @@ export default function ImageWithSkeleton({
                 alt={alt}
                 loading={loading}
                 decoding={decoding}
-                onLoad={() => setIsLoaded(true)}
-                onError={() => setIsLoaded(true)}
+                onLoad={(e) => {
+                    setIsLoaded(true);
+                    onLoadProp?.(e);
+                }}
+                onError={(e) => {
+                    setIsLoaded(true);
+                    onErrorProp?.(e);
+                }}
                 className={`${className} transition-opacity duration-300 ${
                     isLoaded ? "opacity-100" : "opacity-0"
                 }`}

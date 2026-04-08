@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { ArrowRight, Sparkles, Palette, ChevronLeft, ChevronRight, ShoppingCart, Truck, ShieldCheck, Star } from "lucide-react";
+import { ArrowRight, Sparkles, Palette, ChevronLeft, ChevronRight, ShoppingCart, Truck, ShieldCheck, Shirt } from "lucide-react";
 import Loader from "../components/shared/Loader";
 import ImageWithSkeleton from "../components/shared/ImageWithSkeleton";
 import api from "../api/axios";
@@ -16,7 +16,8 @@ interface Product {
     id: string;
     name: string;
     price: number;
-    compareAtPrice: number | null;
+    /** Higher “was” price when on sale; used in flash offer strikethrough. */
+    compareAtPrice?: number | null;
     mockupImageUrl: string;
     backMockupImageUrl?: string;
     primaryView?: "front" | "back";
@@ -56,9 +57,15 @@ interface ArtistSummary {
 
 interface CustomerHomeConfig {
     showHeroSection: boolean;
+    /** Use a line break between the two headline lines (e.g. Wear Art. + newline + Break The Basic.). */
     heroTitle: string;
     heroSubtitle: string;
-    heroButtonText: string;
+    heroTileFreshTitle?: string;
+    heroTileFreshButton?: string;
+    heroTileFreshLink?: string;
+    heroTileArtistsTitle?: string;
+    heroTileArtistsButton?: string;
+    heroTileArtistsLink?: string;
     showCategoriesSection: boolean;
     showFeaturedProducts: boolean;
     showTrendingArtists: boolean;
@@ -80,11 +87,19 @@ interface SpecialOfferConfig {
     ctaText: string;
 }
 
+const SUBTITLE_DEFAULT =
+    "Behind every design is a real Indian creator with a dream. Your purchase puts money directly in their hands — not a factory, not a corporation. Just art and the people who make it.";
+
 const DEFAULT_HOME_CONFIG: CustomerHomeConfig = {
     showHeroSection: true,
-    heroTitle: "WEAR ART. Change Lives.",
-    heroSubtitle: "Behind every design is a real Indian creator with a dream. Your purchase puts money directly in their hands — not a factory, not a corporation. Just art and the people who make it.",
-    heroButtonText: "Shop Collection",
+    heroTitle: "",
+    heroSubtitle: SUBTITLE_DEFAULT,
+    heroTileFreshTitle: "Fresh Designs\nEvery Day",
+    heroTileFreshButton: "Explore",
+    heroTileFreshLink: "/products?latestDrops=true&sort=newest",
+    heroTileArtistsTitle: "Meet Independent\nIndian Artists",
+    heroTileArtistsButton: "Browse",
+    heroTileArtistsLink: "/artists",
     showCategoriesSection: true,
     showFeaturedProducts: true,
     showTrendingArtists: true,
@@ -96,21 +111,44 @@ const DEFAULT_BANNERS_CONFIG: BannersConfig = {
     heroBgImage: "",
 };
 
+function heroHeadlineLines(raw: string): [string, string] {
+    const parts = raw.split("\n").map((s) => s.trim()).filter(Boolean);
+    return [parts[0] || "Wear Art.", parts[1] || "Break The Basic."];
+}
+
+function HeroAccentLine({ text, accent }: { text: string; accent: string }) {
+    const i = text.lastIndexOf(accent);
+    if (i < 0) return <span>{text}</span>;
+    return (
+        <span>
+            {text.slice(0, i)}
+            <span className="text-primary italic">{accent}</span>
+            {text.slice(i + accent.length)}
+        </span>
+    );
+}
+
 function ArtistHomeTilePhoto({
     photoUrl,
     initial,
+    alt = "",
 }: {
     photoUrl: string | null | undefined;
     initial: string;
+    /** Accessible name when photo loads (usually artist display name). */
+    alt?: string;
 }) {
     const [failed, setFailed] = useState(false);
+    useEffect(() => {
+        setFailed(false);
+    }, [photoUrl]);
     const showPhoto = Boolean(photoUrl && !failed);
     return (
         <div className="w-full aspect-square max-h-[120px] sm:max-h-[140px] shrink-0 rounded-[4px] overflow-hidden border-[2px] border-white/15 mb-4 rotate-[-2deg] group-hover:rotate-0 transition-transform">
             {showPhoto ? (
                 <ImageWithSkeleton
                     src={photoUrl!}
-                    alt=""
+                    alt={alt}
                     className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
                     wrapperClassName="w-full h-full"
                     onError={() => setFailed(true)}
@@ -141,6 +179,7 @@ function HomePage() {
     const [addedId, setAddedId] = useState<string | null>(null);
     const [showArtistSwitchModal, setShowArtistSwitchModal] = useState(false);
     const catScrollRef = useRef<HTMLDivElement>(null);
+    const catTabScrollRef = useRef<HTMLDivElement>(null);
 
     useEffect(() => {
         const fetchData = async () => {
@@ -151,7 +190,7 @@ function HomePage() {
                     api.get("/api/categories"),
                     api.get("/api/config/customer_home"),
                     api.get("/api/config/site_banners"),
-                    api.get("/api/artists?limit=8"),
+                    api.get("/api/artists?limit=3&sort=sales"),
                     api.get("/api/promotions/special-offer")
                 ]);
                 if (productsRes.status === "fulfilled") setFeaturedProducts(productsRes.value.data.data.products || []);
@@ -239,6 +278,10 @@ function HomePage() {
         if (catScrollRef.current) catScrollRef.current.scrollBy({ left: dir * 300, behavior: "smooth" });
     };
 
+    const scrollCatTabs = (dir: number) => {
+        if (catTabScrollRef.current) catTabScrollRef.current.scrollBy({ left: dir * 220, behavior: "smooth" });
+    };
+
     const routeArtistUser = () => {
         if (!user) return;
         if (user.verificationStatus === "VERIFIED") navigate("/artist/dashboard");
@@ -263,6 +306,10 @@ function HomePage() {
         setShowArtistSwitchModal(false);
         navigate("/login?type=artist&mode=signup");
     };
+
+    const [heroLine1, heroLine2] = heroHeadlineLines(config.heroTitle);
+    const heroSubtitle =
+        config.heroSubtitle?.trim() ? config.heroSubtitle : SUBTITLE_DEFAULT;
 
     return (
         <div className="bg-white overflow-hidden">
@@ -297,15 +344,15 @@ function HomePage() {
                             </div>
 
                             <h1 className="font-display text-[clamp(56px,8vw,100px)] font-black text-white leading-[0.85] tracking-light uppercase [text-shadow:0_4px_32px_rgba(0,0,0,0.55),0_2px_12px_rgba(0,0,0,0.4)]">
-                                Wear <span className="text-primary italic">Art.</span><br />
-                                <span className="relative tracking-light">
-                                    Break The<span className="italic tracking-light text-primary ml-5">Basic.</span>
-                                    {/* <div className="absolute -bottom-2 md:-bottom-4 left-0 w-full h-[6px] md:h-[10px] bg-primary -rotate-1 -z-10 shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]"></div> */}
+                                <HeroAccentLine text={heroLine1} accent="Art." />
+                                <br />
+                                <span className="relative tracking-light inline-block">
+                                    <HeroAccentLine text={heroLine2} accent="Basic." />
                                 </span>
                             </h1>
 
                             <p className="font-display text-[15px] md:text-[18px] font-bold text-white/75 leading-relaxed max-w-[500px] tracking-wide [text-shadow:0_2px_16px_rgba(0,0,0,0.45)]">
-                                {config.heroSubtitle}
+                                {heroSubtitle}
                             </p>
 
                             <div className="flex flex-wrap gap-5 pt-4">
@@ -347,18 +394,36 @@ function HomePage() {
                             {
                                 img: banners.heroFreshDesigns,
                                 tag: `${BEE_BADGE} NEW_RELEASES`,
-                                title: "Fresh Designs\nEvery Day",
-                                link: "/products?latestDrops=true&sort=newest",
-                                btn: "Explore",
+                                title:
+                                    config.heroTileFreshTitle ||
+                                    DEFAULT_HOME_CONFIG.heroTileFreshTitle ||
+                                    "Fresh Designs\nEvery Day",
+                                link:
+                                    config.heroTileFreshLink ||
+                                    DEFAULT_HOME_CONFIG.heroTileFreshLink ||
+                                    "/products?latestDrops=true&sort=newest",
+                                btn:
+                                    config.heroTileFreshButton ||
+                                    DEFAULT_HOME_CONFIG.heroTileFreshButton ||
+                                    "Explore",
                                 icon: Sparkles,
                                 span: true
                             },
                             {
                                 img: banners.heroBrowseArtists,
                                 tag: `${BEE_BADGE} PERSONNEL_REGISTRY`,
-                                title: "Meet Independent\nIndian Artists",
-                                link: "/artists",
-                                btn: "Browse",
+                                title:
+                                    config.heroTileArtistsTitle ||
+                                    DEFAULT_HOME_CONFIG.heroTileArtistsTitle ||
+                                    "Meet Independent\nIndian Artists",
+                                link:
+                                    config.heroTileArtistsLink ||
+                                    DEFAULT_HOME_CONFIG.heroTileArtistsLink ||
+                                    "/artists",
+                                btn:
+                                    config.heroTileArtistsButton ||
+                                    DEFAULT_HOME_CONFIG.heroTileArtistsButton ||
+                                    "Browse",
                                 span: true,
                                 icon: Palette
                             },
@@ -446,10 +511,14 @@ function HomePage() {
                                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-8 md:gap-10">
                                     {offerProducts.map((product) => {
                                         const discountedPrice = Math.round(product.price * (1 - specialOffer.discountPercent / 100));
+                                        const originalStrike =
+                                            product.compareAtPrice != null && product.compareAtPrice > product.price
+                                                ? product.compareAtPrice
+                                                : product.price;
                                         return (
-                                            <div key={product.id} className="group flex flex-col items-center">
-                                                <div className="relative w-full aspect-[4/5] bg-white border-[3px] border-neutral-black rounded-[4px] overflow-hidden transition-all duration-300 group-hover:shadow-[10px_10px_0px_0px_rgba(0,0,0,1)] group-hover:translate-x-[-4px] group-hover:translate-y-[-4px]">
-                                                    <Link to={`/products/${product.id}`} className="no-underline w-full h-full block">
+                                            <div key={product.id} className="w-full max-w-[320px] mx-auto group flex flex-col">
+                                                <div className="relative aspect-[4/5] bg-white rounded-[8px] border-[2.5px] border-neutral-black overflow-hidden transition-all duration-500 shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] group-hover:bg-neutral-g1 group-hover:shadow-none group-hover:translate-x-[4px] group-hover:translate-y-[4px]">
+                                                    <Link to={`/products/${product.id}`} className="no-underline w-full h-full block absolute inset-0 z-0">
                                                         {product.mockupImageUrl ? (
                                                             <ImageWithSkeleton
                                                                 src={
@@ -458,37 +527,51 @@ function HomePage() {
                                                                         : product.mockupImageUrl
                                                                 }
                                                                 alt={product.name}
-                                                                className="absolute inset-0 h-full w-full object-cover object-[50%_36%] origin-[50%_38%] scale-[1.2] transition-transform duration-500 group-hover:scale-[1.28]"
+                                                                className="absolute inset-0 h-full w-full object-cover object-[50%_36%] origin-[50%_38%] scale-[1.2] transition-transform duration-500 group-hover:scale-[1.3]"
                                                                 wrapperClassName="h-full w-full overflow-hidden"
                                                             />
                                                         ) : (
-                                                            <div className="w-full h-full flex items-center justify-center text-[100px] opacity-10 grayscale uppercase font-black italic">ART</div>
+                                                            <div className="w-full h-full flex items-center justify-center text-[100px] opacity-10 uppercase font-black italic">TEE</div>
                                                         )}
                                                     </Link>
-                                                    <div className="absolute top-4 left-4 flex gap-2 pointer-events-none">
-                                                        <span className="bg-neutral-black text-white px-3 py-1 font-display text-[12px] font-black uppercase tracking-[2px] rounded-[2px] border-[2px] border-neutral-black shadow-[4px_4px_0px_0px_rgba(255,255,255,0.2)]">-{specialOffer.discountPercent}%</span>
+                                                    <div className="absolute top-4 left-4 z-20 flex gap-2 pointer-events-none">
+                                                        <span className="bg-neutral-black text-white px-2.5 py-1 font-display text-[10px] font-black uppercase tracking-[1.5px] rounded-[2px] border-[2px] border-neutral-black shadow-[3px_3px_0px_0px_rgba(255,255,255,0.25)]">
+                                                            -{specialOffer.discountPercent}%
+                                                        </span>
+                                                    </div>
+                                                    <div className="absolute top-4 right-4 z-20 flex flex-col gap-2 scale-0 group-hover:scale-100 transition-all duration-300">
+                                                        <button
+                                                            type="button"
+                                                            onClick={(e) => {
+                                                                e.preventDefault();
+                                                                e.stopPropagation();
+                                                                handleQuickAdd(product);
+                                                            }}
+                                                            className={`w-12 h-12 rounded-[4px] border-[2px] border-neutral-black flex items-center justify-center transition-all shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] active:shadow-none active:translate-y-1 ${addedId === product.id ? "bg-success text-white" : "bg-white text-neutral-black hover:bg-neutral-black hover:text-white"}`}
+                                                        >
+                                                            <ShoppingCart className="w-5 h-5" />
+                                                        </button>
+                                                    </div>
+                                                    <div className="absolute bottom-0 left-0 w-full p-5 bg-gradient-to-t from-neutral-black to-transparent opacity-0 group-hover:opacity-100 transition-opacity z-10 pointer-events-none group-hover:pointer-events-auto">
+                                                        <div className="font-display text-[10px] font-black text-primary uppercase tracking-[2px] mb-1">{product.artist.name}</div>
+                                                        <div className="font-display text-[18px] font-black text-white leading-tight truncate">{product.name}</div>
                                                     </div>
                                                 </div>
-                                                <div className="w-full pt-6 flex flex-col items-center text-center">
-                                                    <Link to={artistPublicPath(product.artist)} className="font-display text-[12px] font-black tracking-[2px] uppercase text-neutral-black/60 hover:text-neutral-black transition-colors mb-2 no-underline">
-                                                        {product.artist.name}
-                                                    </Link>
-                                                    <h4 className="font-display text-[22px] font-black text-neutral-black leading-tight uppercase tracking-tight mb-2 truncate max-w-full italic px-2">
-                                                        {product.name}
-                                                    </h4>
-                                                    <div className="flex items-center gap-4 mb-5">
-                                                        <span className="font-display text-[16px] font-black text-neutral-black/40 line-through">₹{product.price.toLocaleString('en-IN')}</span>
-                                                        <span className="font-display text-[24px] font-black text-neutral-black">₹{discountedPrice.toLocaleString('en-IN')}</span>
+                                                <div className="py-5 flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+                                                    <div className="flex items-baseline gap-3 flex-wrap">
+                                                        <span className="font-display text-[18px] font-black text-neutral-black/45 line-through tabular-nums">
+                                                            ₹{originalStrike.toLocaleString("en-IN")}
+                                                        </span>
+                                                        <span className="font-display text-[26px] font-black text-neutral-black tabular-nums">
+                                                            ₹{discountedPrice.toLocaleString("en-IN")}
+                                                        </span>
                                                     </div>
-                                                    <button
-                                                        onClick={() => handleQuickAdd(product)}
-                                                        className={`w-full py-4 font-display text-[14px] font-black tracking-[2px] uppercase rounded-[2px] border-[2.5px] border-neutral-black transition-all ${addedId === product.id ? 'bg-success text-white border-success' : 'bg-neutral-black text-white hover:bg-white hover:text-neutral-black shadow-[6px_6px_0px_0px_rgba(0,0,0,0.5)] hover:shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] active:translate-y-1'}`}
-                                                    >
-                                                        {addedId === product.id ? '✓ Claimed' : 'Quick Add'}
-                                                    </button>
+                                                    <div className="font-display text-[10px] font-black text-neutral-black/50 uppercase tracking-[2px]">
+                                                        {(product.categories?.[0] || product.category || "Design").toString()}
+                                                    </div>
                                                 </div>
                                             </div>
-                                        )
+                                        );
                                     })}
                                 </div>
                             ) : (
@@ -539,17 +622,39 @@ function HomePage() {
                         </div>
                     </div>
 
-                    {/* Category Tabs */}
-                    <div className="flex items-center space-x-2 overflow-x-auto scrollbar-hide pb-8 mb-10 border-b border-white/5">
-                        {catNames.map((cat) => (
-                            <button
-                                key={cat}
-                                onClick={() => setActiveCat(cat)}
-                                className={`px-8 py-3.5 whitespace-nowrap font-display text-[12px] font-black uppercase tracking-[2px] rounded-[4px] border-[2px] transition-all ${activeCat === cat ? "bg-primary border-primary text-neutral-black shadow-[4px_4px_0px_0px_rgba(255,222,0,0.3)]" : "bg-transparent border-white/10 text-white/40 hover:text-white hover:border-white/30"}`}
-                            >
-                                {cat}
-                            </button>
-                        ))}
+                    {/* Category Tabs — horizontal scroll + arrows */}
+                    <div className="flex items-center gap-2 pb-8 mb-10 border-b border-white/5">
+                        <button
+                            type="button"
+                            onClick={() => scrollCatTabs(-1)}
+                            className="shrink-0 w-11 h-11 md:w-12 md:h-12 border-[2px] border-white/20 rounded-[4px] bg-white/5 text-white flex items-center justify-center hover:bg-primary hover:border-primary hover:text-neutral-black transition-all"
+                            aria-label="Scroll categories left"
+                        >
+                            <ChevronLeft className="w-5 h-5 md:w-6 md:h-6" />
+                        </button>
+                        <div
+                            ref={catTabScrollRef}
+                            className="flex flex-1 min-w-0 items-center gap-2 overflow-x-auto scrollbar-hide"
+                        >
+                            {catNames.map((cat) => (
+                                <button
+                                    key={cat}
+                                    type="button"
+                                    onClick={() => setActiveCat(cat)}
+                                    className={`shrink-0 px-8 py-3.5 whitespace-nowrap font-display text-[12px] font-black uppercase tracking-[2px] rounded-[4px] border-[2px] transition-all ${activeCat === cat ? "bg-primary border-primary text-neutral-black shadow-[4px_4px_0px_0px_rgba(255,222,0,0.3)]" : "bg-transparent border-white/10 text-white/40 hover:text-white hover:border-white/30"}`}
+                                >
+                                    {cat}
+                                </button>
+                            ))}
+                        </div>
+                        <button
+                            type="button"
+                            onClick={() => scrollCatTabs(1)}
+                            className="shrink-0 w-11 h-11 md:w-12 md:h-12 border-[2px] border-white/20 rounded-[4px] bg-white/5 text-white flex items-center justify-center hover:bg-primary hover:border-primary hover:text-neutral-black transition-all"
+                            aria-label="Scroll categories right"
+                        >
+                            <ChevronRight className="w-5 h-5 md:w-6 md:h-6" />
+                        </button>
                     </div>
 
                     {/* Product Carousel — fixed card width so items never stretch full-row */}
@@ -626,13 +731,18 @@ function HomePage() {
                     <div className="grid grid-cols-1 lg:grid-cols-2 gap-24 items-center relative z-10">
                         <div className="space-y-10">
                             <div className="inline-flex items-center gap-2 bg-primary text-neutral-black px-4 py-1 rounded-[4px] font-display text-[11px] font-black uppercase tracking-[3px]">
-                                <span aria-hidden>{BEE_BADGE}</span> Global Personnel Registry
+                                <span aria-hidden>{BEE_BADGE}</span> Featured artists on TeeHive
                             </div>
                             <h2 className="font-display text-[56px] md:text-[80px] font-black text-white leading-[0.85] tracking-tight uppercase">
-                                Meet The <span className="text-primary italic">Mind</span> Behind The Art.
+                                Meet The <span className="text-primary italic">Mind.</span>
+                                
                             </h2>
-                            <p className="font-display text-[16px] md:text-[18px] font-bold text-white/40 leading-relaxed max-w-[500px] uppercase tracking-wide">
-                                Every TeeHive artifact traces back to a verified independent creator. We empower nodes, not factories. Join the movement of transparent creation.
+                            <span className="font-display text-[56px] md:text-[80px] font-black text-white leading-[0.85] tracking-tight uppercase mt-0">
+                                Behind The Art
+                            </span>
+                            
+                            <p className="font-display text-[15px] md:text-[18px] font-bold text-white/40 leading-relaxed max-w-[500px] tracking-[2px]">
+                                Shop art-led T-shirts from verified independent artists. Browse their stores on TeeHive, discover new designs, and support creators directly—original work, transparent sourcing.
                             </p>
                             <div className="flex flex-wrap gap-5">
                                 <Link to="/artists" className="group/btn relative px-10 py-5 bg-primary text-neutral-black font-display text-[16px] font-black uppercase tracking-[2px] rounded-[4px] transition-all duration-300 shadow-[8px_8px_0px_0px_rgba(255,222,0,0.2)] hover:shadow-[4px_4px_0px_0px_rgba(255,222,0,1)] hover:translate-x-[4px] hover:translate-y-[4px] no-underline inline-flex items-center gap-4">
@@ -647,24 +757,30 @@ function HomePage() {
                             </div>
                         </div>
 
-                        <div className="grid grid-cols-2 sm:grid-cols-3 gap-6">
-                            {(artists.length > 0 ? artists.slice(0, 6) : Array.from({ length: 6 }, (_, i) => ({ id: String(i), name: `Node_${i + 1}`, styles: ["Art"], productCount: 0, artistSlug: null } as ArtistSummary))).map((artist, idx) => {
+                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-6 max-w-4xl ml-auto w-full">
+                            {(artists.length > 0 ? artists.slice(0, 3) : Array.from({ length: 3 }, (_, i) => ({ id: `placeholder-${i}`, name: `Creator ${i + 1}`, styles: ["Art"], productCount: 0, artistSlug: null } as ArtistSummary))).map((artist, idx) => {
                                 const label = (artist.displayName || artist.name || "?").trim();
+                                const styleTag = (artist.styles?.[0] || "Artist").toUpperCase();
                                 const initial = (label.charAt(0) || "?").toUpperCase();
                                 const photo = artist.displayPhotoUrl;
+                                const isPlaceholder = artists.length === 0;
                                 return (
                                     <Link
                                         key={artist.id}
-                                        to={artistPublicPath(artist)}
-                                        className={`bg-white/5 border-[2px] border-white/10 p-5 no-underline transition-all hover:bg-primary group rounded-[4px] flex flex-col min-h-[200px] sm:min-h-[220px] group ${idx % 2 === 0 ? "translate-y-6" : "-translate-y-6"}`}
+                                        to={isPlaceholder ? "/artists" : artistPublicPath(artist)}
+                                        className={`bg-white/5 border-[2px] border-white/10 p-5 no-underline transition-all hover:bg-primary group rounded-[4px] flex flex-col min-h-[200px] sm:min-h-[220px] group ${idx % 2 === 0 ? "sm:translate-y-6" : "sm:-translate-y-6"}`}
                                     >
-                                        <ArtistHomeTilePhoto photoUrl={photo} initial={initial} />
+                                        <ArtistHomeTilePhoto
+                                            photoUrl={photo}
+                                            initial={initial}
+                                            alt={isPlaceholder ? "" : label}
+                                        />
                                         <div className="space-y-1 mt-auto">
                                             <div className="font-display text-[16px] sm:text-[18px] font-black text-white group-hover:text-neutral-black truncate uppercase tracking-tighter">
-                                                {label}
+                                                {label.toUpperCase()}
                                             </div>
                                             <div className="font-display text-[10px] font-black text-primary group-hover:text-neutral-black/60 uppercase tracking-[2px]">
-                                                {artist.styles?.[0] || "GENERAL_ARTIST"}
+                                                {styleTag}
                                             </div>
                                             <div className="pt-1 group-hover:[&_.text-neutral-g3]:text-neutral-black/50">
                                                 <ArtistRatingInline
@@ -686,18 +802,18 @@ function HomePage() {
             {/* ── TRUST INFRASTRUCTURE ── */}
             <section className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 bg-neutral-black border-y-[3px] border-neutral-black text-white">
                 {[
-                    { icon: Truck, title: "LOGISTICS_FLOW", sub: "SYNCED ALL-INDIA TRANSPORT" },
-                    { icon: Palette, title: "CREATOR_MODELS", sub: "100% INDEPENDENT NODES" },
-                    { icon: ShieldCheck, title: "SECURE_PROTOCOL", sub: "7-DAY RECOVERY GUARANTEE" },
-                    { icon: Star, title: "ASSET_QUALITY", sub: "PREMIUM 220GSM CHASSIS" },
+                    { icon: Shirt, title: "Comfy Tees", sub: "Quality cotton prints made to feel good and last." },
+                    { icon: Palette, title: "25% Royalty", sub: "A meaningful slice of every sale goes to the creator." },
+                    { icon: ShieldCheck, title: "5-day returns", sub: "Not the right fit? You have five days to start a return." },
+                    { icon: Truck, title: "Free Shipping", sub: "We ship across India at no extra delivery charge." },
                 ].map((item, i) => (
                     <div key={i} className={`p-10 flex flex-col items-center text-center gap-6 group hover:bg-neutral-black/50 transition-all ${i < 3 ? 'lg:border-r-[2px] border-white/10' : ''}`}>
                         <div className="w-16 h-16 bg-primary text-neutral-black rounded-[4px] flex items-center justify-center shadow-[4px_4px_0px_0px_rgba(255,255,255,0.1)] group-hover:shadow-[4px_4px_0px_0px_rgba(255,222,0,0.5)] group-hover:translate-x-[-2px] group-hover:translate-y-[-2px] transition-all rotate-[5deg] group-hover:rotate-0">
                             <item.icon className="w-8 h-8" />
                         </div>
                         <div className="space-y-2">
-                            <div className="font-display text-[16px] font-black tracking-[2px] text-white uppercase">{item.title}</div>
-                            <div className="font-display text-[10px] font-bold text-white/40 uppercase tracking-[1.5px] leading-relaxed">{item.sub}</div>
+                            <div className="font-display text-base font-black text-white">{item.title}</div>
+                            <div className="font-display text-xs font-bold text-white/50 leading-relaxed">{item.sub}</div>
                         </div>
                     </div>
                 ))}

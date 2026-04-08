@@ -10,6 +10,7 @@ import {
     LayoutGrid,
     Info
 } from "lucide-react";
+import { PRODUCT_SIZES } from "../../constants/productSizes";
 
 const COLORS = [
     { name: "Black", hex: "#202020" },
@@ -19,7 +20,7 @@ const COLORS = [
     { name: "Maroon", hex: "#650c17" },
 ];
 
-const SIZES = ["XS", "S", "M", "L", "XL", "XXL"];
+const SIZES = [...PRODUCT_SIZES];
 
 type StockStatus = "IN_STOCK" | "LOW_STOCK" | "OUT_OF_STOCK";
 
@@ -214,7 +215,7 @@ export default function AdminInventoryMatrix() {
                                         </div>
                                     </th>
                                     {SIZES.map(size => (
-                                        <th key={size} className="p-4 bg-neutral-g1 border-[2px] border-neutral-black min-w-[140px]">
+                                        <th key={size} className="p-3 bg-neutral-g1 border-[2px] border-neutral-black min-w-[96px] sm:min-w-[108px]">
                                             <div className="flex flex-col items-center gap-2">
                                                 <span className="text-[14px] font-black uppercase tracking-[2px]">{size}</span>
                                                 <div className="flex gap-1">
