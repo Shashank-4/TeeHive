@@ -1,4 +1,4 @@
-import { PrismaClient } from "@prisma/client";
+import { PrismaClient, Prisma } from "@prisma/client";
 import {
     sendAdminOrderNotification,
     sendArtistSaleNotificationEmail,
@@ -21,6 +21,29 @@ function formatInr(n: number): string {
  * Call once when an order first transitions to paid (webhook and/or client verify).
  */
 export async function notifyOrderStakeholders(orderId: string): Promise<void> {
+    // Hard idempotency lock across webhook + client callback paths.
+    // We re-use PaymentWebhookEvent unique(provider, providerEventId) as a durable dedupe key.
+    const notifyEventId = `order-notify:${orderId}`;
+    try {
+        await prisma.paymentWebhookEvent.create({
+            data: {
+                provider: "RAZORPAY",
+                providerEventId: notifyEventId,
+                eventType: "order.notifications.sent",
+                payload: { source: "internal_notify", orderId },
+                status: "PROCESSED",
+                processedAt: new Date(),
+                orderId,
+            },
+        });
+    } catch (err) {
+        if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2002") {
+            // Notification already sent (or currently being sent) for this order.
+            return;
+        }
+        throw err;
+    }
+
     const order = await prisma.order.findUnique({
         where: { id: orderId },
         include: {
