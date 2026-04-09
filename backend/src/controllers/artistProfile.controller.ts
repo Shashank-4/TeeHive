@@ -4,7 +4,6 @@ import {
     updateArtistProfileService,
     submitForVerificationService,
 } from "../services/artistProfile.service";
-import { sendArtistApprovalEmail } from "../services/email.service";
 import { Prisma, PrismaClient } from "@prisma/client";
 
 const prisma = new PrismaClient();

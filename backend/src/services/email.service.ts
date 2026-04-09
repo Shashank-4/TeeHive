@@ -39,12 +39,34 @@ export type OrderEmailLineItem = {
 // Template caching
 const templateCache: Record<string, HandlebarsTemplateDelegate> = {};
 
+/**
+ * Resolve the Handlebars email templates directory.
+ * - `ts-node` / dev: __dirname is `src/services` → `../templates/emails` = `src/templates/emails`
+ * - `node dist`: __dirname is `dist/services` → `../templates/emails` is often missing (tsc does not copy .html)
+ *   → fall back to `../../src/templates/emails` when the repo includes `src` (e.g. Render)
+ */
+function getEmailTemplatesDir(): string {
+    const nextToCompiled = path.join(__dirname, "..", "templates", "emails");
+    if (fs.existsSync(nextToCompiled)) {
+        return nextToCompiled;
+    }
+    const fromRepoSrc = path.join(__dirname, "..", "..", "src", "templates", "emails");
+    if (fs.existsSync(fromRepoSrc)) {
+        return fromRepoSrc;
+    }
+    const fromCwd = path.join(process.cwd(), "src", "templates", "emails");
+    if (fs.existsSync(fromCwd)) {
+        return fromCwd;
+    }
+    return nextToCompiled;
+}
+
 function getTemplate(templateName: string): HandlebarsTemplateDelegate {
     if (templateCache[templateName]) {
         return templateCache[templateName];
     }
 
-    const templatePath = path.join(__dirname, `../templates/emails/${templateName}.html`);
+    const templatePath = path.join(getEmailTemplatesDir(), `${templateName}.html`);
     if (!fs.existsSync(templatePath)) {
         throw new Error(`Email template not found: ${templateName}`);
     }
@@ -183,7 +205,8 @@ export const sendAdminReturnClaimNotification = async (claimData: {
     });
 };
 
-export const sendArtistApprovalEmail = async (to: string, name: string) => {
+/** Sent when an artist completes signup (OTP or Google), not when admin acts on designs. */
+export const sendArtistWelcomeEmail = async (to: string, name: string) => {
     const base = frontendBaseUrl();
     return sendEmail(to, "Welcome to the Hive, Creator 🐝", "artist-welcome", {
         ArtistName: name,

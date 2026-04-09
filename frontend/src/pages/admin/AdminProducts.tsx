@@ -24,7 +24,9 @@ interface AdminProduct {
     title: string;
     artist: string;
     categories: string[];
+    /** Display price (may include active category offer). */
     price: number;
+    /** Catalog base price in DB (editable). */
     originalPrice?: number;
     isDiscounted?: boolean;
     discountPercent?: number;
@@ -34,6 +36,7 @@ interface AdminProduct {
     status: string;
     image: string;
     isLatestDrop?: boolean;
+    stockStatus?: string;
 }
 
 interface PaginationData {
@@ -144,16 +147,34 @@ export default function AdminProducts() {
         }
     };
 
-    const handleStockChange = async (productId: string, newStock: number) => {
+    const handleStockChange = async (
+        productId: string,
+        stockStatus: "IN_STOCK" | "LOW_STOCK" | "OUT_OF_STOCK"
+    ) => {
         setActionLoading({ ...actionLoading, [productId]: true });
         try {
-            await api.patch(`/api/admin/products/${productId}/stock`, { stock: newStock });
-            setProducts(products.map(p => p.id === productId ? { ...p, stock: newStock } : p));
+            await api.patch(`/api/admin/products/${productId}/stock`, { stock: stockStatus });
+            setProducts((prev) =>
+                prev.map((p) => (p.id === productId ? { ...p, stockStatus } : p))
+            );
         } catch (err) {
             console.error("Failed to update stock", err);
             alert("Failed to update product stock");
         } finally {
             setActionLoading({ ...actionLoading, [productId]: false });
+        }
+    };
+
+    const handlePriceChange = async (productId: string, newPrice: number) => {
+        setActionLoading((prev) => ({ ...prev, [productId]: true }));
+        try {
+            await api.patch(`/api/admin/products/${productId}/price`, { price: newPrice });
+            await fetchProducts(pagination.page, searchQuery, statusFilter);
+        } catch (err) {
+            console.error("Failed to update price", err);
+            alert("Failed to update product price");
+        } finally {
+            setActionLoading((prev) => ({ ...prev, [productId]: false }));
         }
     };
 
@@ -286,10 +307,30 @@ export default function AdminProducts() {
                                                 </div>
                                             </td>
                                             <td className="py-5 px-6">
-                                                <div className="flex flex-col">
-                                                    <span className="font-display text-[18px] font-black text-neutral-black italic leading-none">₹{product.price.toLocaleString('en-IN')}</span>
+                                                <div className="flex flex-col gap-1.5 max-w-[200px]">
+                                                    <span className="font-display text-[8px] font-black uppercase text-neutral-g4 tracking-wide">
+                                                        Base (catalog)
+                                                    </span>
+                                                    <input
+                                                        type="number"
+                                                        min={0}
+                                                        step={1}
+                                                        defaultValue={Math.round(product.originalPrice ?? product.price)}
+                                                        key={`${product.id}-${product.originalPrice ?? product.price}`}
+                                                        disabled={!!actionLoading[product.id]}
+                                                        onBlur={(e) => {
+                                                            const v = parseFloat(e.target.value);
+                                                            if (!Number.isFinite(v) || v < 0) return;
+                                                            const base = product.originalPrice ?? product.price;
+                                                            if (v === base) return;
+                                                            void handlePriceChange(product.id, v);
+                                                        }}
+                                                        className="w-full max-w-[140px] px-2 py-2 bg-white border-[2px] border-neutral-black rounded-[2px] font-display text-[14px] font-black text-neutral-black"
+                                                    />
                                                     {product.isDiscounted && (
-                                                        <span className="font-display text-[11px] font-bold text-neutral-g3 line-through mt-1">₹{product.originalPrice?.toLocaleString('en-IN')}</span>
+                                                        <span className="font-display text-[9px] font-bold text-neutral-g3 leading-tight">
+                                                            With active offer, shop shows ₹{product.price.toLocaleString("en-IN")}
+                                                        </span>
                                                     )}
                                                 </div>
                                             </td>
@@ -297,15 +338,20 @@ export default function AdminProducts() {
                                                 <div className="flex flex-col gap-2 relative">
                                                     <div className="flex items-center gap-2">
                                                         <select
-                                                            value={(product as any).stockStatus || "IN_STOCK"}
-                                                            onChange={(e) => handleStockChange(product.id, e.target.value as any)}
+                                                            value={product.stockStatus || "IN_STOCK"}
+                                                            onChange={(e) =>
+                                                                handleStockChange(
+                                                                    product.id,
+                                                                    e.target.value as "IN_STOCK" | "LOW_STOCK" | "OUT_OF_STOCK"
+                                                                )
+                                                            }
                                                             className={`appearance-none w-28 px-3 py-2 bg-neutral-g1 border-[2px] border-neutral-black rounded-[2px] font-display text-[10px] font-black uppercase text-center outline-none focus:bg-white transition-all`}
                                                         >
                                                             <option value="IN_STOCK">In Stock</option>
                                                             <option value="LOW_STOCK">Low Stock</option>
                                                             <option value="OUT_OF_STOCK">Out of Stock</option>
                                                         </select>
-                                                        <StockStatusPill stockStatus={(product as any).stockStatus} />
+                                                        <StockStatusPill stockStatus={product.stockStatus || "IN_STOCK"} />
                                                     </div>
                                                 </div>
                                             </td>

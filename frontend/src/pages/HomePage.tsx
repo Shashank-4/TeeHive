@@ -216,7 +216,7 @@ function HomePage() {
                     setSpecialOffer(offer);
                     if (offer.isVisible && offer.categoryName) {
                         try {
-                            const opRes = await api.get(`/api/products?category=${encodeURIComponent(offer.categoryName.toLowerCase())}&limit=4`);
+                            const opRes = await api.get(`/api/products?category=${encodeURIComponent(offer.categoryName)}&limit=4`);
                             setOfferProducts(opRes.data.data.products || []);
                         } catch (e) {
                             console.error("Failed to load offer products", e);
@@ -499,7 +499,7 @@ function HomePage() {
                                         {specialOffer.discountPercent}% OFF
                                     </span>
                                 </div>
-                                <Link to={`/products?category=${encodeURIComponent(specialOffer.categoryName.toLowerCase())}`} className="group/btn w-full md:w-auto text-center px-10 py-5 bg-neutral-black text-white hover:bg-white hover:text-neutral-black font-display text-[16px] font-black uppercase tracking-[2px] rounded-[4px] transition-all duration-300 shadow-[8px_8px_0px_0px_rgba(0,0,0,0.2)] hover:shadow-[6px_6px_0px_0px_rgba(0,0,0,1)] hover:translate-x-[4px] hover:translate-y-[4px] no-underline flex items-center justify-center gap-4 border-[3px] border-neutral-black">
+                                <Link to={`/products?category=${encodeURIComponent(specialOffer.categoryName)}`} className="group/btn w-full md:w-auto text-center px-10 py-5 bg-neutral-black text-white hover:bg-white hover:text-neutral-black font-display text-[16px] font-black uppercase tracking-[2px] rounded-[4px] transition-all duration-300 shadow-[8px_8px_0px_0px_rgba(0,0,0,0.2)] hover:shadow-[6px_6px_0px_0px_rgba(0,0,0,1)] hover:translate-x-[4px] hover:translate-y-[4px] no-underline flex items-center justify-center gap-4 border-[3px] border-neutral-black">
                                     {specialOffer.ctaText} <ArrowRight className="w-6 h-6 group-hover/btn:translate-x-2 transition-transform" />
                                 </Link>
                             </div>

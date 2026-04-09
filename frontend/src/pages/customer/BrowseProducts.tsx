@@ -62,6 +62,14 @@ export default function BrowseProducts() {
     const { addItem } = useCart();
     const shopCategoryScrollRef = useRef<HTMLDivElement>(null);
 
+    const canonicalCategory = (value: string | null, list: string[]) => {
+        if (!value) return "all";
+        const trimmed = value.trim();
+        if (!trimmed || trimmed.toLowerCase() === "all") return "all";
+        const match = list.find((c) => c.toLowerCase() === trimmed.toLowerCase());
+        return match || trimmed;
+    };
+
     const scrollShopCategories = (dir: number) => {
         const el = shopCategoryScrollRef.current;
         if (!el) return;
@@ -85,9 +93,9 @@ export default function BrowseProducts() {
     const sortParam = searchParams.get("sort");
 
     useEffect(() => {
-        setSelectedCategory(categoryParam && categoryParam.length > 0 ? categoryParam : "all");
+        setSelectedCategory(canonicalCategory(categoryParam, categories));
         if (sortParam) setSortBy(sortParam);
-    }, [categoryParam, sortParam]);
+    }, [categoryParam, sortParam, categories]);
 
     useEffect(() => {
         fetchProducts();
@@ -97,7 +105,7 @@ export default function BrowseProducts() {
         try {
             setIsLoading(true);
             const params = new URLSearchParams();
-            const cat = searchParams.get("category") || selectedCategory;
+            const cat = canonicalCategory(searchParams.get("category") || selectedCategory, categories);
             const sort = searchParams.get("sort") || sortBy;
             const q = searchParams.get("search") || "";
 
