@@ -170,6 +170,53 @@ export const updateProductStatusHandler = async (req: Request, res: Response) =>
     }
 };
 
+/** Update catalog base price (and optional compare-at); used by admin inventory and drives storefront/artist APIs. */
+export const updateProductPriceHandler = async (req: Request, res: Response, next: NextFunction) => {
+    try {
+        const { id } = req.params;
+        const rawPrice = req.body.price;
+        const price = typeof rawPrice === "string" ? parseFloat(rawPrice) : Number(rawPrice);
+        if (!Number.isFinite(price) || price < 0) {
+            return res.status(400).json({ status: "error", message: "A valid non-negative price is required" });
+        }
+
+        const existing = await prisma.product.findUnique({ where: { id } });
+        if (!existing) {
+            return res.status(404).json({ status: "error", message: "Product not found" });
+        }
+
+        const data: { price: number; compareAtPrice?: number | null } = { price };
+        if (Object.prototype.hasOwnProperty.call(req.body, "compareAtPrice")) {
+            const cap = req.body.compareAtPrice;
+            if (cap === null || cap === "") {
+                data.compareAtPrice = null;
+            } else {
+                const n = typeof cap === "string" ? parseFloat(cap) : Number(cap);
+                if (!Number.isFinite(n) || n < 0) {
+                    return res.status(400).json({ status: "error", message: "Invalid compareAtPrice" });
+                }
+                data.compareAtPrice = n;
+            }
+        }
+
+        const product = await prisma.product.update({
+            where: { id },
+            data,
+        });
+
+        res.status(200).json({
+            status: "success",
+            data: { product },
+        });
+    } catch (error: any) {
+        console.error("Update Product Price Error:", error);
+        res.status(500).json({
+            status: "error",
+            message: "Failed to update product price",
+        });
+    }
+};
+
 export const updateProductStockHandler = async (req: Request, res: Response, next: NextFunction) => {
     try {
         const { id } = req.params;

@@ -10,6 +10,7 @@ import {
     cleanupExpiredPendingOrders,
     markOrderPaidAfterInventoryCheck,
 } from "../services/orderInventory.service";
+import { notifyOrderStakeholders } from "../services/orderStakeholderNotify.service";
 import {
     buildReturnClaimView,
     getReturnClaimEligibility,
@@ -686,6 +687,14 @@ router.post("/checkout/verify", requireUser, async (req: Request, res: Response)
             });
         });
         const updatedOrder = transition.updatedOrder;
+
+        // Same emails as Razorpay webhook when payment is first confirmed. If the webhook
+        // already processed this order, alreadyProcessed is true and we skip (no duplicates).
+        if (!transition.alreadyProcessed) {
+            notifyOrderStakeholders(order.id).catch((err) =>
+                console.error("[Email] notifyOrderStakeholders after client verify:", err)
+            );
+        }
 
         res.json({
             status: "success",

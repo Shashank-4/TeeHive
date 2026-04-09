@@ -1,7 +1,14 @@
 import { Request, Response } from "express";
-import { PrismaClient } from "@prisma/client";
+import { PrismaClient, OrderStatus } from "@prisma/client";
 
 const prisma = new PrismaClient();
+const CREDITABLE_ORDER_STATUSES: OrderStatus[] = [
+    "PAID",
+    "PROCESSING",
+    "SHIPPED",
+    "DELIVERED",
+    "RECEIVED",
+];
 
 export const listUsersHandler = async (req: Request, res: Response) => {
     try {
@@ -37,19 +44,34 @@ export const listUsersHandler = async (req: Request, res: Response) => {
                     isArtist: true,
                     isAdmin: true,
                     createdAt: true,
-                    orders: {
-                        select: { totalAmount: true }
-                    },
-                    _count: {
-                        select: { orders: true }
-                    }
-                }
+                },
             }),
             prisma.user.count({ where }),
         ]);
 
+        const userIds = users.map((u) => u.id);
+        const orderAgg = userIds.length
+            ? await prisma.order.groupBy({
+                  by: ["userId"],
+                  where: {
+                      userId: { in: userIds },
+                      status: { in: CREDITABLE_ORDER_STATUSES },
+                  },
+                  _sum: { totalAmount: true },
+                  _count: { id: true },
+              })
+            : [];
+        const aggByUser = new Map(
+            orderAgg.map((row) => [
+                row.userId,
+                { totalSpent: row._sum.totalAmount ?? 0, orderCount: row._count.id ?? 0 },
+            ])
+        );
+
         const formattedUsers = users.map(user => {
-            const totalSpent = user.orders.reduce((sum, order) => sum + order.totalAmount, 0);
+            const agg = aggByUser.get(user.id);
+            const totalSpent = agg?.totalSpent ?? 0;
+            const orderCount = agg?.orderCount ?? 0;
             let roleName = "user";
             if (user.isAdmin) roleName = "admin";
             else if (user.isArtist) roleName = "artist";
@@ -60,7 +82,7 @@ export const listUsersHandler = async (req: Request, res: Response) => {
                 email: user.email,
                 role: roleName,
                 joinedAt: user.createdAt,
-                orderCount: user._count.orders,
+                orderCount,
                 totalSpent,
             };
         });

@@ -1,6 +1,7 @@
 import { Request, Response } from "express";
 import { PrismaClient } from "@prisma/client";
 import { uploadSiteAssetToR2 } from "../services/product.service";
+import { syncCatalogPricesFromPricingProtocols } from "../services/pricingCatalogSync.service";
 
 const prisma = new PrismaClient();
 
@@ -48,6 +49,17 @@ export const setConfigHandler = async (req: Request, res: Response) => {
             update: { value: configValue },
             create: { key, value: configValue },
         });
+
+        if (key === "pricing_protocols") {
+            syncCatalogPricesFromPricingProtocols(configValue)
+                .then((r) =>
+                    console.log(
+                        `[config/pricing_protocols] Updated ${r.updated} product row(s).` +
+                            (r.skippedReason ? ` (${r.skippedReason})` : "")
+                    )
+                )
+                .catch((e) => console.error("[config/pricing_protocols] Catalog sync failed:", e));
+        }
 
         res.status(200).json({
             status: "success",

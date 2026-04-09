@@ -15,6 +15,7 @@ import {
     listProductsHandler, 
     patchProductLatestDropHandler,
     updateProductStatusHandler, 
+    updateProductPriceHandler,
     updateProductStockHandler,
     getProductVariantsHandler,
     updateProductVariantsHandler
@@ -53,6 +54,7 @@ router.patch("/users/:id/role", updateUserRoleHandler);
 router.get("/products", listProductsHandler);
 router.patch("/products/:id/latest-drop", patchProductLatestDropHandler);
 router.patch("/products/:id/status", updateProductStatusHandler);
+router.patch("/products/:id/price", updateProductPriceHandler);
 router.patch("/products/:id/stock", updateProductStockHandler);
 router.get("/products/:id/variants", getProductVariantsHandler);
 router.patch("/products/:id/variants", updateProductVariantsHandler);

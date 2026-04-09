@@ -11,7 +11,7 @@ import {
 import bcrypt from "bcryptjs";
 import { verifyJwt, KeyType, signJwt } from "../util/jwt";
 import { findUserById } from "../services/user.service";
-import { sendOtpEmail, sendForgotPasswordEmail, sendCustomerWelcomeEmail, sendArtistApprovalEmail } from "../services/email.service";
+import { sendOtpEmail, sendForgotPasswordEmail, sendCustomerWelcomeEmail, sendArtistWelcomeEmail } from "../services/email.service";
 import crypto from "crypto";
 import {
     updateUserResetToken,
@@ -147,14 +147,22 @@ export const verifyOtpHandler = async (
         const wasEmailVerified = user.isEmailVerified;
         await clearUserOtp(user.id);
 
+        // Email/password: OTP is sent before this step. Welcome only on first successful verify
+        // (new account) or when upgrading to artist — not on routine sign-in OTP for verified users.
         if (!wasEmailVerified) {
             if (user.isArtist || isUpgradingToArtist) {
-                sendArtistApprovalEmail(user.email, user.name || "Artist").catch(err => console.error("Error sending artist welcome email", err));
+                sendArtistWelcomeEmail(user.email, user.name || "Artist").catch((err) =>
+                    console.error("Error sending artist welcome email", err)
+                );
             } else {
-                sendCustomerWelcomeEmail(user.email, user.name || "Customer").catch(err => console.error("Error sending welcome email", err));
+                sendCustomerWelcomeEmail(user.email, user.name || "Customer").catch((err) =>
+                    console.error("Error sending customer welcome email", err)
+                );
             }
         } else if (isUpgradingToArtist) {
-            sendArtistApprovalEmail(user.email, user.name || "Artist").catch(err => console.error("Error sending artist welcome email", err));
+            sendArtistWelcomeEmail(user.email, user.name || "Artist").catch((err) =>
+                console.error("Error sending artist welcome email", err)
+            );
         }
 
         if (isUpgradingToArtist && !user.isArtist) {
@@ -234,15 +242,17 @@ export const googleAuthHandler = async (
             isArtist || false
         );
 
+        // Google: no OTP — only welcome on meaningful account events (new user, upgrade to artist,
+        // or first-time email verification by linking Google). Routine logins send nothing.
         const shouldSendWelcome = isNew || isUpgrade || verifiedByGoogleLink;
         if (shouldSendWelcome) {
             if (user.isArtist) {
-                sendArtistApprovalEmail(user.email, user.name || "Artist").catch((err) =>
+                sendArtistWelcomeEmail(user.email, user.name || "Artist").catch((err) =>
                     console.error("Error sending artist welcome email", err)
                 );
             } else {
                 sendCustomerWelcomeEmail(user.email, user.name || "Customer").catch((err) =>
-                    console.error("Error sending welcome email", err)
+                    console.error("Error sending customer welcome email", err)
                 );
             }
         }

@@ -6,6 +6,7 @@ import {
     isValidArtistSlugFormat,
     normalizeArtistSlug,
 } from "../utils/artistSlug";
+import { calculateProductPrice, getActiveSpecialOffer } from "../utils/productUtils";
 
 const router = Router();
 const prisma = new PrismaClient();
@@ -354,9 +355,19 @@ router.get("/:artistParam", async (req: Request, res: Response) => {
             return res.status(404).json({ error: "Artist not found" });
         }
 
+        const activeOffer = await getActiveSpecialOffer();
+        const { products, ...artistRest } = artist;
+        const pricedProducts = products.map((p) => {
+            const { price, isDiscounted, discountPercent, originalPrice } = calculateProductPrice(
+                p,
+                activeOffer
+            );
+            return { ...p, price, isDiscounted, discountPercent, originalPrice };
+        });
+
         res.json({
             status: "success",
-            data: { artist },
+            data: { artist: { ...artistRest, products: pricedProducts } },
         });
     } catch (error) {
         console.error("Error fetching artist:", error);

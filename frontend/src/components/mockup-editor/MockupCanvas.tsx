@@ -110,6 +110,8 @@ const MockupCanvas = forwardRef<MockupCanvasHandle, MockupCanvasProps>((
     const containerRef = useRef<HTMLDivElement>(null);
     /** Bumps when scene reload is requested; stale async image loads must not insert layers. */
     const sceneGenerationRef = useRef(0);
+    /** True while a full scene rebuild (Effect 1) is in flight — prevents Effect 2 from racing. */
+    const isRebuildingRef = useRef(false);
 
     // Track props in refs for stable closures (color as hex string for filters / export)
     const tshirtColorRef = useRef<string>(tshirtColor);
@@ -126,6 +128,26 @@ const MockupCanvas = forwardRef<MockupCanvasHandle, MockupCanvasProps>((
     useEffect(() => { displacementMapUrlRef.current = displacementMapUrl; }, [displacementMapUrl]);
     useEffect(() => { shadowIntensityRef.current = shadowIntensity; }, [shadowIntensity]);
 
+    // When a design URL changes (user swaps the image), discard the old transform so the
+    // new design gets fresh default positioning fitted inside the print area.
+    // Declared BEFORE the initialTransform effect so that during edit-mode hydration the
+    // persisted transform is written back immediately after the clear.
+    const prevFrontUrlRef = useRef<string | null>(frontDesignUrl);
+    const prevBackUrlRef = useRef<string | null>(backDesignUrl);
+    useEffect(() => {
+        if (frontDesignUrl !== prevFrontUrlRef.current) {
+            frontTransformRef.current = null;
+        }
+        prevFrontUrlRef.current = frontDesignUrl;
+
+        if (backDesignUrl !== prevBackUrlRef.current) {
+            backTransformRef.current = null;
+        }
+        prevBackUrlRef.current = backDesignUrl;
+    }, [frontDesignUrl, backDesignUrl]);
+
+    // Hydrate persisted transforms (edit mode). Runs after the URL-change effect so it
+    // wins when both design URL and initial transform change in the same render.
     useEffect(() => {
         frontTransformRef.current = initialFrontTransform ?? null;
         backTransformRef.current = initialBackTransform ?? null;
@@ -153,11 +175,6 @@ const MockupCanvas = forwardRef<MockupCanvasHandle, MockupCanvasProps>((
         resizeObserver.observe(containerRef.current);
         return () => resizeObserver.disconnect();
     }, []);
-
-    // Track current view
-    useEffect(() => {
-        currentViewRef.current = currentView;
-    }, [currentView]);
 
     // ── Canvas initialization ──
     useEffect(() => {
@@ -253,27 +270,50 @@ const MockupCanvas = forwardRef<MockupCanvasHandle, MockupCanvasProps>((
         };
     }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-    // ── View / color / realism change ──
+    // ── View / color / realism change (full scene rebuild) ──
     useEffect(() => {
         const canvas = fabricRef.current;
         if (!canvas) return;
+
+        // Snapshot the outgoing design's transform before we clear the canvas
+        const outDesign = canvas.getObjects().find((o) => (o as any).id === "user-design");
+        if (outDesign) {
+            const t: DesignTransform = {
+                left: outDesign.left ?? 0,
+                top: outDesign.top ?? 0,
+                scaleX: outDesign.scaleX ?? 1,
+                scaleY: outDesign.scaleY ?? 1,
+                angle: outDesign.angle ?? 0,
+            };
+            // currentViewRef still holds the *previous* view at this point
+            // (updated by a later-declared effect or already current for color-only changes)
+            const outView = currentViewRef.current;
+            if (outView === "front") frontTransformRef.current = t;
+            else backTransformRef.current = t;
+        }
+
         const gen = ++sceneGenerationRef.current;
+        isRebuildingRef.current = true;
         setIsLoading(true);
         clearCanvas(canvas);
         canvas.requestRenderAll();
 
         setTimeout(() => {
             loadFullScene(canvas, currentView, gen).then(() => {
-                if (gen === sceneGenerationRef.current) setIsLoading(false);
+                if (gen === sceneGenerationRef.current) {
+                    isRebuildingRef.current = false;
+                    setIsLoading(false);
+                }
             });
         }, 0);
     }, [currentView, tshirtColor, colorBaseUrl, colorBackBaseUrl, shadowMapUrl, displacementMapUrl, shadowIntensity]); // eslint-disable-line react-hooks/exhaustive-deps
 
-    // ── Design changes ──
+    // ── Design-only changes (user selects/removes a design on the current view) ──
     useEffect(() => {
         const canvas = fabricRef.current;
         if (!canvas) return;
-        if (isLoading) return;
+        // A full scene rebuild already handles loading the design — skip to avoid duplicates.
+        if (isRebuildingRef.current) return;
 
         removeById(canvas, "user-design");
         removeById(canvas, "shadow-overlay");
@@ -283,9 +323,14 @@ const MockupCanvas = forwardRef<MockupCanvasHandle, MockupCanvasProps>((
             return;
         }
 
-        // Flat mode: render design only (no displacement, no shadow overlay).
         loadDesignLayer(canvas, currentDesignUrl, currentView, currentPrintArea);
     }, [currentDesignUrl, currentView]); // eslint-disable-line react-hooks/exhaustive-deps
+
+    // Sync the view ref AFTER the scene-rebuild and design effects so their transform
+    // snapshot reads the outgoing (previous) view value.
+    useEffect(() => {
+        currentViewRef.current = currentView;
+    }, [currentView]);
 
     // ── Guides ──
     useEffect(() => {

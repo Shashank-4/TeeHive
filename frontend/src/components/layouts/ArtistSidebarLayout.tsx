@@ -13,8 +13,10 @@ import {
     Crown,
     ShieldCheck,
     ClipboardList,
+    ExternalLink,
 } from "lucide-react";
 import { useState, useEffect } from "react";
+import { artistPublicPath } from "../../utils/artistRoutes";
 
 const artistNavItems = [
     { to: "/artist/dashboard", icon: LayoutDashboard, label: "Dashboard", requiresVerified: true },
@@ -64,6 +66,12 @@ export default function ArtistSidebarLayout() {
     const handleSignOut = async () => {
         await signOut();
         navigate("/login");
+    };
+
+    const openPublicStorefront = () => {
+        if (!user?.id) return;
+        const path = artistPublicPath({ id: user.id, artistSlug: user.artistSlug });
+        window.open(path, "_blank", "noopener,noreferrer");
     };
 
     const StatusBadge = () => {
@@ -192,8 +200,16 @@ export default function ArtistSidebarLayout() {
                 })}
             </nav>
 
-            {/* Sign Out */}
-            <div className="px-[14px] py-3 border-t border-neutral-g2 shrink-0">
+            {/* Storefront + Sign Out */}
+            <div className="px-[14px] py-3 border-t border-neutral-g2 shrink-0 space-y-2">
+                <button
+                    type="button"
+                    onClick={openPublicStorefront}
+                    className={`group w-full flex items-center gap-[10px] py-[11px] px-3 border-[1.5px] border-neutral-black rounded-[4px] font-display text-[11px] font-bold tracking-[0.5px] uppercase text-neutral-black bg-white hover:bg-neutral-black hover:text-white transition-all ${!sidebarOpen ? "justify-center px-2 border-transparent hover:border-neutral-black" : ""}`}
+                >
+                    <ExternalLink className="w-4 h-4 shrink-0 stroke-[1.8] transition-transform group-hover:translate-x-0.5 group-hover:-translate-y-0.5" />
+                    {sidebarOpen && <span>View Storefront</span>}
+                </button>
                 <button
                     onClick={handleSignOut}
                     className={`flex items-center gap-[10px] font-display text-[12px] font-bold tracking-[0.5px] uppercase text-neutral-g4 hover:text-danger transition-colors whitespace-nowrap ${!sidebarOpen ? "justify-center w-full" : ""

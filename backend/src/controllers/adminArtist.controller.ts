@@ -5,7 +5,7 @@ import {
     verifyArtistService,
     rejectDesignService,
 } from "../services/adminArtist.service";
-import { sendArtistApprovalEmail, sendArtistRejectionEmail } from "../services/email.service";
+import { sendArtistRejectionEmail } from "../services/email.service";
 
 /**
  * GET /api/admin/artists — List artists with optional status filter
@@ -78,10 +78,8 @@ export const verifyArtistHandler = async (
 
         const profile = await verifyArtistService(id, action, reason, canResubmitVerification);
 
-        // Send Email Notifications
-        if (action === "APPROVE") {
-            await sendArtistApprovalEmail(profile.email, profile.name);
-        } else if (action === "REJECT" && reason) {
+        // Artist welcome is sent on signup (OTP / Google), not on admin profile actions.
+        if (action === "REJECT" && reason) {
             await sendArtistRejectionEmail(profile.email, profile.name, reason);
         }
 

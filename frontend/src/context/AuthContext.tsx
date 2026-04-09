@@ -19,6 +19,8 @@ interface User {
     verificationStatus: "UNVERIFIED" | "PENDING_VERIFICATION" | "VERIFIED" | "REJECTED";
     displayName?: string;
     displayPhotoUrl?: string;
+    /** Public storefront URL uses slug when set (from session /api/users/me). */
+    artistSlug?: string | null;
 }
 
 interface AuthContextType {

@@ -294,7 +294,14 @@ export const getPublishedProductsService = async (filters: ProductFilters) => {
     }
 
     if (filters.category && filters.category !== "all") {
-        where.categories = { has: filters.category };
+        const rawCategory = filters.category.trim();
+        if (rawCategory) {
+            const canonicalCategory = await prisma.category.findFirst({
+                where: { name: { equals: rawCategory, mode: "insensitive" } },
+                select: { name: true },
+            });
+            where.categories = { has: canonicalCategory?.name || rawCategory };
+        }
     }
 
     if (filters.search) {

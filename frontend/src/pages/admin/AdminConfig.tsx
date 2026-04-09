@@ -692,8 +692,10 @@ export default function AdminConfig() {
                                             </div>
                                         ))}
                                     </div>
-                                    <p className="font-display text-[10px] font-bold text-neutral-g3 uppercase tracking-[1px] px-2 italic">
-                                        ● These protocols dictate the base pricing enforced in the Manifestation Forge for all artists.
+                                    <p className="font-display text-[10px] font-bold text-neutral-g3 uppercase tracking-[1px] px-2 italic leading-relaxed">
+                                        ● Saving syncs all draft & published catalog base prices from the <span className="text-neutral-black not-italic">T-Shirt</span> row
+                                        (double-side if the product has a back mockup; otherwise front only), so shop and storefronts match. You can still override a SKU under
+                                        Admin → Global Stockpile. The mockup lab uses these tiers for new products.
                                     </p>
                                 </div>
                             </div>
