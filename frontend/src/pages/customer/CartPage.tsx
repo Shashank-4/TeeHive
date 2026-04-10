@@ -19,8 +19,13 @@ import {
     cartItemThumbnail,
     cartLineHasBackMockup,
     canonicalHex,
+    STOREFRONT_TEE_MOCKUP_IMAGE_CLASS,
 } from "../../utils/productMockup";
 import { PRODUCT_SIZES } from "../../constants/productSizes";
+import {
+    cartLineHasIssue,
+    useCartAvailabilityValidation,
+} from "../../hooks/useCartAvailabilityValidation";
 
 export default function Cart() {
     const {
@@ -31,6 +36,9 @@ export default function Cart() {
         updateItemMockupView,
         subtotal,
     } = useCart();
+
+    const { loading: stockLoading, issues, fetchError, blocked: checkoutBlocked } =
+        useCartAvailabilityValidation(items);
 
     const total = subtotal;
 
@@ -96,6 +104,28 @@ export default function Cart() {
                     </Link>
                 </div>
 
+                {(fetchError || issues.length > 0) && (
+                    <div
+                        className="mb-6 rounded-[4px] border-[2px] border-danger bg-danger/5 px-4 py-3 font-display text-[12px] font-bold text-danger"
+                        role="alert"
+                    >
+                        {fetchError ? (
+                            <p className="m-0">{fetchError}</p>
+                        ) : (
+                            <div className="space-y-2">
+                                <p className="m-0 font-black uppercase tracking-wide text-[11px]">
+                                    Some items can&apos;t be checked out right now
+                                </p>
+                                <ul className="m-0 pl-4 list-disc text-neutral-black space-y-1">
+                                    {issues.map((iss, idx) => (
+                                        <li key={`${iss.productId}-${iss.size}-${iss.color}-${idx}`}>{iss.message}</li>
+                                    ))}
+                                </ul>
+                            </div>
+                        )}
+                    </div>
+                )}
+
                 <div className="flex items-end justify-between mb-10 pb-6 border-b-[3px] border-neutral-black">
                     <h1 className="font-display text-[clamp(32px,4vw,48px)] font-black text-neutral-black leading-none tracking-[-0.5px]">
                         Your cart <span className="text-primary italic">({items.length})</span>
@@ -114,6 +144,7 @@ export default function Cart() {
                                     const thumbSrc = cartItemThumbnail(item);
                                     const showViewToggle = cartLineHasBackMockup(item);
                                     const view = item.mockupView === "back" ? "back" : "front";
+                                    const lineIssue = cartLineHasIssue(item, issues);
                                     return (
                                     <div
                                         key={`${item.productId}-${item.size}-${item.color}`}
@@ -128,7 +159,7 @@ export default function Cart() {
                                                 <ImageWithSkeleton
                                                     src={thumbSrc}
                                                     alt={item.name}
-                                                    className="w-full h-full object-cover hover:scale-[1.02] transition-transform duration-300"
+                                                    className={`w-full h-full ${STOREFRONT_TEE_MOCKUP_IMAGE_CLASS} hover:scale-[1.02] transition-transform duration-300`}
                                                     wrapperClassName="w-full h-full min-h-[200px] sm:min-h-0"
                                                 />
                                             </Link>
@@ -177,6 +208,11 @@ export default function Cart() {
                                             <div className="flex-1 flex flex-col justify-between min-w-0 pt-0 sm:pt-1">
                                                 <div className="flex justify-between items-start">
                                                     <div>
+                                                        {lineIssue && (
+                                                            <p className="mb-2 rounded-[2px] border border-danger bg-danger/10 px-2 py-1.5 font-display text-[10px] font-black uppercase tracking-wide text-danger">
+                                                                {lineIssue.message}
+                                                            </p>
+                                                        )}
                                                         <div className="font-display text-[12px] font-bold tracking-wide text-primary mb-1">{item.artistName}</div>
                                                         <Link to={`/products/${item.productId}`} className="no-underline">
                                                             <h3 className="font-display text-[24px] font-black text-neutral-black hover:text-primary transition-colors tracking-tight leading-snug">
@@ -322,11 +358,25 @@ export default function Cart() {
                                 </div>
                             </div>
 
-                            <Link to="/order/checkout" className="no-underline">
-                                <Button variant="primary" size="lg" className="w-full">
-                                    Go to checkout <ArrowRight className="w-5 h-5 ml-2" />
+                            {checkoutBlocked || stockLoading ? (
+                                <Button
+                                    variant="primary"
+                                    size="lg"
+                                    className="w-full opacity-60 cursor-not-allowed"
+                                    disabled
+                                    type="button"
+                                >
+                                    {stockLoading
+                                        ? "Checking inventory…"
+                                        : "Update cart to continue"}
                                 </Button>
-                            </Link>
+                            ) : (
+                                <Link to="/order/checkout" className="no-underline">
+                                    <Button variant="primary" size="lg" className="w-full">
+                                        Go to checkout <ArrowRight className="w-5 h-5 ml-2" />
+                                    </Button>
+                                </Link>
+                            )}
 
                             <div className="mt-8 flex items-center justify-center gap-3 text-[11px] font-display font-bold text-neutral-black/35 text-center">
                                 <Shield className="w-4 h-4 shrink-0" /> Payments are processed securely with Razorpay

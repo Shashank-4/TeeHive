@@ -5,6 +5,7 @@ import ImageWithSkeleton from "../shared/ImageWithSkeleton";
 import Loader from "../shared/Loader";
 import { BEE_BADGE } from "../../constants/brand";
 import { artistPublicPath } from "../../utils/artistRoutes";
+import { STOREFRONT_TEE_MOCKUP_IMAGE_CLASS } from "../../utils/productMockup";
 import ArtistRatingInline from "../shared/ArtistRatingInline";
 
 const DROPS_SECTION_BG =
@@ -277,10 +278,8 @@ export default function LatestDropsShowcase({ products, isLoading }: LatestDrops
                                         transformStyle: "preserve-3d",
                                     };
 
-                                    const imgClassActive =
-                                        "absolute inset-0 h-full w-full object-cover object-[50%_36%] origin-[50%_38%] scale-[1.2] mix-blend-multiply contrast-[1.03] transition-transform duration-500 ease-out";
-                                    const imgClassSide =
-                                        "absolute inset-0 h-full w-full object-cover object-[50%_36%] origin-[50%_38%] scale-[1.2] mix-blend-multiply contrast-[1.03]";
+                                    const imgClassActive = `absolute inset-0 h-full w-full ${STOREFRONT_TEE_MOCKUP_IMAGE_CLASS} mix-blend-multiply contrast-[1.03] transition-transform duration-500 ease-out`;
+                                    const imgClassSide = `absolute inset-0 h-full w-full ${STOREFRONT_TEE_MOCKUP_IMAGE_CLASS} mix-blend-multiply contrast-[1.03]`;
                                     const inner =
                                         src ? (
                                             <ImageWithSkeleton

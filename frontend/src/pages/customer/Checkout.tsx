@@ -7,7 +7,8 @@ import { useCart } from "../../context/CartContext";
 import Loader from "../../components/shared/Loader";
 import GstInclusiveNote from "../../components/shared/GstInclusiveNote";
 import ReturnPolicyNote from "../../components/shared/ReturnPolicyNote";
-import { cartItemThumbnail } from "../../utils/productMockup";
+import { cartItemThumbnail, STOREFRONT_TEE_MOCKUP_IMAGE_CLASS } from "../../utils/productMockup";
+import { useCartAvailabilityValidation } from "../../hooks/useCartAvailabilityValidation";
 
 // Declare Razorpay on window
 declare global {
@@ -20,6 +21,11 @@ export default function Checkout() {
     const navigate = useNavigate();
     const { user, isAuthenticated } = useAuth();
     const { items, subtotal, clearCart } = useCart();
+    const { loading: stockLoading, ok: stockOk, issues: stockIssues, fetchError: stockFetchError } =
+        useCartAvailabilityValidation(items);
+    const inventoryGate =
+        items.length > 0 &&
+        (stockLoading || Boolean(stockFetchError) || !stockOk || stockIssues.length > 0);
     const [step, setStep] = useState<"shipping" | "payment">("shipping");
     const [isLoading, setIsLoading] = useState(false);
     const [paymentError, setPaymentError] = useState("");
@@ -107,6 +113,14 @@ export default function Checkout() {
             alert(err);
             return;
         }
+        if (inventoryGate) {
+            setPaymentError(
+                stockFetchError ||
+                    "One or more items are no longer available. Return to your bag to update or remove them."
+            );
+            return;
+        }
+        setPaymentError("");
         setStep("payment");
     };
 
@@ -136,6 +150,13 @@ export default function Checkout() {
         if (err) {
             alert(err);
             setStep("shipping");
+            return;
+        }
+        if (inventoryGate) {
+            setPaymentError(
+                stockFetchError ||
+                    "One or more items are no longer available. Return to your bag to update or remove them."
+            );
             return;
         }
 
@@ -298,6 +319,33 @@ export default function Checkout() {
                     <span className="font-display text-[11px] font-extrabold uppercase tracking-[1.5px]">Return to bag</span>
                 </Link>
 
+                {items.length > 0 && (stockFetchError || stockIssues.length > 0 || stockLoading) && (
+                    <div
+                        className="mb-[clamp(0.75rem,2vh,1.25rem)] rounded-[2px] border-[1.5px] border-danger bg-danger/5 px-4 py-3 font-display text-[11px] font-bold text-danger"
+                        role="alert"
+                    >
+                        {stockLoading ? (
+                            <span>Verifying inventory…</span>
+                        ) : stockFetchError ? (
+                            <span>{stockFetchError}</span>
+                        ) : (
+                            <div className="space-y-2 text-neutral-black">
+                                <p className="m-0 font-black uppercase tracking-wide text-danger text-[10px]">
+                                    These lines must be updated before you can pay
+                                </p>
+                                <ul className="m-0 pl-4 list-disc space-y-1">
+                                    {stockIssues.map((iss, idx) => (
+                                        <li key={`${iss.productId}-${iss.size}-${iss.color}-${idx}`}>{iss.message}</li>
+                                    ))}
+                                </ul>
+                                <Link to="/cart" className="inline-block mt-2 font-black uppercase tracking-wide text-[10px] text-primary underline">
+                                    Edit cart
+                                </Link>
+                            </div>
+                        )}
+                    </div>
+                )}
+
                 <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 mb-[clamp(1rem,3vh,2rem)] pb-4 sm:pb-5 border-b-[1.5px] border-neutral-black">
                     <h1 className="font-display text-[clamp(1.375rem,4.5vw,2.75rem)] font-black text-neutral-black leading-tight uppercase tracking-[-0.5px]">
                         Checkout <span className="text-primary italic">— secure</span>
@@ -332,9 +380,10 @@ export default function Checkout() {
                                     </h2>
                                     <button
                                         type="submit"
-                                        className="bg-primary text-neutral-black px-[clamp(1.25rem,3vw,2.25rem)] py-[clamp(0.65rem,1.8vh,0.9rem)] font-display text-[clamp(12px,2.2vw,14px)] font-black uppercase tracking-[1px] border-[1.5px] border-neutral-black shadow-[6px_6px_0px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-1 hover:translate-y-1 transition-all shrink-0 self-end sm:self-auto w-full sm:w-auto"
+                                        disabled={inventoryGate}
+                                        className="bg-primary text-neutral-black px-[clamp(1.25rem,3vw,2.25rem)] py-[clamp(0.65rem,1.8vh,0.9rem)] font-display text-[clamp(12px,2.2vw,14px)] font-black uppercase tracking-[1px] border-[1.5px] border-neutral-black shadow-[6px_6px_0px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-1 hover:translate-y-1 transition-all shrink-0 self-end sm:self-auto w-full sm:w-auto disabled:opacity-50 disabled:cursor-not-allowed disabled:shadow-none disabled:translate-x-0 disabled:translate-y-0"
                                     >
-                                        Continue to payment
+                                        {stockLoading ? "Checking inventory…" : "Continue to payment"}
                                     </button>
                                 </div>
                                 <div className="grid grid-cols-1 gap-y-[clamp(0.75rem,2vh,1.5rem)] gap-x-6 sm:grid-cols-2">
@@ -457,8 +506,8 @@ export default function Checkout() {
                                     )}
                                     <button
                                         onClick={handleCheckout}
-                                        disabled={isLoading}
-                                        className="w-full min-h-[clamp(3.25rem,12vw,4.25rem)] py-3 bg-primary border-[1.5px] border-neutral-black font-display text-[clamp(15px,3.5vw,18px)] font-black uppercase tracking-[1.5px] shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] active:shadow-none active:translate-x-1 active:translate-y-1 transition-all flex items-center justify-center gap-3"
+                                        disabled={isLoading || inventoryGate}
+                                        className="w-full min-h-[clamp(3.25rem,12vw,4.25rem)] py-3 bg-primary border-[1.5px] border-neutral-black font-display text-[clamp(15px,3.5vw,18px)] font-black uppercase tracking-[1.5px] shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] active:shadow-none active:translate-x-1 active:translate-y-1 transition-all flex items-center justify-center gap-3 disabled:opacity-50 disabled:cursor-not-allowed disabled:shadow-none disabled:translate-x-0 disabled:translate-y-0"
                                     >
                                         {isLoading ? (
                                             <><Loader size="w-6 h-6 border-2" /> Processing…</>
@@ -495,7 +544,7 @@ export default function Checkout() {
                                                 <img
                                                     src={cartItemThumbnail(item)}
                                                     alt={item.name}
-                                                    className="w-full h-full object-cover"
+                                                    className={`w-full h-full ${STOREFRONT_TEE_MOCKUP_IMAGE_CLASS}`}
                                                 />
                                             </div>
                                             <div className="flex-1 min-w-0 flex flex-col justify-between">

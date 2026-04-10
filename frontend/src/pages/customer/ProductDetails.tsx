@@ -22,6 +22,7 @@ import GstInclusiveNote from "../../components/shared/GstInclusiveNote";
 import ReturnPolicyNote from "../../components/shared/ReturnPolicyNote";
 import { BEE_BADGE } from "../../constants/brand";
 import { artistPublicPath } from "../../utils/artistRoutes";
+import { STOREFRONT_TEE_MOCKUP_IMAGE_CLASS } from "../../utils/productMockup";
 import ArtistRatingInline from "../../components/shared/ArtistRatingInline";
 
 interface Product {
@@ -290,7 +291,7 @@ export default function ProductDetails() {
                                         key={displayMockups.front}
                                         src={displayMockups.front}
                                         alt="Front view"
-                                        className="w-full h-full object-cover rounded-[1px]"
+                                        className={`w-full h-full ${STOREFRONT_TEE_MOCKUP_IMAGE_CLASS} rounded-[1px]`}
                                         wrapperClassName="w-full h-full aspect-square"
                                     />
                                     <span className="absolute bottom-0 inset-x-0 bg-neutral-black/85 text-white font-display text-[8px] font-black uppercase tracking-wider py-0.5 text-center pointer-events-none">
@@ -309,7 +310,7 @@ export default function ProductDetails() {
                                         key={displayMockups.back || displayMockups.front}
                                         src={displayMockups.back || displayMockups.front}
                                         alt="Back view"
-                                        className="w-full h-full object-cover rounded-[1px]"
+                                        className={`w-full h-full ${STOREFRONT_TEE_MOCKUP_IMAGE_CLASS} rounded-[1px]`}
                                         wrapperClassName="w-full h-full aspect-square"
                                     />
                                     <span className="absolute bottom-0 inset-x-0 bg-neutral-black/85 text-white font-display text-[8px] font-black uppercase tracking-wider py-0.5 text-center pointer-events-none">
@@ -325,7 +326,7 @@ export default function ProductDetails() {
                                     key={mainImageSrc}
                                     src={mainImageSrc}
                                     alt={product.name}
-                                    className="w-full h-full object-cover group-hover:scale-[1.02] transition-transform duration-700"
+                                    className={`w-full h-full ${STOREFRONT_TEE_MOCKUP_IMAGE_CLASS} group-hover:scale-[1.02] transition-transform duration-700`}
                                     loading="eager"
                                     fetchPriority="high"
                                     wrapperClassName="w-full h-full"
@@ -544,13 +545,13 @@ export default function ProductDetails() {
                                 <div className="w-8 h-8 sm:w-9 sm:h-9 bg-neutral-g1 border border-neutral-g2 rounded-full flex items-center justify-center shrink-0">
                                     <Truck className="w-3.5 h-3.5 text-primary" />
                                 </div>
-                                <span className="leading-tight">Free 48hr<br />Shipping</span>
+                                <span className="leading-tight">Free<br />Shipping</span>
                             </div>
                             <div className="flex items-center gap-2 text-neutral-g4 font-display text-[9px] sm:text-[10px] font-extrabold uppercase tracking-[0.04em]">
                                 <div className="w-8 h-8 sm:w-9 sm:h-9 bg-neutral-g1 border border-neutral-g2 rounded-full flex items-center justify-center shrink-0">
                                     <Shield className="w-3.5 h-3.5 text-primary" />
                                 </div>
-                                <span className="leading-tight">Premium 220<br />GSM Cotton</span>
+                                <span className="leading-tight">Premium 180<br />GSM Cotton</span>
                             </div>
                             <div className="flex items-center gap-2 text-neutral-g4 font-display text-[9px] sm:text-[10px] font-extrabold uppercase tracking-[0.04em]">
                                 <div className="w-8 h-8 sm:w-9 sm:h-9 bg-neutral-g1 border border-neutral-g2 rounded-full flex items-center justify-center shrink-0">

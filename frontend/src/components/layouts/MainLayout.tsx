@@ -4,7 +4,7 @@ import Footer from "../shared/Footer";
 
 export default function MainLayout() {
     return (
-        <div className="min-h-screen bg-white">
+        <div className="min-h-screen bg-white uppercase [&_input]:normal-case [&_textarea]:normal-case [&_select]:normal-case">
             <Navbar />
             <main className="w-full">
                 <Outlet />

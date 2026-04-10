@@ -23,6 +23,7 @@ import Loader from "../../components/shared/Loader";
 import { Button } from "../../components/ui/Button";
 import ReturnPolicyNote from "../../components/shared/ReturnPolicyNote";
 import Toast from "../../components/shared/Toast";
+import { STOREFRONT_TEE_MOCKUP_IMAGE_CLASS } from "../../utils/productMockup";
 
 interface OrderItem {
     id: string;
@@ -321,7 +322,7 @@ export default function CustomerOrders() {
                                                                     <img
                                                                         src={item.product.mockupImageUrl}
                                                                         alt={item.product.name}
-                                                                        className="w-24 h-24 rounded-[4px] border-[2.5px] border-neutral-black object-cover hover:rotate-2 transition-transform shadow-[4px_4px_0px_0px_rgba(0,0,0,0.1)] group-hover/item:shadow-none"
+                                                                        className={`w-24 h-24 rounded-[4px] border-[2.5px] border-neutral-black ${STOREFRONT_TEE_MOCKUP_IMAGE_CLASS} hover:rotate-2 transition-transform shadow-[4px_4px_0px_0px_rgba(0,0,0,0.1)] group-hover/item:shadow-none`}
                                                                     />
                                                                     <div className="absolute -top-2 -left-2 bg-neutral-black text-white w-8 h-8 rounded-full border-[1.5px] border-white flex items-center justify-center font-display text-[12px] font-black italic shadow-lg">
                                                                         x{item.quantity}

@@ -6,7 +6,11 @@ import api from "../../api/axios";
 import { useCart } from "../../context/CartContext";
 import { BEE_BADGE } from "../../constants/brand";
 import { artistPublicPath } from "../../utils/artistRoutes";
-import { frontMockupUrl, backMockupUrl } from "../../utils/productMockup";
+import {
+    frontMockupUrl,
+    backMockupUrl,
+    STOREFRONT_TEE_MOCKUP_IMAGE_CLASS,
+} from "../../utils/productMockup";
 import ArtistRatingInline from "../../components/shared/ArtistRatingInline";
 import BannerTeehiveMarquee from "../../components/shared/BannerTeehiveMarquee";
 
@@ -148,7 +152,7 @@ export default function Hive50Page() {
                                                 <img
                                                     src={mockupSrc(product)}
                                                     alt={product.name}
-                                                    className="w-full h-full object-cover group-hover:scale-105 transition-transform"
+                                                    className={`w-full h-full ${STOREFRONT_TEE_MOCKUP_IMAGE_CLASS} group-hover:scale-105 transition-transform`}
                                                 />
                                             </div>
                                         </Link>
@@ -222,7 +226,7 @@ export default function Hive50Page() {
                                             <img
                                                 src={mockupSrc(product)}
                                                 alt={product.name}
-                                                className="w-full h-full object-cover group-hover:scale-105 transition-transform"
+                                                className={`w-full h-full ${STOREFRONT_TEE_MOCKUP_IMAGE_CLASS} group-hover:scale-105 transition-transform`}
                                             />
                                         </Link>
 

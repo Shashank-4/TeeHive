@@ -1,3 +1,9 @@
+/**
+ * Tailwind classes for t-shirt mockups in listings/cards/cart — same vertical anchor as the customer PDP hero.
+ * Compose with hover/scale: e.g. `${STOREFRONT_TEE_MOCKUP_IMAGE_CLASS} group-hover:scale-105 transition-transform`.
+ */
+export const STOREFRONT_TEE_MOCKUP_IMAGE_CLASS = "object-cover object-[center_30%]";
+
 export function canonicalHex(hex: string): string {
     const s = (hex || "").trim().toLowerCase().replace(/^#/, "").replace(/[^0-9a-f]/g, "");
     return s ? `#${s}` : "#ffffff";

@@ -247,9 +247,25 @@ export default function ArtistProductManager() {
                                                 {actionLoading === product.id ? "..." : "Publish"}
                                             </button>
                                         )}
-                                        <button className="flex-1 py-2.5 bg-white border-[1.5px] border-neutral-black rounded-[2px] font-display text-[9px] font-black uppercase tracking-[1px] text-neutral-black shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:translate-x-[1px] hover:translate-y-[1px] hover:shadow-none transition-all font-display">
-                                            <Eye className="w-3.5 h-3.5 inline mr-1 mb-0.5" /> View
-                                        </button>
+                                        {product.status === "PUBLISHED" ? (
+                                            <Link
+                                                to={`/products/${product.id}`}
+                                                target="_blank"
+                                                rel="noopener noreferrer"
+                                                className="flex-1 py-2.5 bg-white border-[1.5px] border-neutral-black rounded-[2px] font-display text-[9px] font-black uppercase tracking-[1px] text-neutral-black shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:translate-x-[1px] hover:translate-y-[1px] hover:shadow-none transition-all text-center no-underline inline-flex items-center justify-center gap-1"
+                                            >
+                                                <Eye className="w-3.5 h-3.5 shrink-0" /> View
+                                            </Link>
+                                        ) : (
+                                            <button
+                                                type="button"
+                                                disabled
+                                                title="Publish this product to open its storefront page"
+                                                className="flex-1 py-2.5 bg-neutral-g1 border-[1.5px] border-neutral-g2 rounded-[2px] font-display text-[9px] font-black uppercase tracking-[1px] text-neutral-g4 shadow-none cursor-not-allowed opacity-70"
+                                            >
+                                                <Eye className="w-3.5 h-3.5 inline mr-1 mb-0.5" /> View
+                                            </button>
+                                        )}
                                         <button
                                             onClick={() => handleDelete(product.id)}
                                             disabled={actionLoading === product.id}
@@ -313,6 +329,16 @@ export default function ArtistProductManager() {
                                                     >
                                                         Publish
                                                     </button>
+                                                )}
+                                                {product.status === "PUBLISHED" && (
+                                                    <Link
+                                                        to={`/products/${product.id}`}
+                                                        target="_blank"
+                                                        rel="noopener noreferrer"
+                                                        className="px-4 py-2 bg-white text-neutral-black border-[1px] border-neutral-black rounded-[2px] font-display text-[9px] font-black uppercase tracking-[1px] hover:translate-x-[1px] hover:translate-y-[1px] transition-all inline-flex items-center gap-1 no-underline"
+                                                    >
+                                                        <Eye className="w-3.5 h-3.5" /> View
+                                                    </Link>
                                                 )}
                                                 <button
                                                     onClick={() => handleDelete(product.id)}
