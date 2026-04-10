@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { Star, Loader2, MessageSquare, CheckCircle } from "lucide-react";
 import api from "../../api/axios";
+import { STOREFRONT_TEE_MOCKUP_IMAGE_CLASS } from "../../utils/productMockup";
 
 interface ReviewableProduct {
     id: string;
@@ -148,7 +149,11 @@ export default function RatePurchase() {
                             {/* Product Info */}
                             <div className="w-full md:w-1/3 flex flex-col items-center text-center space-y-4">
                                 <div className="w-full aspect-[4/5] bg-neutral-g1 border-[2px] border-neutral-black rounded-[2px] overflow-hidden">
-                                    <img src={product.mockupImageUrl} alt={product.name} className="w-full h-full object-cover" />
+                                    <img
+                                        src={product.mockupImageUrl}
+                                        alt={product.name}
+                                        className={`w-full h-full ${STOREFRONT_TEE_MOCKUP_IMAGE_CLASS}`}
+                                    />
                                 </div>
                                 <div>
                                     <h3 className="font-display text-[14px] font-black uppercase text-neutral-black tracking-[1px] mb-1">

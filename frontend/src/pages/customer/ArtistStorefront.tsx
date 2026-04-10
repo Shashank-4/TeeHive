@@ -5,14 +5,17 @@ import {
     Palette,
     ExternalLink,
     ShoppingBag,
-    Heart,
 } from "lucide-react";
 import api from "../../api/axios";
 import ImageWithSkeleton from "../../components/shared/ImageWithSkeleton";
 import Loader from "../../components/shared/Loader";
 import ArtistRatingInline from "../../components/shared/ArtistRatingInline";
 import { useCart } from "../../context/CartContext";
-import { frontMockupUrl, backMockupUrl } from "../../utils/productMockup";
+import {
+    frontMockupUrl,
+    backMockupUrl,
+    STOREFRONT_TEE_MOCKUP_IMAGE_CLASS,
+} from "../../utils/productMockup";
 
 interface Product {
     id: string;
@@ -265,7 +268,7 @@ export default function ArtistStorefront() {
                                                         : product.mockupImageUrl
                                                 }
                                                 alt={product.name}
-                                                className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+                                                className={`w-full h-full ${STOREFRONT_TEE_MOCKUP_IMAGE_CLASS} group-hover:scale-105 transition-transform duration-500`}
                                                 wrapperClassName="w-full h-full"
                                             />
                                             {onSale && (
@@ -273,11 +276,6 @@ export default function ArtistStorefront() {
                                                     -{discountPct}%
                                                 </div>
                                             )}
-                                            <div className="absolute right-4 top-4 translate-x-12 opacity-0 group-hover:translate-x-0 group-hover:opacity-100 transition-all">
-                                                <span className="w-10 h-10 bg-white border border-neutral-g2 rounded-[4px] flex items-center justify-center pointer-events-none">
-                                                    <Heart className="w-5 h-5" />
-                                                </span>
-                                            </div>
                                         </div>
                                         <div className="p-4 pt-5 pb-2">
                                             <div className="font-display text-[10px] font-bold tracking-[1.5px] uppercase text-primary mb-1 truncate">

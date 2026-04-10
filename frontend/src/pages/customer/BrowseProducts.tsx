@@ -9,6 +9,7 @@ import { Link, useSearchParams } from "react-router-dom";
 import Loader from "../../components/shared/Loader";
 import ImageWithSkeleton from "../../components/shared/ImageWithSkeleton";
 import api from "../../api/axios";
+import { STOREFRONT_TEE_MOCKUP_IMAGE_CLASS } from "../../utils/productMockup";
 import { useCart } from "../../context/CartContext";
 import { BEE_BADGE } from "../../constants/brand";
 import { artistPublicPath } from "../../utils/artistRoutes";
@@ -302,7 +303,7 @@ export default function BrowseProducts() {
                                                 : product.mockupImageUrl
                                         }
                                         alt={product.name}
-                                        className="w-full h-full object-cover group-hover:scale-105 transition-transform"
+                                        className={`w-full h-full ${STOREFRONT_TEE_MOCKUP_IMAGE_CLASS} group-hover:scale-105 transition-transform`}
                                         wrapperClassName="w-full h-full"
                                     />
                                     {product.isDiscounted && (

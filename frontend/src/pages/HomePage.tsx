@@ -9,7 +9,11 @@ import { useAuth } from "../context/AuthContext";
 import LatestDropsShowcase from "../components/home/LatestDropsShowcase";
 import { BEE_BADGE } from "../constants/brand";
 import { artistPublicPath } from "../utils/artistRoutes";
-import { frontMockupUrl, backMockupUrl } from "../utils/productMockup";
+import {
+    frontMockupUrl,
+    backMockupUrl,
+    STOREFRONT_TEE_MOCKUP_IMAGE_CLASS,
+} from "../utils/productMockup";
 import ArtistRatingInline from "../components/shared/ArtistRatingInline";
 
 interface Product {
@@ -527,7 +531,7 @@ function HomePage() {
                                                                         : product.mockupImageUrl
                                                                 }
                                                                 alt={product.name}
-                                                                className="absolute inset-0 h-full w-full object-cover object-[50%_36%] origin-[50%_38%] scale-[1.2] transition-transform duration-500 group-hover:scale-[1.3]"
+                                                                className={`absolute inset-0 h-full w-full ${STOREFRONT_TEE_MOCKUP_IMAGE_CLASS} transition-transform duration-500 group-hover:scale-[1.06]`}
                                                                 wrapperClassName="h-full w-full overflow-hidden"
                                                             />
                                                         ) : (
@@ -686,7 +690,7 @@ function HomePage() {
                                                             : product.mockupImageUrl
                                                     }
                                                     alt={product.name}
-                                                    className="absolute inset-0 h-full w-full object-cover object-[50%_36%] origin-[50%_38%] scale-[1.2] transition-transform duration-500 group-hover:scale-[1.3]"
+                                                    className={`absolute inset-0 h-full w-full ${STOREFRONT_TEE_MOCKUP_IMAGE_CLASS} transition-transform duration-500 group-hover:scale-[1.06]`}
                                                     wrapperClassName="h-full w-full overflow-hidden"
                                                 />
                                             ) : (

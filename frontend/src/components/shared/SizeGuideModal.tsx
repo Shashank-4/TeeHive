@@ -1,4 +1,3 @@
-import ImageWithSkeleton from "./ImageWithSkeleton";
 import { SIZE_GUIDE_MEASUREMENTS } from "../../constants/productSizes";
 
 type SizeGuideModalProps = {
@@ -6,9 +5,7 @@ type SizeGuideModalProps = {
     onClose: () => void;
 };
 
-/**
- * Branded size guide: semantic table for SEO/accessibility plus reference diagram (sizeGuide.webp).
- */
+/** Branded size guide: semantic table for SEO/accessibility. */
 export default function SizeGuideModal({ open, onClose }: SizeGuideModalProps) {
     if (!open) return null;
 
@@ -49,7 +46,7 @@ export default function SizeGuideModal({ open, onClose }: SizeGuideModalProps) {
                     </button>
                 </div>
 
-                <div className="space-y-8 p-4 sm:p-6">
+                <div className="p-4 sm:p-6">
                     <div className="overflow-x-auto rounded-[4px] border-[2px] border-neutral-black">
                         <table className="w-full min-w-[320px] border-collapse text-left">
                             <caption className="border-b-[2px] border-neutral-black bg-neutral-g1 px-4 py-3 text-left font-body text-[13px] font-semibold text-neutral-g5">
@@ -65,6 +62,9 @@ export default function SizeGuideModal({ open, onClose }: SizeGuideModalProps) {
                                     </th>
                                     <th scope="col" className="px-3 py-3 font-display text-[11px] font-black uppercase tracking-wider sm:px-4">
                                         Length (in)
+                                    </th>
+                                    <th scope="col" className="px-3 py-3 font-display text-[11px] font-black uppercase tracking-wider sm:px-4">
+                                        Sleeve (in)
                                     </th>
                                 </tr>
                             </thead>
@@ -86,22 +86,13 @@ export default function SizeGuideModal({ open, onClose }: SizeGuideModalProps) {
                                         <td className="border-t border-neutral-g2 px-3 py-2.5 font-body text-[14px] font-medium text-neutral-g5 sm:px-4">
                                             {row.lengthIn}
                                         </td>
+                                        <td className="border-t border-neutral-g2 px-3 py-2.5 font-body text-[14px] font-medium text-neutral-g5 sm:px-4">
+                                            {row.sleeveIn}
+                                        </td>
                                     </tr>
                                 ))}
                             </tbody>
                         </table>
-                    </div>
-
-                    <div>
-                        <p className="mb-3 font-display text-[11px] font-black uppercase tracking-[0.2em] text-neutral-g4">
-                            How to measure
-                        </p>
-                        <ImageWithSkeleton
-                            src="/assets/sizeGuide.webp"
-                            alt="Diagram showing how to measure chest and length for TeeHive T-shirt sizing"
-                            className="w-full max-h-[min(52vh,520px)] rounded-[4px] border-[2px] border-neutral-black object-contain bg-neutral-g1"
-                            wrapperClassName="w-full"
-                        />
                     </div>
                 </div>
             </div>

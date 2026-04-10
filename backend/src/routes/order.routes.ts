@@ -10,6 +10,12 @@ import {
     cleanupExpiredPendingOrders,
     markOrderPaidAfterInventoryCheck,
 } from "../services/orderInventory.service";
+import {
+    collectCartIssues,
+    findVariantForLine,
+    loadCartValidationContext,
+    validateCheckoutLine,
+} from "../services/cartAvailability.service";
 import { notifyOrderStakeholders } from "../services/orderStakeholderNotify.service";
 import {
     buildReturnClaimView,
@@ -102,84 +108,27 @@ async function buildCheckoutDraft(items: CheckoutItemInput[], couponCode?: strin
     }
 
     const productIds = [...new Set(items.map((item) => item.id))];
-    const [products, activeOffer, variants] = await Promise.all([
-        prisma.product.findMany({
-            where: { id: { in: productIds } },
-            select: {
-                id: true,
-                name: true,
-                price: true,
-                compareAtPrice: true,
-                stockStatus: true,
-                tshirtColor: true,
-                availableColors: true,
-                status: true,
-                artistId: true,
-            },
-        }),
+    const [ctx, activeOffer] = await Promise.all([
+        loadCartValidationContext(prisma, productIds),
         getActiveSpecialOffer(),
-        prisma.productVariant.findMany({
-            where: { productId: { in: productIds } },
-            select: {
-                productId: true,
-                color: true,
-                size: true,
-                stockStatus: true,
-            },
-        }),
     ]);
 
-    const productsById = new Map(products.map((product) => [product.id, product]));
-    const variantsByProductId = new Map<string, typeof variants>();
-    variants.forEach((variant) => {
-        const bucket = variantsByProductId.get(variant.productId) || [];
-        bucket.push(variant);
-        variantsByProductId.set(variant.productId, bucket);
-    });
     const validatedItems = [];
     let subtotal = 0;
 
     for (const item of items) {
-        if (!item?.id) throw new Error("A cart item is missing its product id.");
-        if (!Number.isInteger(item.quantity) || item.quantity <= 0) {
-            throw new Error("Each cart item must have a quantity of at least 1.");
-        }
-        if (!String(item.size || "").trim()) throw new Error("Each cart item must include a size.");
-        if (!String(item.color || "").trim()) throw new Error("Each cart item must include a color.");
+        const lineErr = validateCheckoutLine(item, ctx);
+        if (lineErr) throw new Error(lineErr);
 
-        const product = productsById.get(item.id);
-        if (!product || product.status !== "PUBLISHED") {
-            throw new Error(`Product ${item.id} is no longer available.`);
-        }
-
-        const allowedColors = product.availableColors?.length ? product.availableColors : [product.tshirtColor];
-        if (!allowedColors.includes(item.color)) {
-            throw new Error(`${product.name} is no longer available in the selected color.`);
-        }
-
-        const productVariants = variantsByProductId.get(product.id) || [];
-        if (productVariants.length > 0) {
-            const variant = productVariants.find(
-                (entry) => entry.color === item.color && entry.size === item.size
-            );
-            if (!variant) {
-                throw new Error(`${product.name} is not available in ${item.color} / ${item.size}.`);
-            }
-            if (variant.stockStatus === "OUT_OF_STOCK") {
-                throw new Error(
-                    `${product.name} is currently out of stock in ${item.color} / ${item.size}.`
-                );
-            }
-        } else {
-            if (product.stockStatus === "OUT_OF_STOCK") {
-                throw new Error(`${product.name} is currently out of stock.`);
-            }
-        }
+        const product = ctx.productsById.get(item.id)!;
+        const productVariants = ctx.variantsByProductId.get(product.id) || [];
 
         const { price: finalUnitPrice } = calculateProductPrice(product, activeOffer);
         const lineTotal = finalUnitPrice * item.quantity;
         const artistShareAmount = Number((lineTotal * ARTIST_COMMISSION_RATE).toFixed(2));
         const platformFeeAmount = Number((lineTotal - artistShareAmount).toFixed(2));
+
+        const matchedVariant = findVariantForLine(productVariants, item.color, item.size);
 
         subtotal += lineTotal;
         validatedItems.push({
@@ -203,11 +152,7 @@ async function buildCheckoutDraft(items: CheckoutItemInput[], couponCode?: strin
                 activeOfferCategoryName: activeOffer?.categoryName ?? null,
                 inventorySource: productVariants.length > 0 ? "variant" : "product",
                 stockStatus:
-                    productVariants.length > 0
-                        ? productVariants.find(
-                              (entry) => entry.color === item.color && entry.size === item.size
-                          )?.stockStatus || null
-                        : product.stockStatus,
+                    productVariants.length > 0 ? matchedVariant?.stockStatus || null : product.stockStatus,
             },
         });
     }
@@ -471,6 +416,33 @@ router.post(
         }
     }
 );
+
+/** Public: lets the storefront cart / checkout UI match server rules (variants, global matrix, canonical colors). */
+router.post("/validate-cart", async (req: Request, res: Response): Promise<any> => {
+    try {
+        const raw = req.body?.items;
+        if (!Array.isArray(raw)) {
+            return badRequest(res, "Request must include an items array.");
+        }
+        const items: CheckoutItemInput[] = raw.map((row: any) => ({
+            id: String(row?.id || "").trim(),
+            quantity: Number(row?.quantity),
+            size: String(row?.size || "").trim(),
+            color: String(row?.color || "").trim(),
+        }));
+        const issues = await collectCartIssues(prisma, items);
+        return res.json({
+            status: "success",
+            data: { ok: issues.length === 0, issues },
+        });
+    } catch (error: any) {
+        console.error("Error validating cart:", error);
+        return res.status(500).json({
+            status: "error",
+            message: "Unable to validate cart availability.",
+        });
+    }
+});
 
 router.post("/checkout", requireUser, async (req: Request, res: Response): Promise<any> => {
     const user = res.locals.user;

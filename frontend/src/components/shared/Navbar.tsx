@@ -5,6 +5,7 @@ import { useAuth } from "../../context/AuthContext";
 import { useCart } from "../../context/CartContext";
 import api from "../../api/axios";
 import { artistPublicPath } from "../../utils/artistRoutes";
+import { STOREFRONT_TEE_MOCKUP_IMAGE_CLASS } from "../../utils/productMockup";
 import ArtistRatingInline from "./ArtistRatingInline";
 
 interface SearchProductResult {
@@ -284,7 +285,11 @@ export default function Navbar() {
                                                             className="w-full text-left px-4 py-3.5 hover:bg-primary/15 transition-colors border-b border-neutral-black/5 last:border-b-0"
                                                         >
                                                             <div className="flex items-center gap-3">
-                                                                <img src={image} alt={p.name} className="w-10 h-10 rounded-[2px] border border-neutral-black/20 object-cover bg-neutral-g1 shrink-0" />
+                                                                <img
+                                                                    src={image}
+                                                                    alt={p.name}
+                                                                    className={`w-10 h-10 rounded-[2px] border border-neutral-black/20 bg-neutral-g1 shrink-0 ${STOREFRONT_TEE_MOCKUP_IMAGE_CLASS}`}
+                                                                />
                                                                 <div className="min-w-0">
                                                                     <div className="font-display text-[12px] font-black uppercase truncate">{p.name}</div>
                                                                     <div className="font-display text-[10px] font-bold uppercase tracking-[1px] text-neutral-g3">

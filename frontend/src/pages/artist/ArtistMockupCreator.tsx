@@ -58,6 +58,8 @@ export default function ArtistMockupCreator() {
     const [previewColor, setPreviewColor] = useState<TShirtColor>(TShirtColor.White);
     const [selectedColors, setSelectedColors] = useState<TShirtColor[]>([TShirtColor.White]);
     const [primaryColor, setPrimaryColor] = useState<TShirtColor>(TShirtColor.White);
+    /** User must tap the ★ on a selected fabric (set once per session / after primary fabric is removed). Hydrated drafts start confirmed. */
+    const [primaryColorConfirmed, setPrimaryColorConfirmed] = useState(false);
     const [primaryView, setPrimaryView] = useState<ViewType>("front");
     const [currentView, setCurrentView] = useState<ViewType>("front");
     const [productName, setProductName] = useState("");
@@ -108,6 +110,7 @@ export default function ArtistMockupCreator() {
                     setPreviewColor(firstHex);
                     setSelectedColors([firstHex]);
                     setPrimaryColor(firstHex);
+                    setPrimaryColorConfirmed(false);
                 }
             } catch (err) {
                 console.error("Failed to load global colors", err);
@@ -144,6 +147,7 @@ export default function ArtistMockupCreator() {
                           : [product.tshirtColor]) as TShirtColor[])
                 );
                 setPrimaryColor((draftState.primaryColor || product.primaryColor || product.tshirtColor) as TShirtColor);
+                setPrimaryColorConfirmed(true);
                 setPrimaryView((draftState.primaryView || product.primaryView || "front") as ViewType);
                 setFrontDesign(draftState.frontDesign || product.design || null);
                 setBackDesign(draftState.backDesign || null);
@@ -222,6 +226,15 @@ export default function ArtistMockupCreator() {
         if (!price || parseFloat(price) <= 0) return setSaveError("Invalid Pricing Logic");
         if (!frontDesign && !backDesign) return setSaveError("No Visual Data Appended");
         if (selectedCategories.length === 0) return setSaveError("Classification Required");
+        if (!primaryColorConfirmed) {
+            return setSaveError("Tap the star (★) on a selected fabric to confirm the primary storefront color.");
+        }
+        const primaryInSelection = selectedColors.some(
+            (c) => c.toLowerCase() === primaryColor.toLowerCase()
+        );
+        if (!primaryInSelection) {
+            return setSaveError("Primary fabric must be one of your selected colors. Tap ★ on a selected swatch.");
+        }
 
         setIsSaving(true);
         try {
@@ -333,6 +346,26 @@ export default function ArtistMockupCreator() {
 
     return (
         <div className="w-full min-h-screen bg-neutral-g1 flex flex-col pt-4 relative">
+            {saveError && (
+                <div
+                    className="fixed top-4 left-4 right-4 sm:left-auto sm:right-6 z-[120] w-auto sm:max-w-sm bg-red-50 border-[2px] border-red-500 p-4 rounded-[4px] flex items-start gap-3 shadow-[6px_6px_0px_0px_rgba(0,0,0,1)] animate-bounce"
+                    role="alert"
+                >
+                    <AlertTriangle className="text-red-500 w-6 h-6 shrink-0 mt-0.5" />
+                    <p className="flex-1 min-w-0 font-display text-[11px] sm:text-[12px] font-black text-red-500 uppercase tracking-[1px] leading-snug">
+                        {saveError}
+                    </p>
+                    <button
+                        type="button"
+                        onClick={() => setSaveError(null)}
+                        className="shrink-0 font-display text-[10px] font-black uppercase text-red-600 underline underline-offset-2"
+                        aria-label="Dismiss error"
+                    >
+                        Dismiss
+                    </button>
+                </div>
+            )}
+
             {(isSaving || isHydratingDraft) && (
                 <div
                     className="fixed inset-0 z-[200] bg-neutral-black/90 backdrop-blur-sm flex flex-col items-center justify-center gap-8 px-8"
@@ -357,31 +390,52 @@ export default function ArtistMockupCreator() {
                     </div>
                 </div>
             )}
-            <div className="flex-1 px-4 sm:px-8 pb-12 w-full">
-                {/* Workspace Header */}
-                <div className="flex flex-col md:flex-row md:items-end justify-between mb-10 gap-6">
-                    <div className="flex gap-4">
+            <div className="flex-1 px-4 sm:px-8 pb-12 w-full min-h-0">
+                {/* Top bar: title left, save / publish top-right — canvas workspace starts directly below */}
+                <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between mb-6 lg:mb-8">
+                    <div className="min-w-0">
+                        <h1 className="font-display text-[clamp(1.125rem,2.5vw,1.375rem)] font-black uppercase tracking-tight text-neutral-black">
+                            Mockup lab
+                        </h1>
+                        <p className="font-display text-[10px] font-bold text-neutral-g3 uppercase tracking-[0.2em] mt-1">
+                            Canvas & product setup
+                        </p>
+                    </div>
+                    <div className="flex flex-wrap gap-3 sm:justify-end shrink-0">
                         <button
+                            type="button"
                             onClick={() => handleSaveProduct("DRAFT")}
-                            disabled={isSaving}
-                            className="flex items-center gap-3 px-6 py-3 bg-white border-[2px] border-neutral-black rounded-[4px] font-display text-[13px] font-black uppercase tracking-[1px] shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] hover:translate-x-[1px] hover:translate-y-[1px] hover:shadow-none transition-all disabled:opacity-40 disabled:pointer-events-none"
+                            disabled={isSaving || !primaryColorConfirmed}
+                            title={
+                                !primaryColorConfirmed
+                                    ? "Confirm primary fabric with the star (★) in Fabrication Config"
+                                    : undefined
+                            }
+                            className="flex items-center gap-3 px-5 py-2.5 sm:px-6 sm:py-3 bg-white border-[2px] border-neutral-black rounded-[4px] font-display text-[12px] sm:text-[13px] font-black uppercase tracking-[1px] shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] hover:translate-x-[1px] hover:translate-y-[1px] hover:shadow-none transition-all disabled:opacity-40 disabled:pointer-events-none"
                         >
-                            <FileText className="w-4 h-4" /> {isEditMode ? "Update Lab Draft" : "Save Lab Draft"}
+                            <FileText className="w-4 h-4 shrink-0" />{" "}
+                            {isEditMode ? "Update Lab Draft" : "Save Lab Draft"}
                         </button>
                         <button
+                            type="button"
                             onClick={() => setShowPublishModal(true)}
-                            disabled={isSaving}
-                            className="flex items-center gap-3 px-8 py-3 bg-primary border-[2px] border-neutral-black rounded-[4px] font-display text-[13px] font-black uppercase tracking-[1px] shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] hover:translate-x-[2px] hover:translate-y-[2px] hover:shadow-none transition-all disabled:opacity-40 disabled:pointer-events-none"
+                            disabled={isSaving || !primaryColorConfirmed}
+                            title={
+                                !primaryColorConfirmed
+                                    ? "Confirm primary fabric with the star (★) in Fabrication Config"
+                                    : undefined
+                            }
+                            className="flex items-center gap-3 px-6 py-2.5 sm:px-8 sm:py-3 bg-primary border-[2px] border-neutral-black rounded-[4px] font-display text-[12px] sm:text-[13px] font-black uppercase tracking-[1px] shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] hover:translate-x-[2px] hover:translate-y-[2px] hover:shadow-none transition-all disabled:opacity-40 disabled:pointer-events-none"
                         >
-                            <Send className="w-4 h-4" /> Transmit to Store
+                            <Send className="w-4 h-4 shrink-0" /> Transmit to Store
                         </button>
                     </div>
                 </div>
 
-                {/* Main Workspace */}
-                <div className="grid grid-cols-1 lg:grid-cols-[1fr_420px] gap-8">
+                {/* Main Workspace: canvas first (top on mobile); left canvas sticky on lg; right column scrolls inside max-height */}
+                <div className="flex flex-col lg:flex-row lg:gap-8 lg:items-start">
                     {/* Left Side: The Canvas */}
-                    <div className="space-y-6">
+                    <div className="w-full lg:flex-1 lg:min-w-0 space-y-6 lg:sticky lg:top-4 lg:z-10 lg:self-start">
                         <div className="bg-white border-[2px] border-neutral-black rounded-[6px] p-8 shadow-[12px_12px_0px_0px_rgba(0,0,0,1)] relative overflow-hidden group">
                             <div className="absolute top-0 right-0 w-32 h-full bg-neutral-g1/50 -skew-x-12 translate-x-16 pointer-events-none" />
 
@@ -434,18 +488,10 @@ export default function ArtistMockupCreator() {
                                 )}
                             </div>
                         </div>
-
-                        {/* Error Handling */}
-                        {saveError && (
-                            <div className="bg-red-50 border-[2px] border-red-500 p-4 rounded-[4px] flex items-center gap-4 animate-bounce">
-                                <AlertTriangle className="text-red-500 w-6 h-6" />
-                                <p className="font-display text-[12px] font-black text-red-500 uppercase tracking-[1px]">{saveError}</p>
-                            </div>
-                        )}
                     </div>
 
                     {/* Right Side: Configuration Sidebar */}
-                    <div className="space-y-8">
+                    <div className="w-full lg:w-[420px] lg:shrink-0 space-y-8 lg:max-h-[calc(100dvh-7.5rem)] lg:min-h-0 lg:overflow-y-auto lg:overscroll-y-contain lg:pr-2 lg:pb-2 [scrollbar-width:thin]">
                         {/* 1. Visual Assembly */}
                         <div className="bg-white border-[2px] border-neutral-black rounded-[6px] p-6 shadow-[8px_8px_0px_0px_rgba(0,0,0,1)]">
                             <h3 className="font-display text-[14px] font-black uppercase tracking-[1px] mb-6 flex items-center gap-2">
@@ -580,7 +626,14 @@ export default function ArtistMockupCreator() {
                             </h3>
                             <div className="space-y-6">
                                 <div className="space-y-3">
-                                    <label className="font-display text-[10px] font-black uppercase tracking-[2px] text-neutral-g4 px-1">Available Fabrics ({selectedColors.length})</label>
+                                    <label className="font-display text-[10px] font-black uppercase tracking-[2px] text-neutral-g4 px-1">
+                                        Available Fabrics ({selectedColors.length})
+                                    </label>
+                                    {!primaryColorConfirmed && selectedColors.length > 0 && (
+                                        <p className="font-display text-[10px] font-black uppercase tracking-wide text-danger bg-danger/10 border border-danger/40 rounded-[4px] px-3 py-2">
+                                            Required: tap the ★ on your primary fabric before saving or publishing.
+                                        </p>
+                                    )}
                                     <div className="flex flex-wrap gap-3">
                                         {activeColorsList.map((c) => {
                                             const isSelected = selectedColors.includes(c.color);
@@ -588,28 +641,48 @@ export default function ArtistMockupCreator() {
                                             return (
                                                 <div key={c.name} className="relative group">
                                                     <button
+                                                        type="button"
                                                         onClick={() => {
-                                                            setSelectedColors(prev => isSelected ? (prev.length > 1 ? prev.filter(x => x !== c.color) : prev) : [...prev, c.color]);
+                                                            if (isSelected) {
+                                                                if (selectedColors.length <= 1) return;
+                                                                const next = selectedColors.filter((x) => x !== c.color);
+                                                                setSelectedColors(next);
+                                                                const stillHasPrimary = next.some(
+                                                                    (x) =>
+                                                                        x.toLowerCase() === primaryColor.toLowerCase()
+                                                                );
+                                                                if (!stillHasPrimary) {
+                                                                    setPrimaryColorConfirmed(false);
+                                                                    setPrimaryColor(next[0]);
+                                                                    setPreviewColor(next[0]);
+                                                                }
+                                                                return;
+                                                            }
+                                                            setSelectedColors((prev) => [...prev, c.color]);
                                                             setPreviewColor(c.color);
                                                         }}
-                                                        className={`w-10 h-10 border-[2px] border-neutral-black rounded-full shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] group-hover:scale-110 group-hover:shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] transition-all ${isSelected ? 'scale-110 shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] ring-offset-2 ring-2 ring-primary' : ''}`}
+                                                        className={`w-10 h-10 border-[2px] border-neutral-black rounded-full shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] group-hover:scale-110 group-hover:shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] transition-all ${isSelected ? "scale-110 shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] ring-offset-2 ring-2 ring-primary" : ""}`}
                                                         style={{ backgroundColor: c.color }}
                                                         title={c.name}
                                                     />
                                                     {isSelected && (
                                                         <button
+                                                            type="button"
                                                             onClick={() => {
-                                                                // Primary color should drive the exported mockup base.
                                                                 setPrimaryColor(c.color);
                                                                 setPreviewColor(c.color);
+                                                                setPrimaryColorConfirmed(true);
                                                             }}
-                                                            className={`absolute -top-1 -right-1 w-5 h-5 rounded-full flex items-center justify-center border-[1px] border-neutral-black shadow-sm transition-all ${isPrimary ? 'bg-primary' : 'bg-white'}`}
+                                                            aria-label={`Set ${c.name} as primary storefront color`}
+                                                            className={`absolute -top-1 -right-1 w-5 h-5 rounded-full flex items-center justify-center border-[1px] border-neutral-black shadow-sm transition-all ${isPrimary && primaryColorConfirmed ? "bg-primary ring-2 ring-neutral-black ring-offset-1" : isPrimary ? "bg-primary/60" : "bg-white"}`}
                                                         >
-                                                            <Star className={`w-3 h-3 ${isPrimary ? 'fill-neutral-black' : 'text-neutral-g2'}`} />
+                                                            <Star
+                                                                className={`w-3 h-3 ${isPrimary && primaryColorConfirmed ? "fill-neutral-black" : isPrimary ? "fill-neutral-black/50" : "text-neutral-g2"}`}
+                                                            />
                                                         </button>
                                                     )}
                                                 </div>
-                                            )
+                                            );
                                         })}
                                     </div>
                                 </div>

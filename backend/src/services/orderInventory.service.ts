@@ -1,4 +1,9 @@
 import { PrismaClient, type Prisma } from "@prisma/client";
+import {
+    findVariantForLine,
+    isGlobalMatrixOutOfStock,
+    parseGlobalInventoryMatrix,
+} from "./cartAvailability.service";
 
 type DbClient = PrismaClient | Prisma.TransactionClient;
 
@@ -82,13 +87,22 @@ export async function markOrderPaidAfterInventoryCheck(
         return { updatedOrder: order, alreadyProcessed: true };
     }
 
+    const matrixRow = await db.siteConfig.findUnique({ where: { key: "global_inventory" } });
+    const globalMatrix = parseGlobalInventoryMatrix(matrixRow?.value);
+
     for (const item of order.items) {
         const productHasVariants = item.product.variants.length > 0;
 
-        if (productHasVariants) {
-            const variant = item.product.variants.find(
-                (entry) => entry.color === item.color && entry.size === item.size
+        if (
+            isGlobalMatrixOutOfStock(globalMatrix, item.color, item.size)
+        ) {
+            throw new Error(
+                `Inventory no longer available for ${item.color} / ${item.size} (global inventory) during payment confirmation.`
             );
+        }
+
+        if (productHasVariants) {
+            const variant = findVariantForLine(item.product.variants, item.color, item.size);
             if (!variant || variant.stockStatus === "OUT_OF_STOCK") {
                 throw new Error(
                     `Inventory no longer available for variant ${item.color} / ${item.size} during payment confirmation.`
