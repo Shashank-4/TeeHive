@@ -1,6 +1,5 @@
 import { useState, useEffect, useMemo } from "react";
 import {
-    Heart,
     ShoppingCart,
     Minus,
     Plus,
@@ -533,9 +532,6 @@ export default function ProductDetails() {
                                     }`}
                             >
                                 Buy now — ₹{(product.price * quantity).toLocaleString("en-IN")}
-                            </button>
-                            <button type="button" className="w-[52px] h-[52px] sm:w-[56px] sm:h-[56px] shrink-0 flex items-center justify-center border-[1.5px] border-neutral-black rounded-[4px] hover:bg-danger-light hover:text-danger hover:border-danger transition-all shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] active:shadow-none active:translate-x-0.5 active:translate-y-0.5">
-                                <Heart className="w-5 h-5 sm:w-6 sm:h-6" />
                             </button>
                         </div>
 
