@@ -1,5 +1,9 @@
 import { Request, Response } from "express";
 import { PrismaClient } from "@prisma/client";
+import {
+    ensureGlobalInventoryRowForNewColor,
+    removeGlobalInventoryRowForColor,
+} from "../services/globalInventoryMatrix.service";
 import crypto from "crypto";
 import { PutObjectCommand, DeleteObjectCommand } from "@aws-sdk/client-s3";
 import { r2 } from "../util/s3";
@@ -122,6 +126,10 @@ export const createColorHandler = async (req: Request, res: Response) => {
             },
         });
 
+        ensureGlobalInventoryRowForNewColor(prisma, color.hex).catch((e) =>
+            console.error("[global_inventory] Failed to add row for new color:", e)
+        );
+
         res.status(201).json({
             status: "success",
             data: { color },
@@ -149,7 +157,12 @@ export const deleteColorHandler = async (req: Request, res: Response) => {
         if (color.shadowMapKey) await deleteFromR2(color.shadowMapKey);
         if (color.displacementMapKey) await deleteFromR2(color.displacementMapKey);
 
+        const hex = color.hex;
         await prisma.globalColor.delete({ where: { id } });
+
+        removeGlobalInventoryRowForColor(prisma, hex).catch((e) =>
+            console.error("[global_inventory] Failed to remove row for deleted color:", e)
+        );
 
         res.status(200).json({
             status: "success",

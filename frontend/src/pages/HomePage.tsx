@@ -20,8 +20,12 @@ interface Product {
     id: string;
     name: string;
     price: number;
-    /** Higher “was” price when on sale; used in flash offer strikethrough. */
+    /** List / compare price from DB when set above sale price (separate from flash sale). */
     compareAtPrice?: number | null;
+    /** Flash sale (special offer) — aligned with `/api/products` pricing. */
+    isDiscounted?: boolean;
+    discountPercent?: number;
+    originalPrice?: number;
     mockupImageUrl: string;
     backMockupImageUrl?: string;
     primaryView?: "front" | "back";
@@ -29,7 +33,8 @@ interface Product {
     primaryColor?: string;
     availableColors?: string[];
     categories?: string[];
-    category: string;
+    /** Legacy single label from some API responses */
+    category?: string;
     colorMockups?: Record<string, { front: string; back?: string }> | null;
     artist: {
         id: string;
@@ -514,11 +519,23 @@ function HomePage() {
                             {offerProducts.length > 0 ? (
                                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-8 md:gap-10">
                                     {offerProducts.map((product) => {
-                                        const discountedPrice = Math.round(product.price * (1 - specialOffer.discountPercent / 100));
-                                        const originalStrike =
-                                            product.compareAtPrice != null && product.compareAtPrice > product.price
+                                        const flashWas =
+                                            product.isDiscounted &&
+                                            product.originalPrice != null &&
+                                            product.originalPrice > product.price
+                                                ? product.originalPrice
+                                                : null;
+                                        const compareStrike =
+                                            !flashWas &&
+                                            product.compareAtPrice != null &&
+                                            product.compareAtPrice > product.price
                                                 ? product.compareAtPrice
-                                                : product.price;
+                                                : null;
+                                        const strikePrice = flashWas ?? compareStrike;
+                                        const badgePct =
+                                            product.isDiscounted && (product.discountPercent ?? 0) > 0
+                                                ? product.discountPercent!
+                                                : specialOffer.discountPercent;
                                         return (
                                             <div key={product.id} className="w-full max-w-[320px] mx-auto group flex flex-col">
                                                 <div className="relative aspect-[4/5] bg-white rounded-[8px] border-[2.5px] border-neutral-black overflow-hidden transition-all duration-500 shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] group-hover:bg-neutral-g1 group-hover:shadow-none group-hover:translate-x-[4px] group-hover:translate-y-[4px]">
@@ -539,9 +556,11 @@ function HomePage() {
                                                         )}
                                                     </Link>
                                                     <div className="absolute top-4 left-4 z-20 flex gap-2 pointer-events-none">
-                                                        <span className="bg-neutral-black text-white px-2.5 py-1 font-display text-[10px] font-black uppercase tracking-[1.5px] rounded-[2px] border-[2px] border-neutral-black shadow-[3px_3px_0px_0px_rgba(255,255,255,0.25)]">
-                                                            -{specialOffer.discountPercent}%
-                                                        </span>
+                                                        {badgePct > 0 && (
+                                                            <span className="bg-neutral-black text-white px-2.5 py-1 font-display text-[10px] font-black uppercase tracking-[1.5px] rounded-[2px] border-[2px] border-neutral-black shadow-[3px_3px_0px_0px_rgba(255,255,255,0.25)]">
+                                                                -{badgePct}%
+                                                            </span>
+                                                        )}
                                                     </div>
                                                     <div className="absolute top-4 right-4 z-20 flex flex-col gap-2 scale-0 group-hover:scale-100 transition-all duration-300">
                                                         <button
@@ -563,11 +582,13 @@ function HomePage() {
                                                 </div>
                                                 <div className="py-5 flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
                                                     <div className="flex items-baseline gap-3 flex-wrap">
-                                                        <span className="font-display text-[18px] font-black text-neutral-black/45 line-through tabular-nums">
-                                                            ₹{originalStrike.toLocaleString("en-IN")}
-                                                        </span>
+                                                        {strikePrice != null && (
+                                                            <span className="font-display text-[18px] font-black text-neutral-black/45 line-through tabular-nums">
+                                                                ₹{strikePrice.toLocaleString("en-IN")}
+                                                            </span>
+                                                        )}
                                                         <span className="font-display text-[26px] font-black text-neutral-black tabular-nums">
-                                                            ₹{discountedPrice.toLocaleString("en-IN")}
+                                                            ₹{product.price.toLocaleString("en-IN")}
                                                         </span>
                                                     </div>
                                                     <div className="font-display text-[10px] font-black text-neutral-black/50 uppercase tracking-[2px]">
@@ -697,6 +718,13 @@ function HomePage() {
                                                 <div className="w-full h-full flex items-center justify-center text-[100px] opacity-10 uppercase font-black italic">TEE</div>
                                             )}
                                         </Link>
+                                        {product.isDiscounted && (product.discountPercent ?? 0) > 0 && (
+                                            <div className="absolute top-4 left-4 z-20 pointer-events-none">
+                                                <span className="bg-danger text-white font-display text-[10px] font-black px-2 py-1 uppercase tracking-[1px] shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]">
+                                                    -{product.discountPercent}%
+                                                </span>
+                                            </div>
+                                        )}
 
                                         <div className="absolute top-4 right-4 flex flex-col gap-2 scale-0 group-hover:scale-100 transition-all duration-300">
                                             <button
@@ -712,9 +740,29 @@ function HomePage() {
                                             <div className="font-display text-[20px] font-black text-white hover:text-primary transition-colors cursor-pointer truncate">{product.name}</div>
                                         </div>
                                     </div>
-                                    <div className="py-5 flex items-center justify-between">
-                                        <div className="font-display text-[24px] font-black text-white italic tracking-tighter">₹{product.price.toLocaleString('en-IN')}</div>
-                                        <div className="font-display text-[10px] font-black text-white/40 uppercase tracking-[2px]">{product.category}</div>
+                                    <div className="py-5 flex items-center justify-between gap-2 flex-wrap">
+                                        <div className="flex items-baseline gap-2 flex-wrap min-w-0">
+                                            {product.isDiscounted &&
+                                                product.originalPrice != null &&
+                                                product.originalPrice > product.price && (
+                                                    <span className="font-display text-[16px] font-black text-white/45 line-through tabular-nums">
+                                                        ₹{product.originalPrice.toLocaleString("en-IN")}
+                                                    </span>
+                                                )}
+                                            {!product.isDiscounted &&
+                                                product.compareAtPrice != null &&
+                                                product.compareAtPrice > product.price && (
+                                                    <span className="font-display text-[16px] font-black text-white/45 line-through tabular-nums">
+                                                        ₹{product.compareAtPrice.toLocaleString("en-IN")}
+                                                    </span>
+                                                )}
+                                            <div className="font-display text-[24px] font-black text-white italic tracking-tighter tabular-nums">
+                                                ₹{product.price.toLocaleString("en-IN")}
+                                            </div>
+                                        </div>
+                                        <div className="font-display text-[10px] font-black text-white/40 uppercase tracking-[2px] shrink-0">
+                                            {(product.categories?.[0] || product.category || "Design").toString()}
+                                        </div>
                                     </div>
                                 </div>
                             ))

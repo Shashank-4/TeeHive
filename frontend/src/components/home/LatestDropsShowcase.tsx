@@ -39,6 +39,9 @@ export interface LatestDropProduct {
     id: string;
     name: string;
     price: number;
+    isDiscounted?: boolean;
+    discountPercent?: number;
+    originalPrice?: number;
     mockupImageUrl: string;
     backMockupImageUrl?: string;
     primaryView?: "front" | "back";
@@ -355,9 +358,21 @@ export default function LatestDropsShowcase({ products, isLoading }: LatestDrops
                                                         <span className="inline-flex items-center px-1.5 py-0.5 rounded-sm bg-neutral-g1 border border-neutral-g2 font-display text-[9px] font-black uppercase tracking-wider text-neutral-g4">
                                                             INR
                                                         </span>
+                                                        {product.isDiscounted &&
+                                                            product.originalPrice != null &&
+                                                            product.originalPrice > product.price && (
+                                                                <span className="font-display text-sm md:text-base font-black text-neutral-g3 line-through tabular-nums">
+                                                                    ₹{product.originalPrice.toLocaleString("en-IN")}
+                                                                </span>
+                                                            )}
                                                         <span className="font-display text-lg md:text-xl font-black text-neutral-black tabular-nums">
                                                             ₹{product.price.toLocaleString("en-IN")}
                                                         </span>
+                                                        {product.isDiscounted && (product.discountPercent ?? 0) > 0 && (
+                                                            <span className="font-display text-[9px] font-black uppercase text-danger bg-danger/10 border border-danger/30 px-1.5 py-0.5 rounded-sm">
+                                                                -{product.discountPercent}%
+                                                            </span>
+                                                        )}
                                                     </div>
                                                     <Link
                                                         to={`/products/${product.id}`}
