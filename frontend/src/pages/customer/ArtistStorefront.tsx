@@ -22,6 +22,9 @@ interface Product {
     name: string;
     price: number;
     compareAtPrice: number | null;
+    isDiscounted?: boolean;
+    discountPercent?: number;
+    originalPrice?: number;
     mockupImageUrl: string;
     backMockupImageUrl?: string;
     primaryView?: "front" | "back";
@@ -244,16 +247,29 @@ export default function ArtistStorefront() {
                     <div className="grid grid-cols-2 lg:grid-cols-4 gap-px bg-neutral-g2 border border-neutral-g2">
                         {artist.products.map((product) => {
                             const categoryLabel = product.categories?.[0] || "General";
-                            const onSale =
+                            const onFlash =
+                                product.isDiscounted &&
+                                (product.discountPercent ?? 0) > 0 &&
+                                product.originalPrice != null &&
+                                product.originalPrice > product.price;
+                            const onCompareOnly =
+                                !onFlash &&
                                 product.compareAtPrice != null &&
                                 product.compareAtPrice > product.price;
-                            const discountPct = onSale
-                                ? Math.round(
-                                      ((product.compareAtPrice! - product.price) /
-                                          product.compareAtPrice!) *
-                                          100
-                                  )
-                                : 0;
+                            const strikePrice = onFlash
+                                ? product.originalPrice!
+                                : onCompareOnly
+                                  ? product.compareAtPrice!
+                                  : null;
+                            const badgePct = onFlash
+                                ? product.discountPercent!
+                                : onCompareOnly
+                                  ? Math.round(
+                                        ((product.compareAtPrice! - product.price) /
+                                            product.compareAtPrice!) *
+                                            100
+                                    )
+                                  : 0;
                             return (
                                 <div
                                     key={product.id}
@@ -271,9 +287,9 @@ export default function ArtistStorefront() {
                                                 className={`w-full h-full ${STOREFRONT_TEE_MOCKUP_IMAGE_CLASS} group-hover:scale-105 transition-transform duration-500`}
                                                 wrapperClassName="w-full h-full"
                                             />
-                                            {onSale && (
+                                            {badgePct > 0 && (
                                                 <div className="absolute top-4 left-4 bg-danger text-white font-display text-[10px] font-black px-2 py-1 uppercase tracking-[1px] shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] z-10">
-                                                    -{discountPct}%
+                                                    -{badgePct}%
                                                 </div>
                                             )}
                                         </div>
@@ -285,13 +301,13 @@ export default function ArtistStorefront() {
                                                 {product.name}
                                             </h3>
                                             <div className="flex items-center justify-between mb-4">
-                                                <div className="flex items-baseline gap-2">
-                                                    <span className="font-display text-[18px] font-black text-neutral-black">
+                                                <div className="flex items-baseline gap-2 flex-wrap">
+                                                    <span className="font-display text-[18px] font-black text-neutral-black tabular-nums">
                                                         ₹{product.price.toLocaleString("en-IN")}
                                                     </span>
-                                                    {onSale && (
-                                                        <span className="font-display text-[12px] font-bold text-neutral-g3 line-through">
-                                                            ₹{product.compareAtPrice!.toLocaleString("en-IN")}
+                                                    {strikePrice != null && (
+                                                        <span className="font-display text-[12px] font-bold text-neutral-g3 line-through tabular-nums">
+                                                            ₹{strikePrice.toLocaleString("en-IN")}
                                                         </span>
                                                     )}
                                                 </div>

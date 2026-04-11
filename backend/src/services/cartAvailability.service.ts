@@ -23,7 +23,10 @@ export function resolveMatrixRowKey(matrix: GlobalInventoryMatrix, colorHex: str
     return null;
 }
 
-/** Same rule as PDP: only explicit OUT_OF_STOCK cells block; missing row/cell = not blocked. */
+/**
+ * Only explicit OUT_OF_STOCK blocks checkout. LOW_STOCK and missing cells do not block
+ * (storefront may show a low-stock label only).
+ */
 export function isGlobalMatrixOutOfStock(
     matrix: GlobalInventoryMatrix | null | undefined,
     colorHex: string,

@@ -19,6 +19,9 @@ interface Product {
     name: string;
     price: number;
     compareAtPrice: number | null;
+    isDiscounted?: boolean;
+    discountPercent?: number;
+    originalPrice?: number;
     mockupImageUrl: string;
     backMockupImageUrl?: string;
     primaryView?: "front" | "back";
@@ -147,7 +150,7 @@ export default function Hive50Page() {
                                             #{i + 1} All Time
                                         </div>
 
-                                        <Link to={`/products/${product.id}`} className="block mb-6 mt-8">
+                                        <Link to={`/products/${product.id}`} className="block mb-6 mt-8 relative">
                                             <div className="aspect-square bg-white/[0.03] rounded-[4px] overflow-hidden flex items-center justify-center">
                                                 <img
                                                     src={mockupSrc(product)}
@@ -155,6 +158,11 @@ export default function Hive50Page() {
                                                     className={`w-full h-full ${STOREFRONT_TEE_MOCKUP_IMAGE_CLASS} group-hover:scale-105 transition-transform`}
                                                 />
                                             </div>
+                                            {product.isDiscounted && (product.discountPercent ?? 0) > 0 && (
+                                                <span className="absolute top-3 left-3 bg-danger text-white font-display text-[10px] font-black px-2 py-1 uppercase tracking-[1px] shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] z-10">
+                                                    -{product.discountPercent}%
+                                                </span>
+                                            )}
                                         </Link>
 
                                         <div className="text-center">
@@ -174,8 +182,17 @@ export default function Hive50Page() {
                                             <h3 className="font-display text-[18px] font-bold text-white tracking-[0.3px] mb-2 truncate">
                                                 {product.name}
                                             </h3>
-                                            <div className="font-display text-[20px] font-black text-white mb-6">
-                                                ₹{product.price.toLocaleString("en-IN")}
+                                            <div className="flex flex-wrap items-baseline justify-center gap-2 mb-6">
+                                                {product.isDiscounted &&
+                                                    product.originalPrice != null &&
+                                                    product.originalPrice > product.price && (
+                                                        <span className="font-display text-[14px] font-black text-white/45 line-through tabular-nums">
+                                                            ₹{product.originalPrice.toLocaleString("en-IN")}
+                                                        </span>
+                                                    )}
+                                                <div className="font-display text-[20px] font-black text-white tabular-nums">
+                                                    ₹{product.price.toLocaleString("en-IN")}
+                                                </div>
                                             </div>
 
                                             <button
@@ -222,12 +239,17 @@ export default function Hive50Page() {
                                             </span>
                                         </div>
 
-                                        <Link to={`/products/${product.id}`} className="block aspect-square overflow-hidden bg-neutral-g1">
+                                        <Link to={`/products/${product.id}`} className="block aspect-square overflow-hidden bg-neutral-g1 relative">
                                             <img
                                                 src={mockupSrc(product)}
                                                 alt={product.name}
                                                 className={`w-full h-full ${STOREFRONT_TEE_MOCKUP_IMAGE_CLASS} group-hover:scale-105 transition-transform`}
                                             />
+                                            {product.isDiscounted && (product.discountPercent ?? 0) > 0 && (
+                                                <span className="absolute top-3 left-3 bg-danger text-white font-display text-[10px] font-black px-2 py-1 uppercase tracking-[1px] shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] z-10">
+                                                    -{product.discountPercent}%
+                                                </span>
+                                            )}
                                         </Link>
 
                                         <div className="p-4">
@@ -247,11 +269,20 @@ export default function Hive50Page() {
                                             <h4 className="font-display text-[15px] font-bold text-neutral-black mb-3 truncate">
                                                 {product.name}
                                             </h4>
-                                            <div className="flex items-center justify-between mb-4">
-                                                <span className="font-display text-[16px] font-black text-neutral-black">
-                                                    ₹{product.price.toLocaleString("en-IN")}
-                                                </span>
-                                                <span className="font-display text-[9px] font-bold tracking-[1px] uppercase text-neutral-g3 bg-neutral-g1 px-1.5 py-0.5">
+                                            <div className="flex items-center justify-between mb-4 gap-2 flex-wrap">
+                                                <div className="flex items-baseline gap-2 min-w-0">
+                                                    {product.isDiscounted &&
+                                                        product.originalPrice != null &&
+                                                        product.originalPrice > product.price && (
+                                                            <span className="font-display text-[12px] font-bold text-neutral-g3 line-through tabular-nums">
+                                                                ₹{product.originalPrice.toLocaleString("en-IN")}
+                                                            </span>
+                                                        )}
+                                                    <span className="font-display text-[16px] font-black text-neutral-black tabular-nums">
+                                                        ₹{product.price.toLocaleString("en-IN")}
+                                                    </span>
+                                                </div>
+                                                <span className="font-display text-[9px] font-bold tracking-[1px] uppercase text-neutral-g3 bg-neutral-g1 px-1.5 py-0.5 shrink-0">
                                                     {product.category}
                                                 </span>
                                             </div>

@@ -13,38 +13,44 @@ export const getActiveSpecialOffer = async (): Promise<SpecialOffer | null> => {
 };
 
 /**
- * Calculates the discounted price for a product based on a special offer.
- * If the product belongs to the offered category, applies the discount.
+ * Flash sale / special offer: if the product's `categories` includes the offer's
+ * `categoryName` (case-insensitive) and the offer has a positive `discountPercent`,
+ * returns a reduced `price` and `originalPrice` = catalog list price (`product.price`).
  */
 export const calculateProductPrice = (product: any, offer: SpecialOffer | null) => {
-    if (!offer || !offer.isVisible || !offer.categoryName) {
+    const basePrice = typeof product?.price === "number" && Number.isFinite(product.price) ? product.price : 0;
+    const categories = Array.isArray(product?.categories) ? product.categories : [];
+
+    if (!offer || !offer.isVisible || !String(offer.categoryName || "").trim()) {
         return {
-            price: product.price,
+            price: basePrice,
             isDiscounted: false,
             discountPercent: 0,
-            originalPrice: product.price
+            originalPrice: basePrice,
         };
     }
 
-    const hasCategory = product.categories.some(
-        (cat: string) => cat.toLowerCase() === offer.categoryName.toLowerCase()
+    const pct = Math.max(0, Number(offer.discountPercent) || 0);
+    const offerCat = String(offer.categoryName || "").trim().toLowerCase();
+    const hasCategory = categories.some(
+        (cat: string) => String(cat || "").trim().toLowerCase() === offerCat
     );
 
-    if (hasCategory) {
-        const discountAmount = (product.price * offer.discountPercent) / 100;
-        const discountedPrice = Math.round(product.price - discountAmount);
+    if (hasCategory && pct > 0) {
+        const discountAmount = (basePrice * pct) / 100;
+        const discountedPrice = Math.round(basePrice - discountAmount);
         return {
             price: discountedPrice,
             isDiscounted: true,
-            discountPercent: offer.discountPercent,
-            originalPrice: product.price
+            discountPercent: pct,
+            originalPrice: basePrice,
         };
     }
 
     return {
-        price: product.price,
+        price: basePrice,
         isDiscounted: false,
         discountPercent: 0,
-        originalPrice: product.price
+        originalPrice: basePrice,
     };
 };

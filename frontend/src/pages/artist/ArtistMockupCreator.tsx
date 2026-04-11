@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import {
     Palette,
     Image as ImageIcon,
@@ -10,6 +10,7 @@ import {
     AlertTriangle,
     Maximize2,
     X,
+    ChevronDown,
 } from "lucide-react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import MockupCanvas, {
@@ -72,6 +73,37 @@ export default function ArtistMockupCreator() {
     const [saveError, setSaveError] = useState<string | null>(null);
     const [showPublishModal, setShowPublishModal] = useState(false);
     const mockupRef = useRef<MockupCanvasHandle>(null);
+    const rightPanelScrollRef = useRef<HTMLDivElement>(null);
+    const rightPanelContentRef = useRef<HTMLDivElement>(null);
+    const [showRightScrollHint, setShowRightScrollHint] = useState(false);
+
+    const updateRightPanelScrollHint = useCallback(() => {
+        const el = rightPanelScrollRef.current;
+        if (!el) return;
+        const { scrollTop, scrollHeight, clientHeight } = el;
+        const hasOverflow = scrollHeight > clientHeight + 2;
+        const nearBottom = scrollTop + clientHeight >= scrollHeight - 16;
+        setShowRightScrollHint(hasOverflow && !nearBottom);
+    }, []);
+
+    useEffect(() => {
+        const scrollEl = rightPanelScrollRef.current;
+        const contentEl = rightPanelContentRef.current;
+        if (!scrollEl) return;
+
+        const run = () => requestAnimationFrame(updateRightPanelScrollHint);
+        run();
+
+        window.addEventListener("resize", run);
+        const ro = new ResizeObserver(run);
+        ro.observe(scrollEl);
+        if (contentEl) ro.observe(contentEl);
+
+        return () => {
+            window.removeEventListener("resize", run);
+            ro.disconnect();
+        };
+    }, [updateRightPanelScrollHint, isHydratingDraft]);
     const [initialFrontTransform, setInitialFrontTransform] = useState<DesignTransform | null>(null);
     const [initialBackTransform, setInitialBackTransform] = useState<DesignTransform | null>(null);
 
@@ -490,8 +522,14 @@ export default function ArtistMockupCreator() {
                         </div>
                     </div>
 
-                    {/* Right Side: Configuration Sidebar */}
-                    <div className="w-full lg:w-[420px] lg:shrink-0 space-y-8 lg:max-h-[calc(100dvh-7.5rem)] lg:min-h-0 lg:overflow-y-auto lg:overscroll-y-contain lg:pr-2 lg:pb-2 [scrollbar-width:thin]">
+                    {/* Right Side: Configuration Sidebar (scroll hint when content overflows on lg+) */}
+                    <div className="relative w-full lg:w-[420px] lg:shrink-0 lg:max-h-[calc(100dvh-7.5rem)] lg:min-h-0">
+                        <div
+                            ref={rightPanelScrollRef}
+                            onScroll={updateRightPanelScrollHint}
+                            className="w-full lg:max-h-[calc(100dvh-7.5rem)] lg:min-h-0 lg:overflow-y-auto lg:overscroll-y-contain lg:pr-2 lg:pb-10 [scrollbar-width:thin]"
+                        >
+                            <div ref={rightPanelContentRef} className="space-y-8">
                         {/* 1. Visual Assembly */}
                         <div className="bg-white border-[2px] border-neutral-black rounded-[6px] p-6 shadow-[8px_8px_0px_0px_rgba(0,0,0,1)]">
                             <h3 className="font-display text-[14px] font-black uppercase tracking-[1px] mb-6 flex items-center gap-2">
@@ -704,9 +742,38 @@ export default function ArtistMockupCreator() {
                             </div>
                         </div>
 
+                            </div>
+                        </div>
+                        {showRightScrollHint && (
+                            <div
+                                className="pointer-events-none absolute inset-x-0 bottom-0 z-[5] hidden items-center justify-end bg-gradient-to-t from-neutral-g1 from-40% via-neutral-g1/70 to-transparent pb-1 pt-16 lg:flex lg:flex-col"
+                                aria-hidden="true"
+                            >
+                                <ChevronDown
+                                    strokeWidth={2.5}
+                                    className="h-8 w-8 text-neutral-black drop-shadow-[0_1px_2px_rgba(255,255,255,0.9)] mockup-lab-scroll-hint-arrow"
+                                />
+                                <span className="mt-0.5 font-display text-[8px] font-black uppercase tracking-[0.25em] text-neutral-g3">
+                                    Scroll for more
+                                </span>
+                            </div>
+                        )}
                     </div>
                 </div>
             </div>
+
+            <style>{`
+                @keyframes mockup-lab-scroll-hint-bob {
+                    0%, 100% { transform: translateY(0); opacity: 0.75; }
+                    50% { transform: translateY(10px); opacity: 1; }
+                }
+                .mockup-lab-scroll-hint-arrow {
+                    animation: mockup-lab-scroll-hint-bob 1.25s ease-in-out infinite;
+                }
+                @media (prefers-reduced-motion: reduce) {
+                    .mockup-lab-scroll-hint-arrow { animation: none; opacity: 1; }
+                }
+            `}</style>
 
             {/* Select Design Modal */}
             {isSelectModalOpen && (
