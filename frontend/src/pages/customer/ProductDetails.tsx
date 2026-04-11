@@ -77,7 +77,7 @@ export default function ProductDetails() {
     const [quantity, setQuantity] = useState(1);
     const [addedToCart, setAddedToCart] = useState(false);
     const [sizeGuideOpen, setSizeGuideOpen] = useState(false);
-    const { addItem } = useCart();
+    const { addItem, items } = useCart();
 
     const sizes = PRODUCT_SIZES;
 
@@ -151,12 +151,31 @@ export default function ProductDetails() {
 
     const getEffectiveStockStatus = (): "IN_STOCK" | "LOW_STOCK" | "OUT_OF_STOCK" => {
         if (!product) return "OUT_OF_STOCK";
-        if (selectedColor && selectedSize && isGloballyUnavailable(selectedColor, selectedSize)) {
-            return "OUT_OF_STOCK";
+        if (selectedColor && selectedSize) {
+            if (isGloballyUnavailable(selectedColor, selectedSize)) {
+                return "OUT_OF_STOCK";
+            }
         }
-        if (variantForSelection) return variantForSelection.stockStatus;
-        if (hasVariantInventory) return "OUT_OF_STOCK";
-        return product.stockStatus || "IN_STOCK";
+        
+        let status: "IN_STOCK" | "LOW_STOCK" | "OUT_OF_STOCK" = "IN_STOCK";
+        
+        if (variantForSelection) {
+            status = variantForSelection.stockStatus;
+        } else if (hasVariantInventory) {
+            status = "OUT_OF_STOCK";
+        } else {
+            status = product.stockStatus || "IN_STOCK";
+        }
+
+        // Global LOW_STOCK overrides IN_STOCK
+        if (status === "IN_STOCK" && selectedColor && selectedSize && matrix) {
+            const rowKey = resolveMatrixRowKey(selectedColor);
+            if (rowKey && matrix[rowKey]?.[selectedSize] === "LOW_STOCK") {
+                return "LOW_STOCK";
+            }
+        }
+
+        return status;
     };
 
     const displayMockups = useMemo(() => {
@@ -449,9 +468,7 @@ export default function ProductDetails() {
                                 </div>
                                 <div className="flex flex-wrap gap-2">
                                     {sizes.map((size) => {
-                                        const soldOut = hasVariantInventory
-                                            ? isVariantUnavailable(selectedColor, size)
-                                            : isGloballyUnavailable(selectedColor, size);
+                                        const soldOut = isGloballyUnavailable(selectedColor, size) || (hasVariantInventory && isVariantUnavailable(selectedColor, size));
                                         return (
                                             <button
                                                 key={size}
@@ -523,7 +540,15 @@ export default function ProductDetails() {
                                 type="button"
                                 disabled={isOutOfStock}
                                 onClick={() => {
-                                    addCurrentToCart();
+                                    if (product) {
+                                        const color = canonicalHex(selectedColor || product.tshirtColor);
+                                        const alreadyInCart = items.some(
+                                            (i) => i.productId === product.id && i.size === selectedSize && i.color === color
+                                        );
+                                        if (!alreadyInCart) {
+                                            addCurrentToCart();
+                                        }
+                                    }
                                     navigate("/order/checkout");
                                 }}
                                 className={`flex-1 min-w-[min(100%,200px)] min-h-[52px] h-[52px] sm:min-h-[56px] sm:h-[56px] rounded-[4px] border-[1.5px] border-neutral-black font-display text-[13px] sm:text-[14px] font-black uppercase tracking-[0.08em] shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] active:shadow-none active:translate-x-0.5 active:translate-y-0.5 transition-all flex items-center justify-center gap-2 px-2 ${isOutOfStock
