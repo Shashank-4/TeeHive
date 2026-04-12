@@ -178,6 +178,8 @@ function HomePage() {
     const [latestDropProducts, setLatestDropProducts] = useState<Product[]>([]);
     const [categories, setCategories] = useState<Category[]>([]);
     const [artists, setArtists] = useState<ArtistSummary[]>([]);
+    /** Full directory count from `/api/artists` pagination (not the featured slice length). */
+    const [artistDirectoryTotal, setArtistDirectoryTotal] = useState<number | null>(null);
     const [config, setConfig] = useState<CustomerHomeConfig>(DEFAULT_HOME_CONFIG);
     const [banners, setBanners] = useState<BannersConfig>(DEFAULT_BANNERS_CONFIG);
     const [specialOffer, setSpecialOffer] = useState<SpecialOfferConfig | null>(null);
@@ -193,13 +195,15 @@ function HomePage() {
     useEffect(() => {
         const fetchData = async () => {
             try {
-                const [productsRes, latestRes, categoriesRes, configRes, bannersRes, artistsRes, offerRes] = await Promise.allSettled([
+                const [productsRes, latestRes, categoriesRes, configRes, bannersRes, artistsRes, artistCountRes, offerRes] = await Promise.allSettled([
                     api.get("/api/products?limit=24&sort=newest"),
                     api.get("/api/products?latestDrops=true&limit=10"),
                     api.get("/api/categories"),
                     api.get("/api/config/customer_home"),
                     api.get("/api/config/site_banners"),
-                    api.get("/api/artists?limit=3&sort=sales"),
+                    api.get("/api/artists?limit=3&sort=sales&page=1"),
+                    /** Directory size for hero stat (same cohort as browse, default sort). */
+                    api.get("/api/artists?limit=1&page=1&sort=ratings"),
                     api.get("/api/promotions/special-offer")
                 ]);
                 if (productsRes.status === "fulfilled") setFeaturedProducts(productsRes.value.data.data.products || []);
@@ -218,7 +222,15 @@ function HomePage() {
                 if (categoriesRes.status === "fulfilled") setCategories(categoriesRes.value.data.data.categories || []);
                 if (configRes.status === "fulfilled" && configRes.value.data?.data?.config) setConfig({ ...DEFAULT_HOME_CONFIG, ...configRes.value.data.data.config });
                 if (bannersRes.status === "fulfilled" && bannersRes.value.data?.data?.config) setBanners({ ...DEFAULT_BANNERS_CONFIG, ...bannersRes.value.data.data.config });
-                if (artistsRes.status === "fulfilled") setArtists(artistsRes.value.data.data.artists || []);
+                if (artistsRes.status === "fulfilled") {
+                    const d = artistsRes.value.data.data;
+                    setArtists(d.artists || []);
+                }
+
+                if (artistCountRes.status === "fulfilled") {
+                    const t = artistCountRes.value.data?.data?.pagination?.total;
+                    setArtistDirectoryTotal(typeof t === "number" ? t : null);
+                }
 
                 if (offerRes.status === "fulfilled" && offerRes.value.data?.data) {
                     const offer = offerRes.value.data.data;
@@ -371,7 +383,7 @@ function HomePage() {
                                 <div className="flex items-center gap-6">
                                     <div>
                                         <div className="font-display text-5xl font-black text-primary leading-none">
-                                            {artists.length || "120"}
+                                            {artistDirectoryTotal ?? (artists.length > 0 ? artists.length : "—")}
                                         </div>
                                         <div
                                             className={`font-display md:text-[12px] font-bold uppercase tracking-widest mt-1 ${banners.heroBgImage ? "text-white/80 [text-shadow:0_1px_10px_rgba(0,0,0,0.5)]" : "text-neutral-g4"}`}

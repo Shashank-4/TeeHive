@@ -187,79 +187,89 @@ export default function CustomerOrders() {
         const s = status?.toUpperCase();
         switch (s) {
             case "PENDING":
-                return { icon: Clock, bg: "bg-warning/10", text: "text-warning", border: "border-warning", label: "AWAITING_PAYMENT" };
+                return { icon: Clock, bg: "bg-warning/10", text: "text-warning", border: "border-warning", label: "Payment pending" };
             case "PAID":
-                return { icon: CheckCircle, bg: "bg-primary/10", text: "text-primary-dark", border: "border-primary", label: "NODE_CONFIRMED" };
+                return { icon: CheckCircle, bg: "bg-primary/10", text: "text-primary-dark", border: "border-primary", label: "Order confirmed" };
             case "RECEIVED":
-                return { icon: Box, bg: "bg-blue-500/10", text: "text-blue-500", border: "border-blue-500", label: "SIGNAL_RECEIVED" };
+                return { icon: Box, bg: "bg-blue-500/10", text: "text-blue-500", border: "border-blue-500", label: "Received at studio" };
             case "PROCESSING":
-                return { icon: Zap, bg: "bg-amber-500/10", text: "text-amber-600", border: "border-amber-500", label: "SYNTHESIZING_DROP" };
+                return { icon: Zap, bg: "bg-amber-500/10", text: "text-amber-600", border: "border-amber-500", label: "In production" };
             case "SHIPPED":
-                return { icon: TruckIcon, bg: "bg-neutral-black/10", text: "text-neutral-black", border: "border-neutral-black", label: "IN_TRANSIT_MODE" };
+                return { icon: TruckIcon, bg: "bg-neutral-black/10", text: "text-neutral-black", border: "border-neutral-black", label: "Shipped" };
             case "OUT_FOR_DELIVERY":
-                return { icon: MapPin, bg: "bg-indigo-500/10", text: "text-indigo-600", border: "border-indigo-500", label: "LAST_MILE_PROTOCOL" };
+                return { icon: MapPin, bg: "bg-indigo-500/10", text: "text-indigo-600", border: "border-indigo-500", label: "Out for delivery" };
             case "DELIVERED":
-                return { icon: CheckCircle, bg: "bg-success/10", text: "text-success", border: "border-success", label: "DELIVERY_COMPLETE" };
+                return { icon: CheckCircle, bg: "bg-success/10", text: "text-success", border: "border-success", label: "Delivered" };
             case "CANCELLED":
-                return { icon: XCircle, bg: "bg-danger/10", text: "text-danger", border: "border-danger", label: "PROTOCOL_ABORTED" };
+                return { icon: XCircle, bg: "bg-danger/10", text: "text-danger", border: "border-danger", label: "Cancelled" };
             default:
-                return { icon: Package, bg: "bg-neutral-g2", text: "text-neutral-g4", border: "border-neutral-g3", label: "UNKNOWN_STATE" };
+                return { icon: Package, bg: "bg-neutral-g2", text: "text-neutral-g4", border: "border-neutral-g3", label: "Status updating" };
         }
     };
 
     if (isLoading) {
         return (
-            <div className="min-h-screen bg-white flex items-center justify-center">
+            <div className="min-h-[50vh] bg-neutral-g1 flex items-center justify-center">
                 <Loader />
             </div>
         );
     }
 
     return (
-        <div className="min-h-screen bg-neutral-g1 py-20 px-4 md:px-16 relative overflow-hidden">
+        <div className="min-h-screen bg-neutral-g1 py-10 sm:py-14 px-4 md:px-10 lg:px-16 relative overflow-hidden">
             {toast && <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
-            {/* Background Decor */}
-            <div className="absolute top-0 left-[-10%] text-[400px] font-display font-black text-neutral-black/[0.02] select-none leading-none -z-0 pointer-events-none uppercase">LOGS</div>
+            <div className="absolute top-4 right-4 md:right-10 text-[clamp(72px,14vw,200px)] font-display font-black text-neutral-black/[0.03] select-none leading-none pointer-events-none uppercase">
+                orders
+            </div>
 
             <div className="max-w-5xl mx-auto relative z-10">
-                {/* ── HEADER ── */}
-                <div className="flex flex-col md:flex-row items-end justify-between gap-8 mb-12 border-b-[3px] border-neutral-black pb-10">
-                    <div className="space-y-4">
-                        <Link to="/user/profile" className="inline-flex items-center gap-2 text-neutral-black/40 hover:text-neutral-black font-display text-[10px] font-black uppercase tracking-[2px] mb-2 no-underline group transition-all">
-                            <ArrowLeft className="w-3.5 h-3.5 group-hover:-translate-x-1" /> RETURN_TO_TERMINAL
+                <header className="flex flex-col lg:flex-row lg:items-end lg:justify-between gap-8 mb-10 pb-8 border-b-[3px] border-neutral-black">
+                    <div className="space-y-4 max-w-2xl">
+                        <Link
+                            to="/user/profile"
+                            className="inline-flex items-center gap-2 text-neutral-black/45 hover:text-neutral-black font-display text-[10px] font-black uppercase tracking-[2px] no-underline group transition-colors"
+                        >
+                            <ArrowLeft className="w-3.5 h-3.5 group-hover:-translate-x-1 transition-transform" />
+                            Back to profile
                         </Link>
-                        <h1 className="font-display text-[48px] md:text-[64px] font-black text-neutral-black leading-none tracking-tight uppercase italic">
-                            Asset <span className="text-primary not-italic">Logs</span>
+                        <h1 className="font-display text-[clamp(32px,5vw,52px)] font-black text-neutral-black leading-[0.95] tracking-tight uppercase">
+                            My <span className="text-primary italic">Orders</span>
                         </h1>
-                        <p className="font-display text-[14px] font-bold text-neutral-black/40 uppercase tracking-[2px]">
-                            Review your historically synchronized designer artifacts.
+                        <p className="font-body text-[14px] sm:text-[15px] text-neutral-black/60 leading-relaxed uppercase tracking-normal">
+                            Track every TeeHive purchase in one place: artist-designed tees and apparel, payment status, production updates, and delivery across India.
                         </p>
                     </div>
 
-                    <div className="flex items-center gap-6 bg-white border-[2.5px] border-neutral-black p-4 rounded-[4px] shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]">
+                    <div className="flex items-center gap-5 bg-white border-[3px] border-neutral-black p-4 rounded-[4px] shadow-[6px_6px_0px_0px_rgba(255,222,0,1)] shrink-0 self-start lg:self-auto">
                         <div className="text-right">
-                            <div className="font-display text-[20px] font-black text-neutral-black leading-none">{orders.length}</div>
-                            <div className="font-display text-[9px] font-black text-neutral-black/40 uppercase tracking-[2px] mt-1">TOTAL_RECORDS</div>
+                            <div className="font-display text-[22px] font-black text-neutral-black leading-none">{orders.length}</div>
+                            <div className="font-display text-[9px] font-black text-neutral-black/40 uppercase tracking-[2px] mt-1">
+                                {orders.length === 1 ? "Order" : "Orders"}
+                            </div>
                         </div>
-                        <div className="w-[1.5px] h-10 bg-neutral-black/10" />
-                        <Package className="w-8 h-8 text-primary" />
+                        <div className="w-px h-10 bg-neutral-black/15" />
+                        <Package className="w-8 h-8 text-primary shrink-0" aria-hidden />
                     </div>
-                </div>
+                </header>
 
                 {/* ── ORDERS LIST ── */}
                 {orders.length === 0 ? (
-                    <div className="bg-white border-[3px] border-neutral-black border-dashed rounded-[4px] p-24 text-center space-y-8">
-                        <div className="w-24 h-24 bg-neutral-g1 rounded-full flex items-center justify-center mx-auto grayscale opacity-30">
-                            <ShoppingBag className="w-12 h-12" />
+                    <div className="bg-white border-[3px] border-neutral-black border-dashed rounded-[4px] p-10 sm:p-16 text-center space-y-6 shadow-[8px_8px_0px_0px_rgba(0,0,0,0.06)]">
+                        <div className="w-20 h-20 bg-primary/15 border-[3px] border-neutral-black rounded-[4px] flex items-center justify-center mx-auto">
+                            <ShoppingBag className="w-9 h-9 text-neutral-black/50" aria-hidden />
                         </div>
-                        <div className="space-y-3">
-                            <h2 className="font-display text-[32px] font-black text-neutral-black uppercase tracking-tight">Vault_Empty</h2>
-                            <p className="font-display text-[12px] font-bold text-neutral-black/40 uppercase tracking-[2px] max-w-sm mx-auto">
-                                No artifact synchronizations detected in your global session history.
+                        <div className="space-y-3 max-w-md mx-auto">
+                            <h2 className="font-display text-[26px] sm:text-[30px] font-black text-neutral-black uppercase tracking-tight">
+                                No orders yet
+                            </h2>
+                            <p className="font-body text-[14px] text-neutral-black/55 leading-relaxed uppercase">
+                                Shop independent artist merch on TeeHive—your order history, tracking, and receipts will appear here after checkout.
                             </p>
                         </div>
                         <Link to="/products" className="inline-block no-underline">
-                            <Button variant="primary" className="px-10">Browse Inventory <ArrowRight className="w-4 h-4" /></Button>
+                            <Button variant="primary" className="px-8 sm:px-10">
+                                Browse products <ArrowRight className="w-4 h-4" />
+                            </Button>
                         </Link>
                     </div>
                 ) : (
@@ -272,26 +282,32 @@ export default function CustomerOrders() {
                             return (
                                 <div
                                     key={order.id}
-                                    className={`bg-white border-[3px] border-neutral-black rounded-[4px] transition-all duration-300 ${isExpanded ? 'shadow-none' : 'shadow-[10px_10px_0px_0px_rgba(0,0,0,1)]'}`}
+                                    className={`bg-white border-[3px] border-neutral-black rounded-[4px] transition-all duration-300 ${isExpanded ? "shadow-[4px_4px_0px_0px_rgba(255,222,0,0.35)]" : "shadow-[8px_8px_0px_0px_rgba(255,222,0,1)]"}`}
                                 >
                                     {/* Order Row Header */}
                                     <button
                                         onClick={() => setExpandedOrder(isExpanded ? null : order.id)}
-                                        className="w-full text-left p-8 md:p-10 flex flex-col md:flex-row md:items-center justify-between gap-10 hover:bg-neutral-g1 transition-colors group"
+                                        className="w-full text-left p-6 sm:p-8 md:p-9 flex flex-col md:flex-row md:items-center justify-between gap-8 hover:bg-neutral-g1/80 transition-colors group"
                                     >
                                         <div className="flex items-center gap-8">
                                             <div className={`w-16 h-16 ${status.bg} ${status.text} border-[2.5px] ${status.border} rounded-[4px] flex items-center justify-center rotate-[-4deg] group-hover:rotate-0 transition-all`}>
                                                 <StatusIcon className="w-8 h-8" />
                                             </div>
                                             <div className="space-y-1">
-                                                <div className="font-display text-[11px] font-black text-neutral-black/40 uppercase tracking-[2px]">
-                                                    SYNC_DATE: {new Date(order.createdAt).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" }).toUpperCase()}
+                                                <div className="font-display text-[10px] font-black text-neutral-black/40 uppercase tracking-[2px]">
+                                                    Ordered{" "}
+                                                    {new Date(order.createdAt).toLocaleDateString("en-IN", {
+                                                        day: "2-digit",
+                                                        month: "short",
+                                                        year: "numeric",
+                                                    })}
                                                 </div>
-                                                <div className="font-display text-[24px] font-black text-neutral-black uppercase tracking-tight leading-none group-hover:text-primary transition-all">
-                                                    RECORD_#{order.id.slice(-8).toUpperCase()}
+                                                <div className="font-display text-[22px] sm:text-[24px] font-black text-neutral-black uppercase tracking-tight leading-none group-hover:text-primary transition-colors">
+                                                    Order #{order.id.slice(-8).toUpperCase()}
                                                 </div>
-                                                <div className={`inline-flex items-center gap-2 font-display text-[10px] font-black uppercase tracking-[2px] ${status.text}`}>
-                                                    <div className={`w-1.5 h-1.5 rounded-full ${status.bg.replace('/10', '')} animate-pulse`} /> {status.label}
+                                                <div className={`inline-flex items-center gap-2 font-display text-[10px] font-black uppercase tracking-[1.5px] ${status.text}`}>
+                                                    <span className={`inline-block w-1.5 h-1.5 rounded-full ${status.bg.replace("/10", "/40")}`} aria-hidden />
+                                                    <span className="normal-case tracking-normal font-bold">{status.label}</span>
                                                 </div>
                                             </div>
                                         </div>
@@ -299,7 +315,9 @@ export default function CustomerOrders() {
                                         <div className="flex items-center justify-between md:justify-end gap-12 w-full md:w-auto">
                                             <div className="text-right">
                                                 <div className="font-display text-[28px] font-black text-neutral-black italic">₹{order.totalAmount.toLocaleString('en-IN')}</div>
-                                                <div className="font-display text-[10px] font-black text-neutral-black/30 uppercase tracking-[2px] mt-1">TOTAL_OBLIGATION</div>
+                                                <div className="font-display text-[10px] font-black text-neutral-black/30 uppercase tracking-[2px] mt-1">
+                                                    Total
+                                                </div>
                                             </div>
                                             <div className="w-10 h-10 border-[2.5px] border-neutral-black rounded-full flex items-center justify-center group-hover:bg-primary transition-all">
                                                 {isExpanded ? <ChevronUp className="w-5 h-5" /> : <ChevronDown className="w-5 h-5" />}
@@ -309,11 +327,12 @@ export default function CustomerOrders() {
 
                                     {/* Data Reveal */}
                                     {isExpanded && (
-                                        <div className="border-t-[3.5px] border-neutral-black p-8 md:p-12 animate-in slide-in-from-top-2 duration-300">
-                                            <div className="grid grid-cols-1 lg:grid-cols-[1fr_350px] gap-12">
-                                                <div className="space-y-8">
-                                                    <h4 className="font-display text-[12px] font-black uppercase tracking-[3px] text-neutral-black flex items-center gap-3 italic mb-6">
-                                                        <Zap className="w-4 h-4 text-primary" /> ARTIFACT_MANIFEST
+                                        <div className="border-t-[3px] border-neutral-black p-6 sm:p-8 md:p-10 animate-in slide-in-from-top-2 duration-300">
+                                            <div className="grid grid-cols-1 lg:grid-cols-[1fr_340px] gap-10">
+                                                <div className="space-y-6">
+                                                    <h4 className="font-display text-[11px] font-black uppercase tracking-[2.5px] text-neutral-black flex items-center gap-2 mb-4">
+                                                        <Zap className="w-4 h-4 text-primary shrink-0" aria-hidden />
+                                                        Order items
                                                     </h4>
                                                     <div className="space-y-6">
                                                         {order.items.map((item) => (
@@ -335,7 +354,9 @@ export default function CustomerOrders() {
                                                                     >
                                                                         {item.product.name}
                                                                     </Link>
-                                                                    <div className="font-display text-[10px] font-black text-neutral-black/30 uppercase tracking-[2px] mt-1">CREATOR: {item.product.artist.name}</div>
+                                                                    <div className="font-display text-[10px] font-black text-neutral-black/35 uppercase tracking-[1.5px] mt-1">
+                                                                        Artist: {item.product.artist.name}
+                                                                    </div>
                                                                     <div className="pt-2 flex gap-3">
                                                                         <span className="bg-neutral-g2 px-2 py-0.5 rounded-[2px] font-display text-[9px] font-black uppercase tracking-[1px]">{item.color}</span>
                                                                         <span className="bg-neutral-g2 px-2 py-0.5 rounded-[2px] font-display text-[9px] font-black uppercase tracking-[1px]">{item.size}</span>
@@ -343,7 +364,9 @@ export default function CustomerOrders() {
                                                                 </div>
                                                                 <div className="text-right self-center">
                                                                     <div className="font-display text-[20px] font-black text-neutral-black italic leading-none">₹{(item.price * item.quantity).toLocaleString('en-IN')}</div>
-                                                                    <div className="font-display text-[9px] font-black text-neutral-black/20 uppercase tracking-[2px] mt-1">UNIT_SUM</div>
+                                                                    <div className="font-display text-[9px] font-black text-neutral-black/25 uppercase tracking-[2px] mt-1">
+                                                                        Subtotal
+                                                                    </div>
                                                                 </div>
                                                             </div>
                                                         ))}
@@ -351,13 +374,16 @@ export default function CustomerOrders() {
                                                 </div>
 
                                                 {/* Shipping Details */}
-                                                <div className="bg-neutral-g1 p-8 rounded-[4px] border-[2.5px] border-neutral-black border-dashed h-fit space-y-6">
-                                                    <h4 className="font-display text-[12px] font-black uppercase tracking-[3px] text-neutral-black flex items-center gap-3">
-                                                        <Truck className="w-4 h-4" /> COORDINATE_LOGS
+                                                <div className="bg-neutral-g1 p-6 sm:p-7 rounded-[4px] border-[3px] border-neutral-black border-dashed h-fit space-y-5">
+                                                    <h4 className="font-display text-[11px] font-black uppercase tracking-[2.5px] text-neutral-black flex items-center gap-2">
+                                                        <Truck className="w-4 h-4 shrink-0" aria-hidden />
+                                                        Ship to
                                                     </h4>
                                                     {order.shippingAddress ? (
-                                                        <div className="space-y-4">
-                                                            <div className="font-display text-[11px] font-black text-neutral-black/20 uppercase tracking-[2px]">NODE_ADDRESS:</div>
+                                                        <div className="space-y-3">
+                                                            <div className="font-display text-[10px] font-black text-neutral-black/35 uppercase tracking-[2px]">
+                                                                Delivery address
+                                                            </div>
                                                             <div className="font-display text-[13px] font-bold text-neutral-black leading-relaxed space-y-1">
                                                                 <p>{order.shippingAddress.name.toUpperCase()}</p>
                                                                 <p className="opacity-60">{order.shippingAddress.line1.toUpperCase()}</p>
@@ -366,13 +392,18 @@ export default function CustomerOrders() {
                                                             </div>
                                                         </div>
                                                     ) : (
-                                                        <p className="font-display text-[11px] font-black text-danger uppercase tracking-[2px]">ADDRESS_DATA_CORRUPTED</p>
+                                                        <p className="font-display text-[11px] font-bold text-danger uppercase tracking-[1.5px] leading-snug">
+                                                            Shipping address unavailable for this order. Contact support if you need help.
+                                                        </p>
                                                     )}
 
                                                     <div className="pt-4 border-t border-neutral-black/5 space-y-3">
                                                         <div className="flex items-center justify-between font-display text-[10px] font-black uppercase tracking-[2px]">
-                                                            <span className="opacity-40 italic">PROTOCOL_AUTH</span>
-                                                            <span className="text-success flex items-center gap-1.5"><Shield className="w-3 h-3" /> VERIFIED</span>
+                                                            <span className="text-neutral-black/40">Checkout</span>
+                                                            <span className="text-success flex items-center gap-1.5">
+                                                                <Shield className="w-3 h-3 shrink-0" aria-hidden />
+                                                                Secured
+                                                            </span>
                                                         </div>
                                                         <ReturnPolicyNote />
                                                         {order.returnClaim ? (

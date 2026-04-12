@@ -41,6 +41,15 @@ import ArtistEarnings from "./pages/artist/ArtistEarnings";
 import AdminReviews from "./pages/admin/AdminReviews";
 import ForgotPassword from "./pages/auth/ForgotPassword";
 import ResetPassword from "./pages/auth/ResetPassword";
+import PrivacyPolicyPage from "./pages/legal/PrivacyPolicyPage";
+import TermsAndConditionsPage from "./pages/legal/TermsAndConditionsPage";
+import ReturnRefundPolicyPage from "./pages/legal/ReturnRefundPolicyPage";
+import ShippingPolicyPage from "./pages/legal/ShippingPolicyPage";
+import ArtistAgreementPage from "./pages/legal/ArtistAgreementPage";
+import ArtistContentGuidelinesPage from "./pages/legal/ArtistContentGuidelinesPage";
+import ArtistTaxPayoutPolicyPage from "./pages/legal/ArtistTaxPayoutPolicyPage";
+import CopyrightTakedownPolicyPage from "./pages/legal/CopyrightTakedownPolicyPage";
+import GrievanceRedressalMechanismPage from "./pages/legal/GrievanceRedressalMechanismPage";
 
 
 const router: RouteObject[] = [
@@ -61,6 +70,15 @@ const router: RouteObject[] = [
             { path: "orders/:orderId/rate", element: <RatePurchase /> },
             { path: "products/:productId", element: <ProductDetails /> },
             { path: "user/profile", element: <CustomerProfile /> },
+            { path: "privacy-policy", element: <PrivacyPolicyPage /> },
+            { path: "terms", element: <TermsAndConditionsPage /> },
+            { path: "return-refund-policy", element: <ReturnRefundPolicyPage /> },
+            { path: "shipping-policy", element: <ShippingPolicyPage /> },
+            { path: "copyright-takedown-policy", element: <CopyrightTakedownPolicyPage /> },
+            { path: "grievance-redressal", element: <GrievanceRedressalMechanismPage /> },
+            { path: "artist-agreement", element: <ArtistAgreementPage /> },
+            { path: "artist-content-guidelines", element: <ArtistContentGuidelinesPage /> },
+            { path: "artist-tax-payout-policy", element: <ArtistTaxPayoutPolicyPage /> },
         ],
     },
 

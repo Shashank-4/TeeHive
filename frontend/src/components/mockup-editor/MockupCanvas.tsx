@@ -80,6 +80,56 @@ export interface MockupCanvasHandle {
 const PROXY_BASE = () =>
     `${import.meta.env.VITE_API_URL || "http://localhost:3000"}/api/proxy/image?url=`;
 
+/**
+ * Crop a loaded image to the tight bounding box of its non-transparent pixels.
+ * Returns a trimmed HTMLCanvasElement, or `null` if the image is fully opaque
+ * (no benefit from trimming) or fully transparent.
+ */
+function trimTransparentPixels(img: HTMLImageElement): HTMLCanvasElement | null {
+    const w = img.naturalWidth;
+    const h = img.naturalHeight;
+    if (w === 0 || h === 0) return null;
+
+    const src = document.createElement("canvas");
+    src.width = w;
+    src.height = h;
+    const ctx = src.getContext("2d", { willReadFrequently: true });
+    if (!ctx) return null;
+    ctx.drawImage(img, 0, 0);
+
+    const { data } = ctx.getImageData(0, 0, w, h);
+    let top = h, left = w, right = -1, bottom = -1;
+    let hasTransparent = false;
+
+    for (let y = 0; y < h; y++) {
+        for (let x = 0; x < w; x++) {
+            const alpha = data[(y * w + x) * 4 + 3];
+            if (alpha > 0) {
+                if (y < top) top = y;
+                if (y > bottom) bottom = y;
+                if (x < left) left = x;
+                if (x > right) right = x;
+            } else {
+                hasTransparent = true;
+            }
+        }
+    }
+
+    if (!hasTransparent) return null; // fully opaque — no trim needed
+    if (right < 0) return null; // fully transparent
+
+    const trimW = right - left + 1;
+    const trimH = bottom - top + 1;
+    // Skip if trim removes less than 5% on any side — not worth the overhead
+    if (trimW >= w * 0.95 && trimH >= h * 0.95) return null;
+
+    const out = document.createElement("canvas");
+    out.width = trimW;
+    out.height = trimH;
+    out.getContext("2d")!.drawImage(src, left, top, trimW, trimH, 0, 0, trimW, trimH);
+    return out;
+}
+
 // ── Component ──
 
 const MockupCanvas = forwardRef<MockupCanvasHandle, MockupCanvasProps>((
@@ -456,10 +506,22 @@ const MockupCanvas = forwardRef<MockupCanvasHandle, MockupCanvasProps>((
         const opacity = 0.92;
 
         try {
-            // Flat mode: render the design without displacement warping.
-            const fabricImg = await fabric.FabricImage.fromURL(proxyUrl, { crossOrigin: "anonymous" });
+            // Load as HTMLImageElement first so we can trim transparent padding
+            const rawImg = await new Promise<HTMLImageElement>((resolve, reject) => {
+                const img = new Image();
+                img.crossOrigin = "anonymous";
+                img.onload = () => resolve(img);
+                img.onerror = reject;
+                img.src = proxyUrl;
+            });
 
             if (sceneGen != null && sceneGen !== sceneGenerationRef.current) return;
+
+            const trimmed = trimTransparentPixels(rawImg);
+            const fabricImg = trimmed
+                ? new fabric.FabricImage(trimmed)
+                : new fabric.FabricImage(rawImg);
+
             if (!fabricImg) return;
 
             // Apply subtle blur for "printed on fabric" look

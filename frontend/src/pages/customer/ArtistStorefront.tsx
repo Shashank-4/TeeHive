@@ -1,11 +1,6 @@
 import { useState, useEffect } from "react";
 import { Link, useParams } from "react-router-dom";
-import {
-    ArrowLeft,
-    Palette,
-    ExternalLink,
-    ShoppingBag,
-} from "lucide-react";
+import { ArrowLeft, Palette, ExternalLink, ShoppingBag } from "lucide-react";
 import api from "../../api/axios";
 import ImageWithSkeleton from "../../components/shared/ImageWithSkeleton";
 import Loader from "../../components/shared/Loader";
@@ -231,8 +226,8 @@ export default function ArtistStorefront() {
             </div>
 
             <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
-                <h2 className="font-display text-xl md:text-2xl font-black text-neutral-black mb-8 uppercase tracking-tight flex items-center gap-2">
-                    <Palette className="w-6 h-6 text-primary" />
+                <h2 className="font-display text-xl md:text-2xl font-black text-neutral-black uppercase tracking-tight flex items-center gap-2 mb-8">
+                    <Palette className="w-6 h-6 text-primary shrink-0" />
                     Shop collection
                 </h2>
 

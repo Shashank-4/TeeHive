@@ -14,6 +14,7 @@ import {
     ShieldCheck,
     ClipboardList,
     ExternalLink,
+    Menu,
 } from "lucide-react";
 import { useState, useEffect } from "react";
 import { artistPublicPath } from "../../utils/artistRoutes";
@@ -74,37 +75,40 @@ export default function ArtistSidebarLayout() {
         window.open(path, "_blank", "noopener,noreferrer");
     };
 
-    const StatusBadge = () => {
+    const StatusBadge = ({ showOpen }: { showOpen: boolean }) => {
         if (isVerified) return (
             <div className="flex items-center gap-[5px] font-display text-[9px] font-extrabold tracking-[1px] uppercase text-success mt-1">
                 <span className="w-[6px] h-[6px] rounded-full bg-success"></span>
-                {sidebarOpen && <span>Verified</span>}
+                {showOpen && <span>Verified</span>}
             </div>
         );
         if (isPending) return (
             <div className="flex items-center gap-[5px] font-display text-[9px] font-extrabold tracking-[1px] uppercase text-primary-dark mt-1">
                 <span className="w-[6px] h-[6px] rounded-full bg-primary-dark"></span>
-                {sidebarOpen && <span>Under Review</span>}
+                {showOpen && <span>Under Review</span>}
             </div>
         );
         if (isRejected) return (
             <div className="flex items-center gap-[5px] font-display text-[9px] font-extrabold tracking-[1px] uppercase text-danger mt-1">
                 <span className="w-[6px] h-[6px] rounded-full bg-danger"></span>
-                {sidebarOpen && <span>Rejected</span>}
+                {showOpen && <span>Rejected</span>}
             </div>
         );
         return (
             <div className="flex items-center gap-[5px] font-display text-[9px] font-extrabold tracking-[1px] uppercase text-neutral-g4 mt-1">
                 <span className="w-[6px] h-[6px] rounded-full bg-neutral-g3"></span>
-                {sidebarOpen && <span>Setup Required</span>}
+                {showOpen && <span>Setup Required</span>}
             </div>
         );
     };
 
-    const SidebarContent = () => (
+    const SidebarContent = ({ forceExpanded = false }: { forceExpanded?: boolean }) => {
+        const showOpen = forceExpanded || sidebarOpen;
+
+        return (
         <div className="flex flex-col h-full">
             {/* Logo */}
-            <div className="flex items-center justify-between gap-3 px-[14px] h-[60px] border-b-[1.5px] border-neutral-black shrink-0 overflow-hidden">
+            <div className="flex items-center justify-between px-[14px] h-[60px] border-b-[1.5px] border-neutral-black shrink-0 overflow-hidden">
                 <div
                     className="flex items-center gap-2 cursor-pointer min-w-0 flex-1"
                     onClick={() => navigate("/artist/dashboard")}
@@ -113,14 +117,14 @@ export default function ArtistSidebarLayout() {
                         <img
                             src={headerLogo}
                             alt="TeeHive"
-                            className={`${sidebarOpen ? "h-8 w-auto max-w-[140px]" : "h-8 w-8"} object-contain shrink-0`}
+                            className={`${showOpen ? "h-16 w-auto max-w-[140px]" : ""} object-contain shrink-0`}
                         />
                     ) : (
                         <>
                             <div className="w-8 h-8 bg-primary rounded-[4px] flex items-center justify-center shrink-0">
                                 <Crown className="w-4 h-4 text-neutral-black" />
                             </div>
-                            {sidebarOpen && (
+                            {showOpen && (
                                 <span className="font-display text-[21px] font-black tracking-[2px] text-neutral-black whitespace-nowrap transition-opacity duration-200">
                                     TEEHIVE
                                 </span>
@@ -139,6 +143,8 @@ export default function ArtistSidebarLayout() {
                 </button>
                 {/* Mobile close */}
                 <button
+                    type="button"
+                    aria-label="Close menu"
                     onClick={() => setMobileOpen(false)}
                     className="lg:hidden flex items-center justify-center w-7 h-7 rounded-[4px] bg-neutral-g1 hover:bg-primary transition-colors"
                 >
@@ -156,7 +162,7 @@ export default function ArtistSidebarLayout() {
                             (user?.displayName || user?.name || "A").charAt(0).toUpperCase()
                         )}
                     </div>
-                    {sidebarOpen && (
+                    {showOpen && (
                         <div className="min-w-0">
                             <div className="font-display text-[13px] font-extrabold text-neutral-black truncate">
                                 {user?.displayName || user?.name}
@@ -167,7 +173,7 @@ export default function ArtistSidebarLayout() {
                         </div>
                     )}
                 </div>
-                <StatusBadge />
+                <StatusBadge showOpen={showOpen} />
             </div>
 
             {/* Navigation */}
@@ -194,7 +200,7 @@ export default function ArtistSidebarLayout() {
                         >
                             <Icon className={`w-[17px] h-[17px] shrink-0 stroke-[1.8] ${isActive ? "stroke-neutral-black" : isDisabled ? "stroke-neutral-g3" : "stroke-current"
                                 }`} />
-                            {sidebarOpen && <span className="transition-opacity duration-200">{item.label}</span>}
+                            {showOpen && <span className="transition-opacity duration-200">{item.label}</span>}
                         </NavLink>
                     );
                 })}
@@ -205,22 +211,24 @@ export default function ArtistSidebarLayout() {
                 <button
                     type="button"
                     onClick={openPublicStorefront}
-                    className={`group w-full flex items-center gap-[10px] py-[11px] px-3 border-[1.5px] border-neutral-black rounded-[4px] font-display text-[11px] font-bold tracking-[0.5px] uppercase text-neutral-black bg-white hover:bg-neutral-black hover:text-white transition-all ${!sidebarOpen ? "justify-center px-2 border-transparent hover:border-neutral-black" : ""}`}
+                    className={`group w-full flex items-center gap-[10px] py-[11px] px-3 border-[1.5px] border-neutral-black rounded-[4px] font-display text-[11px] font-bold tracking-[0.5px] uppercase text-neutral-black bg-white hover:bg-neutral-black hover:text-white transition-all ${!showOpen ? "justify-center px-2 border-transparent hover:border-neutral-black" : ""}`}
                 >
                     <ExternalLink className="w-4 h-4 shrink-0 stroke-[1.8] transition-transform group-hover:translate-x-0.5 group-hover:-translate-y-0.5" />
-                    {sidebarOpen && <span>View Storefront</span>}
+                    {showOpen && <span>View Storefront</span>}
                 </button>
                 <button
+                    type="button"
                     onClick={handleSignOut}
-                    className={`flex items-center gap-[10px] font-display text-[12px] font-bold tracking-[0.5px] uppercase text-neutral-g4 hover:text-danger transition-colors whitespace-nowrap ${!sidebarOpen ? "justify-center w-full" : ""
+                    className={`flex items-center gap-[10px] font-display text-[12px] font-bold tracking-[0.5px] uppercase text-neutral-g4 hover:text-danger transition-colors whitespace-nowrap ${!showOpen ? "justify-center w-full" : ""
                         }`}
                 >
                     <LogOut className="w-4 h-4 shrink-0 stroke-current stroke-[1.8]" />
-                    {sidebarOpen && <span>Sign Out</span>}
+                    {showOpen && <span>Sign Out</span>}
                 </button>
             </div>
         </div>
-    );
+        );
+    };
 
     return (
         <div className="flex h-screen bg-neutral-g1 overflow-hidden font-body">
@@ -237,7 +245,7 @@ export default function ArtistSidebarLayout() {
                 className={`fixed inset-y-0 left-0 z-50 w-[240px] bg-white border-r-[1.5px] border-neutral-black transform transition-transform duration-200 ease-in-out lg:hidden ${mobileOpen ? "translate-x-0" : "-translate-x-full"
                     }`}
             >
-                <SidebarContent />
+                <SidebarContent forceExpanded />
             </aside>
 
             {/* Desktop sidebar */}
@@ -249,9 +257,21 @@ export default function ArtistSidebarLayout() {
             </aside>
 
             {/* Main content area */}
-            <div className="flex-1 flex flex-col min-w-0 overflow-hidden">                
-                {/* Page content */}
-                <main className="flex-1 overflow-y-auto">
+            <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
+                <header className="lg:hidden shrink-0 flex items-center gap-3 h-[52px] px-3 bg-white border-b-[1.5px] border-neutral-black z-[30]">
+                    <button
+                        type="button"
+                        aria-label="Open menu"
+                        onClick={() => setMobileOpen(true)}
+                        className="flex items-center justify-center w-10 h-10 rounded-[4px] border-[1.5px] border-neutral-black bg-neutral-g1 hover:bg-primary active:scale-95 transition-all"
+                    >
+                        <Menu className="w-5 h-5 stroke-neutral-black stroke-[2.5]" />
+                    </button>
+                    <span className="font-display text-[14px] font-black tracking-[1px] text-neutral-black truncate uppercase">
+                        Artist Studio
+                    </span>
+                </header>
+                <main className="flex-1 overflow-y-auto min-h-0">
                     <Outlet />
                 </main>
             </div>

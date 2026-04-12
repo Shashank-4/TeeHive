@@ -4,72 +4,62 @@ import { signInSchema, type SignInSchema } from "../../lib/validationSchemas";
 import { useState, useEffect } from "react";
 import { useAuth } from "../../context/AuthContext";
 import { useNavigate, Link } from "react-router-dom";
-
-import { Mail, Lock, Eye, EyeOff, ShieldCheck } from "lucide-react";
-import { GoogleLogin } from "@react-oauth/google";
+import { Mail, Lock, Eye, EyeOff, ShieldCheck, ArrowLeft } from "lucide-react";
 import { Input } from "../ui/Input";
 import { Button } from "../ui/Button";
+import GoogleAuthButton from "./GoogleAuthButton";
 
 interface SignInFormProps {
     isArtist: boolean;
 }
+
+/** Resend cooldown; single interval while on OTP step avoids stacked timeouts from [step, countdown] effects. */
+const OTP_RESEND_SECONDS = 30;
 
 const SignInForm = ({ isArtist }: SignInFormProps) => {
     const { signIn, verifyOtp, resendOtp, googleAuth } = useAuth();
     const navigate = useNavigate();
     const [apiError, setApiError] = useState<string | null>(null);
     const [showPassword, setShowPassword] = useState(false);
-
-    // Step 1: Credentials | Step 2: OTP
     const [step, setStep] = useState<1 | 2>(1);
     const [otpCode, setOtpCode] = useState("");
     const [isVerifying, setIsVerifying] = useState(false);
-    const [countdown, setCountdown] = useState(60);
+    const [countdown, setCountdown] = useState(OTP_RESEND_SECONDS);
     const [isResending, setIsResending] = useState(false);
 
     useEffect(() => {
-        if (step !== 2 || countdown <= 0) return;
-        const id = window.setTimeout(() => setCountdown((c) => c - 1), 1000);
-        return () => window.clearTimeout(id);
-    }, [step, countdown]);
+        if (step !== 2) return;
+        const id = window.setInterval(() => {
+            setCountdown((c) => Math.max(0, c - 1));
+        }, 1000);
+        return () => window.clearInterval(id);
+    }, [step]);
 
     const handleResendOtp = async () => {
         if (countdown > 0 || isResending) return;
         setApiError(null);
         setIsResending(true);
         try {
-            const email = getValues("email");
-            await resendOtp(email);
-            setCountdown(60);
-        } catch (error: any) {
-            setApiError(error.response?.data?.message || "Failed to resend OTP");
+            await resendOtp(getValues("email"));
+            setCountdown(OTP_RESEND_SECONDS);
+        } catch (err: any) {
+            setApiError(err.response?.data?.message?.toUpperCase() || "FAILED TO RESEND OTP.");
         } finally {
             setIsResending(false);
         }
     };
 
-    const {
-        register,
-        handleSubmit,
-        getValues,
-        formState: { errors, isSubmitting },
-    } = useForm<SignInSchema>({
-        resolver: zodResolver(signInSchema),
-    });
+    const { register, handleSubmit, getValues, formState: { errors, isSubmitting } } =
+        useForm<SignInSchema>({ resolver: zodResolver(signInSchema) });
 
     const redirectUser = async () => {
-        const meResponse = await (await import("../../api/axios")).default.get("/api/users/me");
-        const loggedInUser = meResponse.data.data.user;
-
-        if (loggedInUser.isArtist) {
-            if (loggedInUser.verificationStatus === "VERIFIED") {
-                navigate("/artist/dashboard");
-            } else if (loggedInUser.verificationStatus === "PENDING_VERIFICATION") {
-                navigate("/artist/verification-status");
-            } else {
-                navigate("/artist/setup-profile");
-            }
-        } else if (loggedInUser.isAdmin) {
+        const res = await (await import("../../api/axios")).default.get("/api/users/me");
+        const u = res.data.data.user;
+        if (u.isArtist) {
+            if (u.verificationStatus === "VERIFIED") navigate("/artist/dashboard");
+            else if (u.verificationStatus === "PENDING_VERIFICATION") navigate("/artist/verification-status");
+            else navigate("/artist/setup-profile");
+        } else if (u.isAdmin) {
             navigate("/admin/dashboard");
         } else {
             navigate("/");
@@ -80,213 +70,152 @@ const SignInForm = ({ isArtist }: SignInFormProps) => {
         setApiError(null);
         try {
             await signIn({ ...data, loginAsArtist: isArtist });
-            setCountdown(60);
-            setStep(2); // Proceed to OTP verification step
-        } catch (error: any) {
-            setApiError(
-                error.response?.data?.message || "An unexpected error occurred."
-            );
-            console.error(error);
+            setCountdown(OTP_RESEND_SECONDS);
+            setStep(2);
+        } catch (err: any) {
+            setApiError(err.response?.data?.message?.toUpperCase() || "INCORRECT EMAIL OR PASSWORD.");
         }
     };
 
     const handleVerifyOtp = async (e: React.FormEvent) => {
         e.preventDefault();
-        if (otpCode.length !== 6) {
-            setApiError("Please enter a valid 6-digit OTP.");
-            return;
-        }
+        if (otpCode.length !== 6) { setApiError("ENTER THE FULL 6-DIGIT CODE."); return; }
         setApiError(null);
         setIsVerifying(true);
         try {
-            const email = getValues("email");
-            await verifyOtp(email, otpCode);
+            await verifyOtp(getValues("email"), otpCode);
             await redirectUser();
-        } catch (error: any) {
-            setApiError(error.response?.data?.message || "Invalid or expired OTP.");
+        } catch (err: any) {
+            setApiError(err.response?.data?.message?.toUpperCase() || "INVALID OR EXPIRED CODE.");
         } finally {
             setIsVerifying(false);
         }
     };
 
-    const handleGoogleSuccess = async (credentialResponse: any) => {
+    const handleGoogleSuccess = async (cr: { credential?: string }) => {
         setApiError(null);
         try {
-            if (credentialResponse.credential) {
-                await googleAuth(credentialResponse.credential, isArtist);
+            if (cr.credential) {
+                await googleAuth(cr.credential, isArtist);
                 await redirectUser();
             }
-        } catch (error: any) {
-            setApiError(error.response?.data?.message || "Google Login failed.");
+        } catch (err: any) {
+            setApiError(err.response?.data?.message?.toUpperCase() || "GOOGLE SIGN-IN FAILED.");
         }
     };
 
-    const buttonText = `Sign In as ${isArtist ? "Artist" : "Customer"}`;
+    if (step === 1) return (
+        <form onSubmit={handleSubmit(onSubmit)} className="space-y-1">
+            <Input
+                label="Email Address"
+                icon={<Mail className="w-4 h-4" />}
+                {...register("email")}
+                id="signin-email"
+                type="email"
+                placeholder="you@example.com"
+                error={errors.email?.message?.toUpperCase()}
+            />
+            <Input
+                label="Password"
+                icon={<Lock className="w-4 h-4" />}
+                {...register("password")}
+                id="signin-password"
+                type={showPassword ? "text" : "password"}
+                placeholder="Enter your password"
+                error={errors.password?.message?.toUpperCase()}
+                rightElement={
+                    <button type="button" onClick={() => setShowPassword(!showPassword)} className="focus:outline-none group">
+                        {showPassword
+                            ? <EyeOff className="w-4 h-4 text-neutral-g3 group-hover:text-neutral-black transition-colors" />
+                            : <Eye className="w-4 h-4 text-neutral-g3 group-hover:text-neutral-black transition-colors" />
+                        }
+                    </button>
+                }
+            />
+
+            <div className="flex items-center justify-between pt-1 pb-2">
+                <label className="flex items-center gap-2 cursor-pointer">
+                    <input type="checkbox" id="remember-me" name="remember-me"
+                        className="w-4 h-4 accent-primary border-[2px] border-neutral-black cursor-pointer" />
+                    <span className="font-display text-[10px] font-black uppercase tracking-[2px] text-neutral-black/50">Remember me</span>
+                </label>
+                <Link to="/forgot-password"
+                    className="font-display text-[10px] font-black uppercase tracking-[2px] text-danger hover:underline decoration-danger">
+                    Forgot password?
+                </Link>
+            </div>
+
+            {apiError && (
+                <p className="text-[11px] font-display font-black uppercase tracking-widest text-danger text-center border-[2px] border-danger/20 bg-danger/5 py-2 px-3 rounded-[4px] mb-3">
+                    {apiError}
+                </p>
+            )}
+
+            <Button type="submit" isLoading={isSubmitting} size="lg" variant="dark" className="w-full">
+                Sign In as {isArtist ? "Artist" : "Customer"}
+            </Button>
+
+            <div className="flex items-center gap-4 py-3">
+                <div className="flex-1 h-[2px] bg-neutral-black/8" />
+                <span className="font-display text-[9px] font-black uppercase tracking-[3px] text-neutral-black/20 whitespace-nowrap">Or continue with</span>
+                <div className="flex-1 h-[2px] bg-neutral-black/8" />
+            </div>
+
+            <GoogleAuthButton
+                onSuccess={handleGoogleSuccess}
+                onError={() => setApiError("GOOGLE SIGN-IN FAILED.")}
+                text="continue_with"
+            />
+        </form>
+    );
 
     return (
-        <div className="space-y-6">
-            {step === 1 ? (
-                <form
-                    onSubmit={handleSubmit(onSubmit)}
-                    className="space-y-4"
-                >
-                    <Input
-                        label="Email Address"
-                        icon={<Mail className="w-4 h-4" />}
-                        {...register("email")}
-                        id="email"
-                        type="email"
-                        placeholder="your@email.com"
-                        error={errors.email?.message}
-                    />
+        <form onSubmit={handleVerifyOtp} className="space-y-5">
+            <div className="text-center space-y-4">
+                <div className="w-14 h-14 bg-primary border-[2.5px] border-neutral-black rounded-[4px] shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] flex items-center justify-center mx-auto">
+                    <ShieldCheck className="w-7 h-7 text-neutral-black stroke-[2.5]" />
+                </div>
+                <div>
+                    <h4 className="font-display text-[16px] font-black uppercase tracking-tight text-neutral-black">Verify Your Email</h4>
+                    <p className="font-display text-[11px] font-bold uppercase tracking-[1.5px] text-neutral-black/40 mt-1">
+                        Code sent to <span className="text-neutral-black">{getValues("email")}</span>
+                    </p>
+                </div>
+                {countdown > 0
+                    ? <p className="font-display text-[10px] font-black uppercase tracking-[2px] text-neutral-black/30">Resend in <span className="text-neutral-black">{countdown}s</span></p>
+                    : <p className="font-display text-[10px] font-black uppercase tracking-[2px] text-neutral-black/30">Didn't receive it? Resend below.</p>
+                }
+            </div>
 
-                    <Input
-                        label="Password"
-                        icon={<Lock className="w-4 h-4" />}
-                        {...register("password")}
-                        id="password"
-                        type={showPassword ? "text" : "password"}
-                        placeholder="Enter your password"
-                        error={errors.password?.message}
-                        rightElement={
-                            <button
-                                type="button"
-                                onClick={() => setShowPassword(!showPassword)}
-                                className="group focus:outline-none"
-                            >
-                                {showPassword ? (
-                                    <EyeOff className="w-4 h-4 stroke-neutral-g3 group-hover:stroke-neutral-black transition-colors stroke-[1.8]" />
-                                ) : (
-                                    <Eye className="w-4 h-4 stroke-neutral-g3 group-hover:stroke-neutral-black transition-colors stroke-[1.8]" />
-                                )}
-                            </button>
-                        }
-                    />
+            <input
+                type="text" maxLength={6} value={otpCode}
+                onChange={(e) => setOtpCode(e.target.value.replace(/\D/g, ""))}
+                placeholder="000000"
+                className="w-full text-center text-[36px] tracking-[0.5em] font-display font-black py-4 border-[3px] border-neutral-black rounded-[4px] focus:shadow-[6px_6px_0px_0px_rgba(255,222,0,1)] outline-none bg-white placeholder:text-neutral-black/10 transition-all"
+            />
 
-                    <div className="flex items-center justify-between">
-                        <label className="flex items-center gap-2 cursor-pointer text-[13px] text-neutral-g4">
-                            <input
-                                id="remember-me"
-                                name="remember-me"
-                                type="checkbox"
-                                className="w-[15px] h-[15px] accent-primary cursor-pointer"
-                            />
-                            Remember me
-                        </label>
-                        <Link
-                            to="/forgot-password"
-                            className="text-[13px] text-danger font-semibold hover:underline"
-                        >
-                            Forgot password?
-                        </Link>
-                    </div>
-
-                    {apiError && (
-                        <p className="mt-2 text-[12px] text-center text-danger font-bold">
-                            {apiError}
-                        </p>
-                    )}
-
-                    <Button
-                        type="submit"
-                        isLoading={isSubmitting}
-                        size="md"
-                        className="w-full !mb-6"
-                    >
-                        {buttonText}
-                    </Button>
-
-                    <div className="flex items-center gap-4 !mb-6">
-                        <div className="flex-1 h-[2.5px] bg-neutral-black/5"></div>
-                        <div className="text-[9px] text-neutral-black/20 font-display font-black tracking-[3px] uppercase whitespace-nowrap">
-                            OR_CONTINUE_WITH
-                        </div>
-                        <div className="flex-1 h-[2.5px] bg-neutral-black/5"></div>
-                    </div>
-
-                    {/* Styled Google Auth wrapper */}
-                    <div className="relative w-full rounded-[4px] overflow-hidden bg-white border-[3px] border-neutral-black hover:border-primary hover:shadow-[6px_6px_0px_0px_rgba(255,222,0,1)] hover:-translate-x-1 hover:-translate-y-1 transition-all">
-                        <GoogleLogin
-                            onSuccess={handleGoogleSuccess}
-                            onError={() => setApiError("Google Sign-In Failed")}
-                            theme="outline"
-                            size="large"
-                            text="continue_with"
-                            width="2000"
-                        />
-                    </div>
-                </form>
-            ) : (
-                <form onSubmit={handleVerifyOtp} className="space-y-6">
-                    <div className="text-center mb-6">
-                        <div className="w-16 h-16 bg-primary/10 border-[1.5px] border-primary/20 rounded-md flex items-center justify-center mx-auto mb-4">
-                            <ShieldCheck className="w-8 h-8 text-neutral-black stroke-[1.5]" />
-                        </div>
-                        <h3 className="font-display text-[24px] font-black text-neutral-black tracking-[-0.5px]">Enter verification code</h3>
-                        <p className="text-[13px] text-neutral-g4 mt-2 leading-relaxed">
-                            We sent a 6-digit code to{" "}
-                            <span className="font-semibold text-neutral-black">{getValues("email")}</span>.
-                            It may take a minute to arrive.
-                        </p>
-                        {countdown > 0 ? (
-                            <p className="text-[13px] text-neutral-g4 mt-3">
-                                You can request a new code in{" "}
-                                <span className="tabular-nums font-semibold text-neutral-black">{countdown}</span> seconds.
-                            </p>
-                        ) : (
-                            <p className="text-[13px] text-neutral-g4 mt-3">You can resend the code if you didn&apos;t receive it.</p>
-                        )}
-                    </div>
-
-                    <div className="space-y-4">
-                        <input
-                            type="text"
-                            maxLength={6}
-                            value={otpCode}
-                            onChange={(e) => setOtpCode(e.target.value.replace(/[^0-9]/g, ''))}
-                            placeholder="000000"
-                            className="w-full text-center text-3xl tracking-[1em] font-mono py-4 border-[1.5px] border-neutral-g2 rounded-md focus:border-primary focus:shadow-[0_0_0_3px_rgba(240,221,38,0.12)] transition-all outline-none bg-white text-neutral-black"
-                        />
-                        {apiError && (
-                            <p className="text-[12px] text-center text-danger font-bold">
-                                {apiError}
-                            </p>
-                        )}
-                        <Button
-                            type="submit"
-                            isLoading={isVerifying}
-                            size="lg"
-                            disabled={isVerifying || otpCode.length !== 6}
-                            className="w-full"
-                        >
-                            {isVerifying ? "SYNCHRONIZING..." : "INITIATE_SESSION"}
-                        </Button>
-                        <div className="text-center mt-2">
-                            <button
-                                type="button"
-                                onClick={handleResendOtp}
-                                disabled={countdown > 0 || isResending}
-                                className="text-[13px] font-semibold text-primary hover:underline disabled:opacity-40 disabled:no-underline disabled:cursor-not-allowed disabled:text-neutral-g4"
-                            >
-                                {isResending ? "Sending…" : "Resend OTP"}
-                            </button>
-                        </div>
-                        <button
-                            type="button"
-                            onClick={() => {
-                                setStep(1);
-                                setOtpCode("");
-                                setApiError(null);
-                                setCountdown(60);
-                            }}
-                            className="w-full py-2 text-[13px] text-neutral-g4 hover:text-neutral-black font-semibold transition-colors"
-                        >
-                            Back to Login
-                        </button>
-                    </div>
-                </form>
+            {apiError && (
+                <p className="text-[11px] font-display font-black uppercase tracking-widest text-danger text-center border-[2px] border-danger/20 bg-danger/5 py-2 rounded-[4px]">
+                    {apiError}
+                </p>
             )}
-        </div>
+
+            <Button type="submit" isLoading={isVerifying} disabled={otpCode.length !== 6} size="lg" variant="dark" className="w-full">
+                Verify & Sign In
+            </Button>
+
+            <div className="flex items-center justify-between">
+                <button type="button" onClick={handleResendOtp} disabled={countdown > 0 || isResending}
+                    className="font-display text-[10px] font-black uppercase tracking-[2px] text-primary hover:underline disabled:opacity-30 disabled:cursor-not-allowed">
+                    {isResending ? "Sending…" : "Resend Code"}
+                </button>
+                <button type="button"
+                    onClick={() => { setStep(1); setOtpCode(""); setApiError(null); setCountdown(OTP_RESEND_SECONDS); }}
+                    className="font-display text-[10px] font-black uppercase tracking-[2px] text-neutral-black/30 hover:text-neutral-black flex items-center gap-1.5 transition-colors">
+                    <ArrowLeft className="w-3.5 h-3.5" /> Back
+                </button>
+            </div>
+        </form>
     );
 };
 
