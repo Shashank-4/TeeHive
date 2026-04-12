@@ -1,5 +1,5 @@
 import { Router, Request, Response } from "express";
-import { PrismaClient } from "@prisma/client";
+import { PrismaClient, VerificationStatus } from "@prisma/client";
 import {
     isUuidParam,
     isReservedArtistSlug,
@@ -43,7 +43,9 @@ function artistPublicWhere(param: string) {
     const trimmed = param.trim();
     const base = {
         isArtist: true,
-        verificationStatus: "VERIFIED" as const,
+        isAdmin: false,
+        /** Match public directory: pending / unverified creators appear; rejected do not. */
+        verificationStatus: { not: VerificationStatus.REJECTED },
     };
     if (isUuidParam(trimmed)) {
         return { ...base, id: trimmed };
@@ -55,7 +57,7 @@ function artistPublicWhere(param: string) {
     };
 }
 
-// Public: List all verified artists with their product count
+// Public: List artists (non-admin, not rejected) with product counts — same cohort as storefront links.
 router.get("/", async (req: Request, res: Response) => {
     try {
         const page = parseInt(req.query.page as string) || 1;
@@ -65,7 +67,8 @@ router.get("/", async (req: Request, res: Response) => {
 
         const baseWhere: any = {
             isArtist: true,
-            verificationStatus: "VERIFIED",
+            isAdmin: false,
+            verificationStatus: { not: VerificationStatus.REJECTED },
         };
 
         const where: any = { ...baseWhere };
@@ -99,77 +102,49 @@ router.get("/", async (req: Request, res: Response) => {
             },
         } as const;
 
-        if (sortRaw === "sales" && !search) {
-            const sold = await prisma.orderItem.groupBy({
-                by: ["artistId"],
-                where: {
-                    artistId: { not: null },
-                    order: { status: { in: [...PAID_ORDER_STATUSES] } },
-                },
-                _sum: { quantity: true },
-                orderBy: { _sum: { quantity: "desc" } },
-                skip: Math.max(0, (page - 1) * limit),
-                take: limit,
-            });
+        const orderItemArtistScope = {
+            artistId: { not: null },
+            order: { status: { in: [...PAID_ORDER_STATUSES] } },
+            artist: {
+                isArtist: true,
+                isAdmin: false,
+                verificationStatus: { not: VerificationStatus.REJECTED },
+            },
+        };
 
-            const ids = sold.map((s) => s.artistId).filter((id): id is string => Boolean(id));
-
-            /** No paid orders yet — show verified artists who have published products (catalog depth first). */
-            if (ids.length === 0) {
-                const withCatalog = await prisma.user.findMany({
-                    where: {
-                        ...baseWhere,
-                        products: { some: { status: "PUBLISHED" } },
-                    },
-                    select: artistSelect,
-                });
-                withCatalog.sort(
-                    (a, b) => (b._count.products ?? 0) - (a._count.products ?? 0)
-                );
-                const total = withCatalog.length;
-                const pageRows = withCatalog.slice(
-                    Math.max(0, (page - 1) * limit),
-                    Math.max(0, (page - 1) * limit) + limit
-                );
-                const rowsWithPhotos = await withDisplayPhotoFallback(pageRows);
-                return res.json({
-                    status: "success",
-                    data: {
-                        artists: rowsWithPhotos.map((a) => ({
-                            ...a,
-                            productCount: a._count.products,
-                            _count: undefined,
-                        })),
-                        pagination: {
-                            page,
-                            limit,
-                            total,
-                            totalPages: Math.ceil(total / limit) || 1,
-                        },
-                    },
-                });
+        /** All matching artists, highest lifetime paid qty first; zero-sales artists included and ordered after. */
+        if (sortRaw === "sales") {
+            const [allUsers, sumGroups] = await Promise.all([
+                prisma.user.findMany({ where, select: artistSelect }),
+                prisma.orderItem.groupBy({
+                    by: ["artistId"],
+                    where: orderItemArtistScope,
+                    _sum: { quantity: true },
+                }),
+            ]);
+            const sumMap = new Map<string, number>();
+            for (const g of sumGroups) {
+                if (g.artistId) sumMap.set(g.artistId, g._sum.quantity ?? 0);
             }
-
-            const rows = await prisma.user.findMany({
-                where: { ...baseWhere, id: { in: ids } },
-                select: artistSelect,
+            const labelCompare = (a: (typeof allUsers)[0], b: (typeof allUsers)[0]) => {
+                const la = (a.displayName?.trim() || a.name || "").toLowerCase();
+                const lb = (b.displayName?.trim() || b.name || "").toLowerCase();
+                return la.localeCompare(lb, undefined, { sensitivity: "base" }) || a.id.localeCompare(b.id);
+            };
+            allUsers.sort((a, b) => {
+                const sa = sumMap.get(a.id) ?? 0;
+                const sb = sumMap.get(b.id) ?? 0;
+                if (sb !== sa) return sb - sa;
+                const pc = (b._count.products ?? 0) - (a._count.products ?? 0);
+                if (pc !== 0) return pc;
+                return labelCompare(a, b);
             });
-
-            const orderMap = new Map(ids.map((id, i) => [id, i]));
-            rows.sort((a, b) => (orderMap.get(a.id) ?? 0) - (orderMap.get(b.id) ?? 0));
-
-            const rowsWithPhotos = await withDisplayPhotoFallback(rows);
-
-            const totalSoldGroups = await prisma.orderItem.groupBy({
-                by: ["artistId"],
-                where: {
-                    artistId: { not: null },
-                    order: { status: { in: [...PAID_ORDER_STATUSES] } },
-                },
-                _sum: { quantity: true },
-            });
-            const total = totalSoldGroups.filter((g) => g.artistId).length;
-
+            const total = allUsers.length;
+            const pageRows = allUsers.slice(
+                Math.max(0, (page - 1) * limit),
+                Math.max(0, (page - 1) * limit) + limit
+            );
+            const rowsWithPhotos = await withDisplayPhotoFallback(pageRows);
             return res.json({
                 status: "success",
                 data: {
@@ -188,11 +163,55 @@ router.get("/", async (req: Request, res: Response) => {
             });
         }
 
+        /** A–Z by `displayName` when set; otherwise account `name` (same label as storefront cards). */
+        if (sortRaw === "alpha" || sortRaw === "name") {
+            const allUsers = await prisma.user.findMany({ where, select: artistSelect });
+            const listKey = (u: (typeof allUsers)[0]) =>
+                (u.displayName?.trim() || u.name || "").toLowerCase();
+            allUsers.sort((a, b) => {
+                const c = listKey(a).localeCompare(listKey(b), undefined, { sensitivity: "base" });
+                if (c !== 0) return c;
+                return a.id.localeCompare(b.id);
+            });
+            const total = allUsers.length;
+            const pageRows = allUsers.slice(
+                Math.max(0, (page - 1) * limit),
+                Math.max(0, (page - 1) * limit) + limit
+            );
+            const rowsWithPhotos = await withDisplayPhotoFallback(pageRows);
+            return res.json({
+                status: "success",
+                data: {
+                    artists: rowsWithPhotos.map((a) => ({
+                        ...a,
+                        productCount: a._count.products,
+                        _count: undefined,
+                    })),
+                    pagination: {
+                        page,
+                        limit,
+                        total,
+                        totalPages: Math.ceil(total / limit) || 1,
+                    },
+                },
+            });
+        }
+
+        const orderByForList = (): any => {
+            switch (sortRaw) {
+                case "newest":
+                    return { createdAt: "desc" };
+                case "ratings":
+                default:
+                    return [{ artistRating: "desc" }, { reviewCount: "desc" }, { createdAt: "desc" }];
+            }
+        };
+
         const [artists, total] = await Promise.all([
             prisma.user.findMany({
                 where,
                 select: artistSelect,
-                orderBy: { createdAt: "desc" },
+                orderBy: orderByForList(),
                 skip: (page - 1) * limit,
                 take: limit,
             }),
@@ -345,6 +364,7 @@ router.get("/:artistParam", async (req: Request, res: Response) => {
                         availableColors: true,
                         categories: true,
                         colorMockups: true,
+                        createdAt: true,
                     },
                     orderBy: { createdAt: "desc" },
                 },
@@ -357,12 +377,48 @@ router.get("/:artistParam", async (req: Request, res: Response) => {
 
         const activeOffer = await getActiveSpecialOffer();
         const { products, ...artistRest } = artist;
+
+        const productIds = products.map((p) => p.id);
+        const salesByProduct = new Map<string, number>();
+        const avgRatingByProduct = new Map<string, number>();
+        if (productIds.length > 0) {
+            const [salesGroups, ratingGroups] = await Promise.all([
+                prisma.orderItem.groupBy({
+                    by: ["productId"],
+                    where: {
+                        productId: { in: productIds },
+                        order: { status: { in: [...PAID_ORDER_STATUSES] } },
+                    },
+                    _sum: { quantity: true },
+                }),
+                prisma.review.groupBy({
+                    by: ["productId"],
+                    where: { productId: { in: productIds } },
+                    _avg: { productRating: true },
+                }),
+            ]);
+            for (const g of salesGroups) {
+                if (g.productId) salesByProduct.set(g.productId, g._sum.quantity ?? 0);
+            }
+            for (const g of ratingGroups) {
+                if (g.productId) avgRatingByProduct.set(g.productId, g._avg.productRating ?? 0);
+            }
+        }
+
         const pricedProducts = products.map((p) => {
             const { price, isDiscounted, discountPercent, originalPrice } = calculateProductPrice(
                 p,
                 activeOffer
             );
-            return { ...p, price, isDiscounted, discountPercent, originalPrice };
+            return {
+                ...p,
+                price,
+                isDiscounted,
+                discountPercent,
+                originalPrice,
+                salesCount: salesByProduct.get(p.id) ?? 0,
+                avgProductRating: avgRatingByProduct.get(p.id) ?? 0,
+            };
         });
 
         res.json({

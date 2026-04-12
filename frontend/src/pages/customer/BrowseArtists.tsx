@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Link } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import { Palette, ShoppingBag, Globe, Instagram, Twitter, Verified } from "lucide-react";
 import Loader from "../../components/shared/Loader";
 import ImageWithSkeleton from "../../components/shared/ImageWithSkeleton";
@@ -30,7 +30,18 @@ interface Pagination {
     totalPages: number;
 }
 
+const SORT_OPTIONS: { value: string; label: string; title?: string }[] = [
+    { value: "ratings", label: "HIGHEST RATED" },
+    { value: "sales", label: "MOST SALES" },
+    { value: "newest", label: "NEW ARTISTS" },
+    { value: "alpha", label: "A–Z", title: "Alphabetical by display name (falls back to account name if unset)" },
+];
+
 export default function BrowseArtists() {
+    const [searchParams, setSearchParams] = useSearchParams();
+    const sortFromUrl = searchParams.get("sort") || "ratings";
+    const sort = SORT_OPTIONS.some((o) => o.value === sortFromUrl) ? sortFromUrl : "ratings";
+
     const [artists, setArtists] = useState<Artist[]>([]);
     const [pagination, setPagination] = useState<Pagination | null>(null);
     const [isLoading, setIsLoading] = useState(true);
@@ -38,7 +49,17 @@ export default function BrowseArtists() {
 
     useEffect(() => {
         fetchArtists();
-    }, [page]);
+    }, [page, sort]);
+
+    const setSort = (next: string) => {
+        setSearchParams((prev) => {
+            const p = new URLSearchParams(prev);
+            if (next && next !== "ratings") p.set("sort", next);
+            else p.delete("sort");
+            return p;
+        });
+        setPage(1);
+    };
 
     const fetchArtists = async () => {
         try {
@@ -46,6 +67,7 @@ export default function BrowseArtists() {
             const params = new URLSearchParams();
             params.set("page", page.toString());
             params.set("limit", "12");
+            params.set("sort", sort);
 
             const res = await api.get(`/api/artists?${params.toString()}`);
             setArtists(res.data.data.artists);
@@ -77,7 +99,36 @@ export default function BrowseArtists() {
             </div>
 
             {/* ── CONTENT ── */}
-            <div className="w-full px-8 py-16">
+            <div className="w-full px-4 sm:px-8 py-10 sm:py-10">
+                <div className="max-w-[1600px] mx-auto mb-8">
+                    <p className="font-display text-[10px] font-black uppercase tracking-[3px] text-neutral-g3 mb-3">
+                        Sort directory
+                    </p>
+                    <div
+                        className="flex flex-wrap gap-2"
+                        role="group"
+                        aria-label="Sort artists"
+                    >
+                        {SORT_OPTIONS.map((o) => {
+                            const active = sort === o.value;
+                            return (
+                                <button
+                                    key={o.value}
+                                    type="button"
+                                    title={o.title}
+                                    onClick={() => setSort(o.value)}
+                                    className={`font-display text-[10px] sm:text-[11px] font-black uppercase tracking-[1px] px-3.5 py-2.5 sm:px-4 sm:py-3 rounded-[4px] border-[2px] border-neutral-black transition-all ${
+                                        active
+                                            ? "bg-primary text-neutral-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]"
+                                            : "bg-white text-neutral-black hover:bg-neutral-g1"
+                                    }`}
+                                >
+                                    {o.label}
+                                </button>
+                            );
+                        })}
+                    </div>
+                </div>
                 {isLoading ? (
                     <div className="flex flex-col items-center justify-center py-40">
                         <Loader size="w-16 h-16 border-[3px]" />
@@ -141,11 +192,13 @@ export default function BrowseArtists() {
                                             )}
                                         </div>
 
-                                        <div className="flex items-center gap-2 mb-2">
+                                        <div className="flex items-center justify-center gap-2 mb-2">
                                             <h3 className="font-display text-[20px] font-black text-neutral-black leading-tight uppercase tracking-[-0.3px]">
                                                 {artist.displayName || artist.name}
                                             </h3>
-                                            <Verified className="w-4 h-4 text-primary fill-neutral-black" />
+                                            {artist.verificationStatus === "VERIFIED" && (
+                                                <Verified className="w-4 h-4 text-primary fill-neutral-black shrink-0" aria-hidden />
+                                            )}
                                         </div>
 
                                         <p className="font-display text-[10px] font-black text-neutral-g3 uppercase tracking-[1.5px] mb-2">

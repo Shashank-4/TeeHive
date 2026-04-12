@@ -4,9 +4,11 @@ import {
     Upload,
     Edit,
     Eye,
+    BookOpen,
+    Wallet,
 } from "lucide-react";
 import Loader from "../../components/shared/Loader";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, Link } from "react-router-dom";
 import api from "../../api/axios";
 import RevenueChart from "../../components/artist/RevenueChart";
 
@@ -123,6 +125,47 @@ export default function ArtistDashboard() {
                             </div>
                         </div>
                     )}
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 normal-case">
+                        <Link
+                            to="/artist-content-guidelines"
+                            className="group flex items-start gap-4 p-5 bg-white border-[2px] border-neutral-black rounded-[6px] shadow-[6px_6px_0px_0px_rgba(0,0,0,1)] hover:translate-x-[2px] hover:translate-y-[2px] hover:shadow-none transition-all no-underline text-neutral-black"
+                        >
+                            <div className="w-11 h-11 rounded-[4px] border-[2px] border-neutral-black bg-primary/20 flex items-center justify-center shrink-0">
+                                <BookOpen className="w-5 h-5 text-neutral-black" />
+                            </div>
+                            <div>
+                                <div className="font-display text-[12px] font-black uppercase tracking-[0.15em] text-neutral-g3 mb-1">
+                                    Policies
+                                </div>
+                                <div className="font-display text-[16px] font-black text-neutral-black group-hover:text-primary transition-colors">
+                                    Artist Content Guidelines
+                                </div>
+                                <p className="font-body text-[13px] text-neutral-g4 mt-1 leading-snug">
+                                    What you can upload, fan art, and quality rules.
+                                </p>
+                            </div>
+                        </Link>
+                        <Link
+                            to="/artist-tax-payout-policy"
+                            className="group flex items-start gap-4 p-5 bg-white border-[2px] border-neutral-black rounded-[6px] shadow-[6px_6px_0px_0px_rgba(0,0,0,1)] hover:translate-x-[2px] hover:translate-y-[2px] hover:shadow-none transition-all no-underline text-neutral-black"
+                        >
+                            <div className="w-11 h-11 rounded-[4px] border-[2px] border-neutral-black bg-primary/20 flex items-center justify-center shrink-0">
+                                <Wallet className="w-5 h-5 text-neutral-black" />
+                            </div>
+                            <div>
+                                <div className="font-display text-[12px] font-black uppercase tracking-[0.15em] text-neutral-g3 mb-1">
+                                    Policies
+                                </div>
+                                <div className="font-display text-[16px] font-black text-neutral-black group-hover:text-primary transition-colors">
+                                    Tax &amp; Payout Policy
+                                </div>
+                                <p className="font-body text-[13px] text-neutral-g4 mt-1 leading-snug">
+                                    Commission, TDS, payout dates, and disputes.
+                                </p>
+                            </div>
+                        </Link>
+                    </div>
                 </div>
 
                 {/* Main Stats Grid */}

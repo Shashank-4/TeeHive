@@ -46,12 +46,29 @@ export const uploadDesignToR2Service = async (
         const fileKey = `designs/${artistId}/${timestamp}-${randomId}.${fileExtension}`;
         const thumbKey = `designs/${artistId}/${timestamp}-${randomId}-thumb.jpg`;
 
+        // Trim transparent padding so the stored image tightly wraps the artwork.
+        // sharp().trim() removes uniform border pixels (transparent for PNGs).
+        let uploadBuffer = file.buffer;
+        let uploadContentType = file.mimetype;
+        try {
+            const trimmed = await sharp(file.buffer)
+                .trim()
+                .png()
+                .toBuffer();
+            if (trimmed.length > 0) {
+                uploadBuffer = trimmed;
+                uploadContentType = "image/png";
+            }
+        } catch {
+            // If trim fails (e.g. fully opaque JPEG), upload the original buffer as-is.
+        }
+
         // Upload High-Res to R2
         const command = new PutObjectCommand({
             Bucket: BUCKET_NAME,
             Key: fileKey,
-            Body: file.buffer,
-            ContentType: file.mimetype,
+            Body: uploadBuffer,
+            ContentType: uploadContentType,
         });
 
         await r2.send(command);

@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
-import { Mail, Zap, ArrowLeft, CheckCircle2 } from "lucide-react";
+import { Mail, ArrowLeft, CheckCircle2 } from "lucide-react";
 import { useForm, type SubmitHandler } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
@@ -13,7 +13,7 @@ const forgotPasswordSchema = z.object({
 });
 
 type ForgotPasswordSchema = z.infer<typeof forgotPasswordSchema>;
-
+const LOGO_BLACK = "/assets/logoHorizontalBlack.svg";
 export default function ForgotPassword() {
     const [isSubmitted, setIsSubmitted] = useState(false);
     const [apiError, setApiError] = useState<string | null>(null);
@@ -43,14 +43,9 @@ export default function ForgotPassword() {
              <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,_var(--tw-gradient-stops))] from-primary/10 via-transparent to-transparent opacity-50 pointer-events-none" />
 
             <div className="w-full max-w-[440px] relative z-10 flex flex-col items-center">
-                 <Link to="/login" className="flex items-center gap-3 no-underline group mb-10">
-                    <div className="w-10 h-10 bg-primary text-neutral-black p-2 flex items-center justify-center rounded-[4px] rotate-[-8deg] group-hover:rotate-0 transition-all border-[2px] border-neutral-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]">
-                        <Zap className="w-6 h-6" fill="currentColor" />
-                    </div>
-                    <span className="font-display text-[26px] font-black tracking-[2px] text-neutral-black uppercase group-hover:text-primary transition-colors">
-                        TEE<span className="italic">HIVE</span>
-                    </span>
-                </Link>
+                  <Link to="/" className="mb-2">
+                        <img src={LOGO_BLACK} alt="TeeHive" className="h-20 w-auto" />
+                    </Link>
 
                 <div className="w-full bg-white border-[3px] border-neutral-black p-8 lg:p-10 rounded-[4px] shadow-[10px_10px_0px_0px_rgba(255,222,0,1)]">
                     {!isSubmitted ? (

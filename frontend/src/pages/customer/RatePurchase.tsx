@@ -195,7 +195,7 @@ export default function RatePurchase() {
                                         Product Quality Rating <span className="text-danger">*</span>
                                     </label>
                                     <p className="font-display text-[10px] font-bold text-neutral-g3 uppercase mb-4 leading-tight">
-                                        How was the fabric and print quality? (Kept internal for quality control).
+                                        How was the fabric and print quality?
                                     </p>
                                     <div className="flex gap-2">
                                         {[1, 2, 3, 4, 5].map((star) => (

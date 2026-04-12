@@ -66,7 +66,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     const signUp = async (
         data: SignUpSchema & { isArtist?: boolean }
     ) => {
-        const { confirmPassword, termsAccepted, ...apiData } = data;
+        const { confirmPassword, termsAccepted, artistAgreementAccepted: _artistAgreementAccepted, ...apiData } = data;
         const response = await api.post("/api/auth/signup", apiData);
         // Returns whether the user is upgrading from customer to artist
         if (response.data?.data?.isUpgrade) {
