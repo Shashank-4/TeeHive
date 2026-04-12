@@ -228,7 +228,7 @@ export default function LoginPage() {
                         </p>
                         <button 
                             onClick={() => { setIsArtist(false); setIsSignUp(false); }}
-                            className="px-10 py-4 border-[3px] border-white text-white font-display text-[12px] font-black uppercase tracking-[2.5px] hover:bg-white hover:text-neutral-black hover:shadow-[6px_6px_0px_0px_rgba(255,222,0,1)] hover:-translate-x-1 hover:-translate-y-1 transition-all duration-300 flex items-center gap-3"
+                            className="px-10 py-4 border-[3px] border-white bg-white text-neutral-black font-display text-[12px] font-black uppercase tracking-[2.5px] shadow-[6px_6px_0px_0px_rgba(255,222,0,1)] -translate-x-1 -translate-y-1 transition-all duration-300 flex items-center gap-3 hover:shadow-none hover:translate-x-0 hover:translate-y-0"
                         >
                             <User className="w-4 h-4" />
                             Switch to Customer
@@ -245,7 +245,7 @@ export default function LoginPage() {
                         </p>
                         <button 
                             onClick={() => { setIsArtist(true); setIsSignUp(false); }}
-                            className="px-10 py-4 border-[3px] border-white text-white font-display text-[12px] font-black uppercase tracking-[2.5px] hover:bg-white hover:text-neutral-black hover:shadow-[6px_6px_0px_0px_rgba(255,222,0,1)] hover:-translate-x-1 hover:-translate-y-1 transition-all duration-300 flex items-center gap-3"
+                            className="px-10 py-4 border-[3px] border-white bg-white text-neutral-black font-display text-[12px] font-black uppercase tracking-[2.5px] shadow-[6px_6px_0px_0px_rgba(255,222,0,1)] -translate-x-1 -translate-y-1 transition-all duration-300 flex items-center gap-3 hover:shadow-none hover:translate-x-0 hover:translate-y-0"
                         >
                             <Palette className="w-4 h-4" />
                             Switch to Artist
