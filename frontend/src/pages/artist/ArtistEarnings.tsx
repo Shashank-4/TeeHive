@@ -215,7 +215,7 @@ export default function ArtistEarnings() {
                         ) : (
                             <Download className="w-4 h-4 text-primary" />
                         )}
-                        Download CSV report
+                        Download Earnings report
                     </button>
                 </div>
 
