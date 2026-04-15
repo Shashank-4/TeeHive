@@ -7,14 +7,16 @@ import * as z from "zod";
 import axios from "../../api/axios";
 import { Input } from "../../components/ui/Input";
 import { Button } from "../../components/ui/Button";
+import { useSiteHeaderLogo } from "../../hooks/useSiteHeaderLogo";
 
 const forgotPasswordSchema = z.object({
     email: z.string().email("Invalid email address"),
 });
 
 type ForgotPasswordSchema = z.infer<typeof forgotPasswordSchema>;
-const LOGO_BLACK = "/assets/logoHorizontalBlack.svg";
+
 export default function ForgotPassword() {
+    const headerLogoSrc = useSiteHeaderLogo();
     const [isSubmitted, setIsSubmitted] = useState(false);
     const [apiError, setApiError] = useState<string | null>(null);
 
@@ -44,7 +46,7 @@ export default function ForgotPassword() {
 
             <div className="w-full max-w-[440px] relative z-10 flex flex-col items-center">
                   <Link to="/" className="mb-2">
-                        <img src={LOGO_BLACK} alt="TeeHive" className="h-20 w-auto" />
+                        <img src={headerLogoSrc} alt="TeeHive" className="h-20 w-auto" />
                     </Link>
 
                 <div className="w-full bg-white border-[3px] border-neutral-black p-8 lg:p-10 rounded-[4px] shadow-[10px_10px_0px_0px_rgba(255,222,0,1)]">

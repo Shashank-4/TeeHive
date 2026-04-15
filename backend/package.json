@@ -6,7 +6,8 @@
     "test": "echo \"Error: no test specified\" && exit 1",
     "start": "nodemon --exec ts-node src/index.ts",
     "start:prod": "node dist/index.js",
-    "build": "tsc",
+    "build": "tsc && tsc -p tsconfig.scripts.json",
+    "payout:generate": "ts-node scripts/generatePayoutSheet.ts",
     "migrate:prod": "prisma migrate deploy",
     "postinstall": "prisma generate"
   },

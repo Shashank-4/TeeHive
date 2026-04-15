@@ -8,7 +8,11 @@ import {
     toggleResubmissionHandler,
     rejectDesignHandler,
 } from "../controllers/adminArtist.controller";
-import { getAdminArtistPayoutMethodsHandler } from "../controllers/artistPayout.controller";
+import {
+    getAdminArtistPayoutMethodsHandler,
+    getAdminArtistSettlementsHandler,
+    getAdminSettlementsHandler,
+} from "../controllers/artistPayout.controller";
 import { getDashboardStatsHandler } from "../controllers/adminStats.controller";
 import { listUsersHandler, updateUserRoleHandler } from "../controllers/adminUsers.controller";
 import { 
@@ -38,10 +42,14 @@ router.use(requireUser, requireRole("admin"));
 // ── Dashboard Stats ──
 router.get("/dashboard/stats", getDashboardStatsHandler);
 
+// ── Settlements (read-only) ──
+router.get("/settlements", getAdminSettlementsHandler);
+
 // ── Artist Management ──
 router.get("/artists", listArtistsHandler);
 router.get("/artists/:id", getArtistDetailHandler);
 router.get("/artists/:id/payout-methods", getAdminArtistPayoutMethodsHandler);
+router.get("/artists/:id/settlements", getAdminArtistSettlementsHandler);
 router.patch("/artists/:id/verify", verifyArtistHandler);
 router.patch("/artists/:id/resubmit", toggleResubmissionHandler);
 router.patch("/designs/:id/reject", rejectDesignHandler);

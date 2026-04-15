@@ -4,7 +4,7 @@ import { ChevronLeft, ChevronRight, ArrowRight } from "lucide-react";
 import ImageWithSkeleton from "../shared/ImageWithSkeleton";
 import Loader from "../shared/Loader";
 import { BEE_BADGE } from "../../constants/brand";
-import { artistPublicPath } from "../../utils/artistRoutes";
+import { artistPublicPath, artistPublicDisplayName } from "../../utils/artistRoutes";
 import { STOREFRONT_TEE_MOCKUP_IMAGE_CLASS } from "../../utils/productMockup";
 import ArtistRatingInline from "../shared/ArtistRatingInline";
 
@@ -48,6 +48,7 @@ export interface LatestDropProduct {
     artist: {
         id: string;
         name: string;
+        displayName?: string | null;
         artistSlug?: string | null;
         artistRating?: number;
         reviewCount?: number;
@@ -345,7 +346,7 @@ export default function LatestDropsShowcase({ products, isLoading }: LatestDrops
                                                         to={artistPublicPath(product.artist)}
                                                         className="font-display text-[10px] font-black tracking-[1.5px] uppercase text-neutral-g4 hover:text-neutral-black transition-colors truncate no-underline block"
                                                     >
-                                                        {product.artist.name}
+                                                        {artistPublicDisplayName(product.artist)}
                                                     </Link>
                                                     <div className="mt-0.5">
                                                         <ArtistRatingInline

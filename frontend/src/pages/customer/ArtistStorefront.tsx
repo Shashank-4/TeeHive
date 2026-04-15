@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { Link, useParams } from "react-router-dom";
 import { ArrowLeft, Palette, ExternalLink, ShoppingBag } from "lucide-react";
 import api from "../../api/axios";
@@ -48,6 +48,12 @@ interface Artist {
     products: Product[];
 }
 
+/** Public label: storefront should show the artist’s display name, not account `name`, when set. */
+function artistDisplayLabel(a: Pick<Artist, "displayName" | "name">): string {
+    const d = a.displayName?.trim();
+    return d && d.length > 0 ? d : a.name;
+}
+
 export default function ArtistStorefront() {
     const { artistHandle } = useParams<{ artistHandle: string }>();
     const [artist, setArtist] = useState<Artist | null>(null);
@@ -74,40 +80,55 @@ export default function ArtistStorefront() {
         if (artistHandle) fetchArtist();
     }, [artistHandle]);
 
-    const handleQuickAdd = (product: Product) => {
-        const colors =
-            product.availableColors?.length ? product.availableColors : [product.tshirtColor];
-        const pickColor = product.primaryColor || product.tshirtColor;
-        const baseMock = {
-            mockupImageUrl: product.mockupImageUrl,
-            backMockupImageUrl: product.backMockupImageUrl,
-            colorMockups: product.colorMockups,
-            primaryColor: product.primaryColor || undefined,
-            tshirtColor: product.tshirtColor,
+    useEffect(() => {
+        if (!artist) return;
+        const label = artistDisplayLabel(artist);
+        const prev = document.title;
+        document.title = `${label} · TeeHive`;
+        return () => {
+            document.title = prev;
         };
-        const useBack = product.primaryView === "back";
-        const img = useBack ? backMockupUrl(baseMock, pickColor) : frontMockupUrl(baseMock, pickColor);
-        addItem({
-            productId: product.id,
-            name: product.name,
-            price: product.price,
-            quantity: 1,
-            size: "M",
-            color: pickColor,
-            image: img,
-            mockupImageUrl: product.mockupImageUrl,
-            backMockupImageUrl: product.backMockupImageUrl,
-            defaultProductColor: product.tshirtColor,
-            primaryColor: product.primaryColor || undefined,
-            primaryView: product.primaryView,
-            mockupView: useBack ? "back" : "front",
-            colorMockups: product.colorMockups ?? undefined,
-            artistName: artist?.displayName || artist?.name || "Artist",
-            availableColors: colors,
-        });
-        setAddedId(product.id);
-        setTimeout(() => setAddedId(null), 2000);
-    };
+    }, [artist]);
+
+    const handleQuickAdd = useCallback(
+        (product: Product) => {
+            if (!artist) return;
+            const nameForCart = artistDisplayLabel(artist);
+            const colors =
+                product.availableColors?.length ? product.availableColors : [product.tshirtColor];
+            const pickColor = product.primaryColor || product.tshirtColor;
+            const baseMock = {
+                mockupImageUrl: product.mockupImageUrl,
+                backMockupImageUrl: product.backMockupImageUrl,
+                colorMockups: product.colorMockups,
+                primaryColor: product.primaryColor || undefined,
+                tshirtColor: product.tshirtColor,
+            };
+            const useBack = product.primaryView === "back";
+            const img = useBack ? backMockupUrl(baseMock, pickColor) : frontMockupUrl(baseMock, pickColor);
+            addItem({
+                productId: product.id,
+                name: product.name,
+                price: product.price,
+                quantity: 1,
+                size: "M",
+                color: pickColor,
+                image: img,
+                mockupImageUrl: product.mockupImageUrl,
+                backMockupImageUrl: product.backMockupImageUrl,
+                defaultProductColor: product.tshirtColor,
+                primaryColor: product.primaryColor || undefined,
+                primaryView: product.primaryView,
+                mockupView: useBack ? "back" : "front",
+                colorMockups: product.colorMockups ?? undefined,
+                artistName: nameForCart,
+                availableColors: colors,
+            });
+            setAddedId(product.id);
+            setTimeout(() => setAddedId(null), 2000);
+        },
+        [artist, addItem]
+    );
 
     if (isLoading) {
         return (
@@ -134,6 +155,8 @@ export default function ArtistStorefront() {
         );
     }
 
+    const label = artistDisplayLabel(artist);
+
     const socialLinks = [
         { key: "portfolio", url: artist.portfolioUrl, label: "Portfolio" },
         { key: "instagram", url: artist.instagramUrl, label: "Instagram" },
@@ -156,6 +179,7 @@ export default function ArtistStorefront() {
                         <img
                             src={artist.coverPhotoUrl!}
                             alt=""
+                            aria-hidden
                             className="w-full h-full object-cover opacity-90"
                         />
                     )}
@@ -175,19 +199,19 @@ export default function ArtistStorefront() {
                             {artist.displayPhotoUrl ? (
                                 <img
                                     src={artist.displayPhotoUrl}
-                                    alt=""
+                                    alt={label}
                                     className="w-full h-full object-cover"
                                 />
                             ) : (
                                 <div className="w-full h-full flex items-center justify-center font-display text-4xl font-black text-neutral-black">
-                                    {(artist.displayName || artist.name).charAt(0).toUpperCase()}
+                                    {label.charAt(0).toUpperCase()}
                                 </div>
                             )}
                         </div>
 
                         <div className="flex-1 space-y-3 pt-0 md:pt-1 min-w-0 text-center md:text-left">
                             <h1 className="font-display text-3xl md:text-4xl font-black text-neutral-black uppercase tracking-tight [text-wrap:balance]">
-                                {artist.displayName || artist.name}
+                                {label}
                             </h1>
                             <div className="flex flex-wrap items-center justify-center md:justify-start gap-4 font-display text-[12px] font-bold uppercase tracking-wide text-neutral-black">
                                 <span className="inline-flex items-center gap-2">
@@ -290,7 +314,7 @@ export default function ArtistStorefront() {
                                         </div>
                                         <div className="p-4 pt-5 pb-2">
                                             <div className="font-display text-[10px] font-bold tracking-[1.5px] uppercase text-primary mb-1 truncate">
-                                                {artist.displayName || artist.name}
+                                                {label}
                                             </div>
                                             <h3 className="font-display text-[16px] font-bold text-neutral-black mb-3 leading-[1.2] tracking-[0.2px] truncate">
                                                 {product.name}

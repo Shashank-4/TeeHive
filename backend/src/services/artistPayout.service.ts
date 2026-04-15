@@ -4,6 +4,7 @@ import {
     PrismaClient,
     PayoutMethodType,
     PayoutVerificationStatus,
+    ArtistSettlementStatus,
 } from "@prisma/client";
 import {
     fetchValidationById,
@@ -55,6 +56,14 @@ function decryptValue(value: string | null | undefined) {
     const decipher = crypto.createDecipheriv("aes-256-gcm", getPayoutEncryptionKey(), iv);
     decipher.setAuthTag(tag);
     return Buffer.concat([decipher.update(encrypted), decipher.final()]).toString("utf8");
+}
+
+function safeDecryptBankAccount(value: string | null | undefined): string {
+    try {
+        return decryptValue(value);
+    } catch {
+        return "";
+    }
 }
 
 function buildFingerprint(type: PayoutMethodType, seed: string) {
@@ -143,7 +152,13 @@ function mapMethodForArtist(method: any) {
     };
 }
 
+/**
+ * Admin payout payload — sensitive fields are MASKED.
+ * Use `revealPayoutMethodForAdmin` to get cleartext with audit logging.
+ */
 function mapMethodForAdmin(method: any) {
+    const rawUpi = method.upiId;
+    const upiIdStr = rawUpi == null ? "" : String(rawUpi).trim();
     return {
         id: method.id,
         methodType: method.methodType,
@@ -153,15 +168,19 @@ function mapMethodForAdmin(method: any) {
         submittedAt: method.submittedAt,
         verifiedAt: method.verifiedAt,
         rejectedAt: method.rejectedAt,
+        createdAt: method.createdAt,
+        updatedAt: method.updatedAt,
         rejectionReason: method.rejectionReason,
         verificationNotes: method.verificationNotes,
-        upiIdMasked: method.upiId ? maskUpiId(method.upiId) : "",
-        upiName: method.upiName || "",
+        upiIdMasked: upiIdStr ? maskUpiId(upiIdStr) : "",
+        upiName: method.upiName == null ? "" : String(method.upiName).trim(),
         bankAccountName: method.bankAccountName || "",
         bankAccountNumberMasked: maskBankAccount(method.bankAccountNumberLast4),
         bankAccountNumberLast4: method.bankAccountNumberLast4 || "",
         bankIfsc: method.bankIfsc || "",
         bankName: method.bankName || "",
+        providerContactId: method.providerContactId || null,
+        providerFundAccountId: method.providerFundAccountId || null,
         providerValidation: buildProviderSummary(method),
         reviews: (method.reviews || []).map((review: any) => ({
             id: review.id,
@@ -327,6 +346,34 @@ async function loadMethods(artistId: string) {
     });
 }
 
+/** All payout method rows for an artist (including inactive), for admin review. */
+async function loadAllMethodsForAdmin(artistId: string) {
+    const pendingMethods = await prisma.artistPayoutMethod.findMany({
+        where: {
+            artistId,
+            isActive: true,
+            verificationStatus: "PENDING_PROVIDER",
+            providerValidationId: { not: null },
+        },
+    });
+    await Promise.all(pendingMethods.map((method) => refreshPendingProviderValidation(method)));
+
+    return prisma.artistPayoutMethod.findMany({
+        where: { artistId },
+        orderBy: [{ isActive: "desc" }, { isDefault: "desc" }, { updatedAt: "desc" }],
+        include: {
+            reviews: {
+                orderBy: { createdAt: "desc" },
+                include: {
+                    reviewerAdmin: {
+                        select: { id: true, name: true, email: true },
+                    },
+                },
+            },
+        },
+    });
+}
+
 export async function listArtistPayoutMethodsService(artistId: string) {
     const methods = await loadMethods(artistId);
     return {
@@ -345,12 +392,161 @@ export async function listAdminArtistPayoutMethodsService(artistId: string) {
         throw new Error("Artist not found");
     }
 
-    const methods = await loadMethods(artistId);
+    const methods = await loadAllMethodsForAdmin(artistId);
     return {
         artist,
         methods: methods.map(mapMethodForAdmin),
-        defaultMethodId: methods.find((method) => method.isDefault)?.id || null,
+        defaultMethodId: methods.find((method) => method.isActive && method.isDefault)?.id || null,
     };
+}
+
+function settlementMethodLabel(method: {
+    methodType: PayoutMethodType;
+    upiId: string | null;
+    bankAccountNumberLast4: string | null;
+    bankName: string | null;
+} | null): string {
+    if (!method) return "—";
+    if (method.methodType === "UPI") {
+        return `UPI · ${maskUpiId(method.upiId || "")}`;
+    }
+    const last4 = method.bankAccountNumberLast4 || "";
+    return `Bank · ${method.bankName || ""}${last4 ? ` ···${last4}` : ""}`;
+}
+
+export async function listArtistSettlementsService(artistId: string) {
+    const settlements = await prisma.artistSettlement.findMany({
+        where: { artistId },
+        orderBy: { createdAt: "desc" },
+        include: {
+            payoutMethod: {
+                select: { methodType: true, upiId: true, bankAccountNumberLast4: true, bankName: true },
+            },
+        },
+    });
+
+    return settlements.map((s) => ({
+        id: s.id,
+        amount: s.amount,
+        currency: s.currency,
+        status: s.status,
+        periodStart: s.periodStart,
+        periodEnd: s.periodEnd,
+        bankReference: s.bankReference,
+        processedAt: s.processedAt,
+        createdAt: s.createdAt,
+        method: settlementMethodLabel(s.payoutMethod),
+    }));
+}
+
+export async function listAdminArtistSettlementsService(artistId: string) {
+    const artist = await prisma.user.findUnique({
+        where: { id: artistId },
+        select: { id: true, isArtist: true },
+    });
+    if (!artist || !artist.isArtist) {
+        throw new Error("Artist not found");
+    }
+
+    const settlements = await prisma.artistSettlement.findMany({
+        where: { artistId },
+        orderBy: { createdAt: "desc" },
+        include: {
+            payoutMethod: {
+                select: { methodType: true, upiId: true, bankAccountNumberLast4: true, bankName: true },
+            },
+        },
+    });
+
+    return settlements.map((s) => ({
+        id: s.id,
+        amount: s.amount,
+        currency: s.currency,
+        status: s.status,
+        periodStart: s.periodStart,
+        periodEnd: s.periodEnd,
+        bankReference: s.bankReference,
+        processedAt: s.processedAt,
+        createdAt: s.createdAt,
+        method: settlementMethodLabel(s.payoutMethod),
+        notes: s.notes,
+    }));
+}
+
+export type AdminSettlementListParams = {
+    artistId?: string;
+    status?: string;
+    from?: string;
+    to?: string;
+    limit?: number;
+};
+
+export async function listAdminAllSettlementsService(params: AdminSettlementListParams) {
+    const limit = Math.min(Math.max(params.limit ?? 100, 1), 200);
+
+    const statusValues = Object.values(ArtistSettlementStatus) as string[];
+    const statusFilter =
+        params.status && statusValues.includes(params.status)
+            ? (params.status as ArtistSettlementStatus)
+            : undefined;
+
+    const fromDate = params.from ? new Date(params.from) : undefined;
+    const toDate = params.to ? new Date(params.to) : undefined;
+    if (params.from && isNaN(fromDate!.getTime())) {
+        throw new Error("Invalid from date");
+    }
+    if (params.to && isNaN(toDate!.getTime())) {
+        throw new Error("Invalid to date");
+    }
+
+    const settlements = await prisma.artistSettlement.findMany({
+        where: {
+            ...(params.artistId ? { artistId: params.artistId } : {}),
+            ...(statusFilter ? { status: statusFilter } : {}),
+            ...(fromDate || toDate
+                ? {
+                      createdAt: {
+                          ...(fromDate ? { gte: fromDate } : {}),
+                          ...(toDate ? { lte: toDate } : {}),
+                      },
+                  }
+                : {}),
+        },
+        orderBy: { createdAt: "desc" },
+        take: limit,
+        include: {
+            payoutMethod: {
+                select: { methodType: true, upiId: true, bankAccountNumberLast4: true, bankName: true },
+            },
+            artist: {
+                select: {
+                    id: true,
+                    name: true,
+                    email: true,
+                    displayName: true,
+                    artistNumber: true,
+                },
+            },
+        },
+    });
+
+    return settlements.map((s) => ({
+        id: s.id,
+        artistId: s.artistId,
+        artistName: s.artist.displayName || s.artist.name,
+        artistEmail: s.artist.email,
+        artistNumber: s.artist.artistNumber,
+        amount: s.amount,
+        currency: s.currency,
+        status: s.status,
+        periodStart: s.periodStart,
+        periodEnd: s.periodEnd,
+        bankReference: s.bankReference,
+        processedAt: s.processedAt,
+        createdAt: s.createdAt,
+        method: settlementMethodLabel(s.payoutMethod),
+        notes: s.notes,
+    }));
 }
 
 export async function saveArtistPayoutMethodsService(

@@ -58,6 +58,7 @@ model User {
   artistReviews           Review[]             @relation("ArtistReviews")
   returnClaims            OrderReturnClaim[]   @relation("CustomerReturnClaims")
   reviewedReturnClaims    OrderReturnClaim[]   @relation("ReturnClaimReviewedBy")
+  adminAuditLogs          AdminAuditLog[]      @relation("AdminAuditLogs")
 }
 
 model Design {
@@ -515,4 +516,20 @@ model Review {
   artist   User    @relation("ArtistReviews", fields: [artistId], references: [id])
 
   @@unique([orderId, productId])
+}
+
+model AdminAuditLog {
+  id           String   @id @default(uuid())
+  adminId      String
+  action       String
+  resourceType String
+  resourceId   String?
+  metadata     Json?
+  ipAddress    String?
+  createdAt    DateTime @default(now())
+  admin        User     @relation("AdminAuditLogs", fields: [adminId], references: [id])
+
+  @@index([adminId])
+  @@index([action, createdAt])
+  @@index([resourceType, resourceId])
 }

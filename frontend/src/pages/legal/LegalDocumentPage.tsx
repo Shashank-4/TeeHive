@@ -1,5 +1,6 @@
 import { Link } from "react-router-dom";
 import type { LegalBlock, LegalDocMeta, LegalSection } from "../../data/legal/types";
+import { useAuth } from "../../context/AuthContext";
 
 function TermsTitleHeading({ title }: { title: string }) {
     const [a, b] = title.split("&").map((s) => s.trim());
@@ -126,15 +127,23 @@ type LegalDocumentPageProps = {
 };
 
 export default function LegalDocumentPage({ meta, sections, otherDocLabel, otherDocPath }: LegalDocumentPageProps) {
+    const { user } = useAuth();
+    const backHref = user?.isAdmin ? "/admin/dashboard" : user?.isArtist ? "/artist/dashboard" : "/";
+    const backLabel = user?.isAdmin
+        ? "← Back to admin"
+        : user?.isArtist
+          ? "← Back to artist dashboard"
+          : "← Back to site";
+
     return (
         <article className="normal-case bg-neutral-g1 min-h-[70vh] py-10 md:py-14 px-4 md:px-8">
             <div className="max-w-3xl mx-auto">
                 <div className="mb-6 flex justify-between items-center gap-4 flex-wrap">
                     <Link
-                        to="/"
+                        to={backHref}
                         className="font-display text-[10px] font-black uppercase tracking-[0.2em] text-neutral-black/40 hover:text-primary transition-colors no-underline"
                     >
-                        ← Back to site
+                        {backLabel}
                     </Link>
                     <Link
                         to={otherDocPath}

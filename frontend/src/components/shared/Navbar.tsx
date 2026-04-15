@@ -7,6 +7,7 @@ import api from "../../api/axios";
 import { artistPublicPath } from "../../utils/artistRoutes";
 import { STOREFRONT_TEE_MOCKUP_IMAGE_CLASS } from "../../utils/productMockup";
 import ArtistRatingInline from "./ArtistRatingInline";
+import { useSiteHeaderLogo } from "../../hooks/useSiteHeaderLogo";
 
 interface SearchProductResult {
     id: string;
@@ -43,7 +44,7 @@ export default function Navbar() {
     const [showArtistSwitchModal, setShowArtistSwitchModal] = useState(false);
     const [productResults, setProductResults] = useState<SearchProductResult[]>([]);
     const [artistResults, setArtistResults] = useState<SearchArtistResult[]>([]);
-    const [headerLogo, setHeaderLogo] = useState("");
+    const headerLogoSrc = useSiteHeaderLogo();
     const menuRef = useRef<HTMLDivElement>(null);
     const desktopSearchRef = useRef<HTMLDivElement>(null);
     const mobileSearchRef = useRef<HTMLFormElement>(null);
@@ -65,19 +66,6 @@ export default function Navbar() {
         setUserMenuOpen(false);
         setSearchOpen(false);
     }, [location.pathname]);
-
-    useEffect(() => {
-        const fetchHeaderLogo = async () => {
-            try {
-                const res = await api.get("/api/config/site_banners");
-                const logo = res.data?.data?.config?.headerLogo;
-                if (typeof logo === "string") setHeaderLogo(logo);
-            } catch {
-                // Keep hardcoded fallback branding if config is unavailable.
-            }
-        };
-        fetchHeaderLogo();
-    }, []);
 
     useEffect(() => {
         const q = searchQuery.trim();
@@ -202,20 +190,11 @@ export default function Navbar() {
                         <Menu className="w-6 h-6" />
                     </button>
                     <Link to="/" className="flex items-center gap-3 no-underline group">
-                        {headerLogo ? (
-                            <img
-                                src={headerLogo}
-                                alt="TeeHive"
-                                className="h-14 sm:h-[58px] md:h-16 max-h-[68px] w-auto object-contain"
-                            />
-                        ) : (
-                            <>
-                                <div className="w-6 h-6 md:w-7 md:h-7 bg-neutral-black rounded-full group-hover:bg-primary group-hover:scale-125 transition-all duration-300 shrink-0" />
-                                <span className="font-display text-[clamp(32px,7vw,48px)] md:text-[52px] font-black tracking-[1px] text-neutral-black leading-none">
-                                    TEE<span className="text-primary italic">HIVE</span>
-                                </span>
-                            </>
-                        )}
+                        <img
+                            src={headerLogoSrc}
+                            alt="TeeHive"
+                            className="h-14 sm:h-[58px] md:h-16 max-h-[68px] w-auto object-contain"
+                        />
                     </Link>
                 </div>
 
@@ -428,20 +407,11 @@ export default function Navbar() {
             <div className={`fixed inset-y-4 left-4 z-[160] w-[calc(100%-32px)] max-w-sm bg-white border-[3px] border-neutral-black rounded-[8px] transform transition-transform duration-500 cubic-bezier(0.4, 0, 0.2, 1) md:hidden flex flex-col shadow-[12px_12px_0px_0px_rgba(0,0,0,1)] ${mobileMenuOpen ? "translate-x-0" : "-translate-x-[calc(100%+40px)]"}`}>
                 <div className="flex items-center justify-between p-6 border-b-[2.5px] border-neutral-black">
                     <Link to="/" onClick={() => setMobileMenuOpen(false)} className="flex items-center gap-3 no-underline">
-                        {headerLogo ? (
-                            <img
-                                src={headerLogo}
-                                alt="TeeHive"
-                                className="h-14 w-auto max-h-[60px] object-contain"
-                            />
-                        ) : (
-                            <>
-                                <div className="w-5 h-5 bg-primary rounded-full shrink-0" />
-                                <span className="font-display text-[34px] font-black tracking-[1.5px] text-neutral-black leading-none">
-                                    TEE<span className="text-primary italic">HIVE</span>
-                                </span>
-                            </>
-                        )}
+                        <img
+                            src={headerLogoSrc}
+                            alt="TeeHive"
+                            className="h-14 w-auto max-h-[60px] object-contain"
+                        />
                     </Link>
                     <button
                         onClick={() => setMobileMenuOpen(false)}
