@@ -39,6 +39,7 @@ import ArtistOrders from "./pages/artist/ArtistOrders"
 import ArtistPayout from "./pages/artist/ArtistPayout";
 import ArtistEarnings from "./pages/artist/ArtistEarnings";
 import AdminReviews from "./pages/admin/AdminReviews";
+import AdminSettlements from "./pages/admin/AdminSettlements";
 import ForgotPassword from "./pages/auth/ForgotPassword";
 import ResetPassword from "./pages/auth/ResetPassword";
 import PrivacyPolicyPage from "./pages/legal/PrivacyPolicyPage";
@@ -118,6 +119,7 @@ const router: RouteObject[] = [
             { path: "colors", element: <AdminColors /> },
             { path: "config", element: <AdminConfig /> },
             { path: "reviews", element: <AdminReviews /> },
+            { path: "settlements", element: <AdminSettlements /> },
         ],
     },
 

@@ -8,7 +8,7 @@ import { useCart } from "../context/CartContext";
 import { useAuth } from "../context/AuthContext";
 import LatestDropsShowcase from "../components/home/LatestDropsShowcase";
 import { BEE_BADGE } from "../constants/brand";
-import { artistPublicPath } from "../utils/artistRoutes";
+import { artistPublicPath, artistPublicDisplayName } from "../utils/artistRoutes";
 import {
     frontMockupUrl,
     backMockupUrl,
@@ -39,6 +39,7 @@ interface Product {
     artist: {
         id: string;
         name: string;
+        displayName?: string | null;
         artistSlug?: string | null;
         artistRating?: number;
         reviewCount?: number;
@@ -278,7 +279,7 @@ function HomePage() {
             primaryView: product.primaryView,
             mockupView: useBack ? "back" : "front",
             colorMockups: product.colorMockups ?? undefined,
-            artistName: product.artist.name,
+            artistName: artistPublicDisplayName(product.artist),
             availableColors: colors,
         });
         setAddedId(product.id);
@@ -588,7 +589,9 @@ function HomePage() {
                                                         </button>
                                                     </div>
                                                     <div className="absolute bottom-0 left-0 w-full p-5 bg-gradient-to-t from-neutral-black to-transparent opacity-0 group-hover:opacity-100 transition-opacity z-10 pointer-events-none group-hover:pointer-events-auto">
-                                                        <div className="font-display text-[10px] font-black text-primary uppercase tracking-[2px] mb-1">{product.artist.name}</div>
+                                                        <div className="font-display text-[10px] font-black text-primary uppercase tracking-[2px] mb-1">
+                                                            {artistPublicDisplayName(product.artist)}
+                                                        </div>
                                                         <div className="font-display text-[18px] font-black text-white leading-tight truncate">{product.name}</div>
                                                     </div>
                                                 </div>
@@ -713,8 +716,8 @@ function HomePage() {
                                     key={product.id}
                                     className="w-[280px] max-w-[92vw] md:w-[320px] shrink-0 snap-start group"
                                 >
-                                    <div className="relative aspect-[4/5] bg-neutral-g1 rounded-[8px] border-[2.5px] border-neutral-black overflow-hidden group-hover:bg-primary transition-all duration-500 shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[4px] hover:translate-y-[4px]">
-                                        <Link to={`/products/${product.id}`} className="no-underline w-full h-full block">
+                                    <div className="relative isolate aspect-[4/5] bg-neutral-black rounded-[8px] border-[2.5px] border-neutral-black overflow-hidden transition-all duration-500 shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[4px] hover:translate-y-[4px]">
+                                        <Link to={`/products/${product.id}`} className="absolute inset-0 z-0 no-underline">
                                             {product.mockupImageUrl ? (
                                                 <ImageWithSkeleton
                                                     src={
@@ -723,8 +726,9 @@ function HomePage() {
                                                             : product.mockupImageUrl
                                                     }
                                                     alt={product.name}
-                                                    className={`absolute inset-0 h-full w-full ${STOREFRONT_TEE_MOCKUP_IMAGE_CLASS} transition-transform duration-500 group-hover:scale-[1.06]`}
-                                                    wrapperClassName="h-full w-full overflow-hidden"
+                                                    className={`absolute inset-0 h-full w-full min-h-[101%] min-w-full max-w-none ${STOREFRONT_TEE_MOCKUP_IMAGE_CLASS} transition-transform duration-500 will-change-transform backface-hidden group-hover:scale-[1.06]`}
+                                                    wrapperClassName="absolute inset-0 min-h-0 overflow-hidden bg-neutral-black"
+                                                    wrapperLayout="absolute-fill"
                                                 />
                                             ) : (
                                                 <div className="w-full h-full flex items-center justify-center text-[100px] opacity-10 uppercase font-black italic">TEE</div>
@@ -748,7 +752,9 @@ function HomePage() {
                                         </div>
 
                                         <div className="absolute bottom-0 left-0 w-full p-6 bg-gradient-to-t from-neutral-black to-transparent opacity-0 group-hover:opacity-100 transition-opacity">
-                                            <div className="font-display text-[10px] font-black text-primary uppercase tracking-[2px] mb-1">{product.artist.name}</div>
+                                            <div className="font-display text-[10px] font-black text-primary uppercase tracking-[2px] mb-1">
+                                                {artistPublicDisplayName(product.artist)}
+                                            </div>
                                             <div className="font-display text-[20px] font-black text-white hover:text-primary transition-colors cursor-pointer truncate">{product.name}</div>
                                         </div>
                                     </div>
@@ -823,7 +829,7 @@ function HomePage() {
 
                         <div className="grid grid-cols-1 sm:grid-cols-3 gap-6 max-w-4xl ml-auto w-full">
                             {(artists.length > 0 ? artists.slice(0, 3) : Array.from({ length: 3 }, (_, i) => ({ id: `placeholder-${i}`, name: `Creator ${i + 1}`, styles: ["Art"], productCount: 0, artistSlug: null } as ArtistSummary))).map((artist, idx) => {
-                                const label = (artist.displayName || artist.name || "?").trim();
+                                const label = artistPublicDisplayName(artist);
                                 const styleTag = (artist.styles?.[0] || "Artist").toUpperCase();
                                 const initial = (label.charAt(0) || "?").toUpperCase();
                                 const photo = artist.displayPhotoUrl;

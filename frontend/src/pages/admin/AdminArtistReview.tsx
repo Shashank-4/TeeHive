@@ -1,5 +1,5 @@
-import { useState, useEffect } from "react";
-import { useParams, useNavigate } from "react-router-dom";
+import { useState, useEffect, useMemo, useCallback } from "react";
+import { useParams, useNavigate, Link } from "react-router-dom";
 import api from "../../api/axios";
 import {
     ArrowLeft,
@@ -18,6 +18,8 @@ import {
     CreditCard,
     Smartphone,
     AlertCircle,
+    ShieldCheck,
+    Receipt,
 } from "lucide-react";
 
 interface Design {
@@ -67,17 +69,28 @@ interface PayoutMethod {
     methodType: "UPI" | "BANK_ACCOUNT";
     verificationStatus: string;
     isDefault: boolean;
+    isActive: boolean;
+    submittedAt?: string | null;
+    verifiedAt?: string | null;
+    rejectedAt?: string | null;
+    createdAt?: string;
+    updatedAt?: string;
     upiIdMasked?: string;
     upiName?: string;
     bankAccountName?: string;
     bankAccountNumberMasked?: string;
+    bankAccountNumberLast4?: string;
     bankIfsc?: string;
     bankName?: string;
     verificationNotes?: string | null;
     rejectionReason?: string | null;
+    providerContactId?: string | null;
+    providerFundAccountId?: string | null;
     providerValidation?: {
+        validationId?: string | null;
         validationStatus?: string | null;
         validationMode?: string | null;
+        validationReference?: string | null;
         registeredName?: string | null;
         nameMatchScore?: number | null;
         reason?: string | null;
@@ -85,6 +98,55 @@ interface PayoutMethod {
         utr?: string | null;
     };
     reviews?: PayoutReview[];
+}
+
+interface AdminArtistSettlement {
+    id: string;
+    amount: number;
+    currency: string;
+    status: string;
+    periodStart: string;
+    periodEnd: string;
+    bankReference: string | null;
+    processedAt: string | null;
+    createdAt: string;
+    method: string;
+    notes: string | null;
+}
+
+function formatPeriodLabel(start: string) {
+    try {
+        return new Date(start).toLocaleDateString("en-IN", { month: "short", year: "numeric" });
+    } catch {
+        return start.slice(0, 10);
+    }
+}
+
+function settlementStatusClass(status: string) {
+    const s = status?.toUpperCase();
+    if (s === "PAID") return "bg-success/15 text-success border-success/40";
+    if (s === "PENDING" || s === "APPROVED" || s === "PROCESSING") return "bg-primary/15 text-neutral-black border-primary/50";
+    if (s === "FAILED" || s === "CANCELLED") return "bg-danger/10 text-danger border-danger/30";
+    return "bg-neutral-g1 text-neutral-g4 border-neutral-black/20";
+}
+
+function formatTs(iso: string | null | undefined) {
+    if (!iso) return "—";
+    try {
+        return new Date(iso).toLocaleString("en-IN", {
+            dateStyle: "medium",
+            timeStyle: "short",
+        });
+    } catch {
+        return iso;
+    }
+}
+
+/** Treat only explicit false-y values as inactive (handles odd JSON / older payloads). */
+function isPayoutRowActive(m: Pick<PayoutMethod, "isActive">): boolean {
+    const v = m.isActive as unknown;
+    if (v === false || v === "false" || v === 0 || v === "0") return false;
+    return true;
 }
 
 export default function AdminArtistReview() {
@@ -102,13 +164,80 @@ export default function AdminArtistReview() {
     const [payoutMethods, setPayoutMethods] = useState<PayoutMethod[]>([]);
     const [payoutLoading, setPayoutLoading] = useState(false);
     const [payoutError, setPayoutError] = useState<string | null>(null);
+    const [settlements, setSettlements] = useState<AdminArtistSettlement[]>([]);
+    const [settlementsLoading, setSettlementsLoading] = useState(false);
+
+    const fetchSettlements = useCallback(async () => {
+        if (!id) return;
+        setSettlementsLoading(true);
+        try {
+            const res = await api.get(`/api/admin/artists/${id}/settlements`);
+            setSettlements(res.data.data?.settlements || []);
+        } catch {
+            setSettlements([]);
+        } finally {
+            setSettlementsLoading(false);
+        }
+    }, [id]);
+
+    const fetchPayoutMethods = useCallback(async () => {
+        if (!id) return;
+        setPayoutLoading(true);
+        setPayoutError(null);
+        try {
+            const res = await api.get(`/api/admin/artists/${id}/payout-methods`);
+            const raw = (res.data.data?.methods || []) as PayoutMethod[];
+            setPayoutMethods(
+                raw.map((m) => ({
+                    ...m,
+                    isActive: isPayoutRowActive(m),
+                }))
+            );
+        } catch (err: any) {
+            setPayoutError(err.response?.data?.message || "Failed to load payout methods.");
+        } finally {
+            setPayoutLoading(false);
+        }
+    }, [id]);
 
     useEffect(() => {
         if (id) {
             fetchArtist();
             fetchPayoutMethods();
+            fetchSettlements();
         }
-    }, [id]);
+    }, [id, fetchPayoutMethods, fetchSettlements]);
+
+    useEffect(() => {
+        const onVis = () => {
+            if (document.visibilityState === "visible" && id) {
+                fetchPayoutMethods();
+                fetchSettlements();
+            }
+        };
+        document.addEventListener("visibilitychange", onVis);
+        return () => document.removeEventListener("visibilitychange", onVis);
+    }, [id, fetchPayoutMethods, fetchSettlements]);
+
+    const sortedPayoutMethods = useMemo(() => {
+        const list = [...payoutMethods];
+        const tier = (m: PayoutMethod) => (isPayoutRowActive(m) ? 0 : 1);
+        const typeOrder = (t: string) => (t === "UPI" ? 0 : 1);
+        list.sort((a, b) => {
+            if (tier(a) !== tier(b)) return tier(a) - tier(b);
+            if (typeOrder(a.methodType) !== typeOrder(b.methodType)) return typeOrder(a.methodType) - typeOrder(b.methodType);
+            if (a.isDefault !== b.isDefault) return a.isDefault ? -1 : 1;
+            const tb = new Date(b.updatedAt || b.createdAt || 0).getTime();
+            const ta = new Date(a.updatedAt || a.createdAt || 0).getTime();
+            return tb - ta;
+        });
+        return list;
+    }, [payoutMethods]);
+
+    const activeMethodCount = useMemo(
+        () => sortedPayoutMethods.filter(isPayoutRowActive).length,
+        [sortedPayoutMethods]
+    );
 
     const fetchArtist = async () => {
         setLoading(true);
@@ -122,26 +251,14 @@ export default function AdminArtistReview() {
         }
     };
 
-    const fetchPayoutMethods = async () => {
-        if (!id) return;
-        setPayoutLoading(true);
-        setPayoutError(null);
-        try {
-            const res = await api.get(`/api/admin/artists/${id}/payout-methods`);
-            setPayoutMethods(res.data.data?.methods || []);
-        } catch (err: any) {
-            setPayoutError(err.response?.data?.message || "Failed to load payout methods.");
-        } finally {
-            setPayoutLoading(false);
-        }
-    };
-
     const handleApprove = async () => {
         if (!artist) return;
         setActionLoading(true);
         try {
             await api.patch(`/api/admin/artists/${artist.id}/verify`, { action: "APPROVE" });
-            fetchArtist();
+            await fetchArtist();
+            await fetchPayoutMethods();
+            await fetchSettlements();
         } catch (err: any) {
             setError(err.response?.data?.message || "Failed to approve artist.");
         } finally {
@@ -159,7 +276,9 @@ export default function AdminArtistReview() {
                 canResubmitVerification: canResubmit,
             });
             setRejecting(false);
-            fetchArtist();
+            await fetchArtist();
+            await fetchPayoutMethods();
+            await fetchSettlements();
         } catch (err) {
             console.error("Failed to reject:", err);
         } finally {
@@ -173,7 +292,8 @@ export default function AdminArtistReview() {
         if (status === "PENDING_REVIEW") return "bg-primary/10 text-neutral-black border-primary/40";
         if (status === "REQUIRES_RESUBMISSION") return "bg-amber-500/10 text-amber-600 border-amber-500/30";
         if (status === "REJECTED") return "bg-danger/10 text-danger border-danger/30";
-        return "bg-white/10 text-white border-white/20";
+        if (status === "DISABLED" || status === "DRAFT") return "bg-neutral-g1 text-neutral-g4 border-neutral-black/20";
+        return "bg-neutral-g1 text-neutral-black border-neutral-black/20";
     };
 
     if (loading) {
@@ -396,9 +516,24 @@ export default function AdminArtistReview() {
                         </div>
 
                         <div className="bg-white border-[3px] border-neutral-black p-8 rounded-[8px] shadow-[8px_8px_0px_0px_rgba(0,0,0,1)]">
-                            <h3 className="font-display text-[12px] font-black uppercase tracking-[2px] text-primary mb-6 border-b-[1px] border-neutral-black/10 pb-4">
-                                Payout methods (read-only)
+                            <h3 className="font-display text-[12px] font-black uppercase tracking-[2px] text-primary mb-2 border-b-[1px] border-neutral-black/10 pb-4 flex items-center gap-2">
+                                <ShieldCheck className="w-4 h-4" /> Payout Methods
                             </h3>
+                            <p className="font-body text-[11px] text-neutral-g4 mb-4 leading-relaxed">
+                                All payout methods on file for this artist (active and inactive).
+                                Sensitive details are masked — full details are only accessible via the server-side payout script.
+                            </p>
+                            {!payoutLoading && !payoutError && payoutMethods.length > 0 && (
+                                <div className="mb-6 rounded-[4px] border border-neutral-black/15 bg-neutral-g1/50 p-4 font-body text-[11px] text-neutral-black">
+                                    <span className="font-display text-[9px] font-black uppercase tracking-wider text-neutral-g3">
+                                        Summary
+                                    </span>
+                                    <p className="mt-1 text-[11px] text-neutral-g4">
+                                        {activeMethodCount} active method{activeMethodCount !== 1 ? "s" : ""} ·{" "}
+                                        {payoutMethods.length} total on file
+                                    </p>
+                                </div>
+                            )}
                             {payoutLoading ? (
                                 <div className="flex items-center gap-3 font-display text-[11px] font-black uppercase text-neutral-g4">
                                     <Loader2 className="w-4 h-4 animate-spin" /> Loading payout registry...
@@ -410,70 +545,300 @@ export default function AdminArtistReview() {
                                 </div>
                             ) : payoutMethods.length === 0 ? (
                                 <div className="border-[2px] border-dashed border-neutral-g2 p-5 rounded-[4px] font-display text-[10px] font-black uppercase text-neutral-g4">
-                                    No payout method submitted yet.
+                                    No payout method on file for this artist.
                                 </div>
                             ) : (
                                 <div className="space-y-6">
-                                    {payoutMethods.map((method) => (
-                                        <div key={method.id} className="border-[2px] border-neutral-black rounded-[6px] p-5 bg-neutral-g1/40">
-                                            <div className="flex items-start justify-between gap-4">
-                                                <div className="space-y-2">
-                                                    <div className="flex items-center gap-3">
-                                                        <div className="w-10 h-10 border-[2px] border-neutral-black rounded-[4px] bg-white flex items-center justify-center">
-                                                            {method.methodType === "UPI" ? (
-                                                                <Smartphone className="w-5 h-5 text-primary" />
-                                                            ) : (
-                                                                <CreditCard className="w-5 h-5 text-primary" />
-                                                            )}
+                                    {sortedPayoutMethods.map((method) => (
+                                        <div
+                                            key={method.id}
+                                            className={`rounded-[6px] border-[2px] border-neutral-black p-5 ${
+                                                isPayoutRowActive(method) ? "bg-neutral-g1/40" : "bg-neutral-g1/80 opacity-90"
+                                            }`}
+                                        >
+                                            <div className="flex flex-wrap items-start justify-between gap-3 border-b border-neutral-black/10 pb-4">
+                                                <div className="flex items-center gap-3 min-w-0">
+                                                    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-[4px] border-[2px] border-neutral-black bg-white">
+                                                        {method.methodType === "UPI" ? (
+                                                            <Smartphone className="h-5 w-5 text-primary" />
+                                                        ) : (
+                                                            <CreditCard className="h-5 w-5 text-primary" />
+                                                        )}
+                                                    </div>
+                                                    <div className="min-w-0">
+                                                        <div className="font-display text-[13px] font-black uppercase">
+                                                            {method.methodType === "UPI" ? "UPI" : "Bank transfer"}
+                                                            {method.isDefault ? " · Default" : ""}
+                                                            {!isPayoutRowActive(method) ? (
+                                                                <span className="ml-2 text-danger">· Inactive</span>
+                                                            ) : null}
                                                         </div>
-                                                        <div>
-                                                            <div className="font-display text-[13px] font-black uppercase">
-                                                                {method.methodType === "UPI" ? "UPI" : "Bank Account"}
-                                                                {method.isDefault ? " • Default" : ""}
-                                                            </div>
-                                                            <div className="font-display text-[10px] font-bold uppercase text-neutral-g4">
-                                                                {method.methodType === "UPI"
-                                                                    ? `${method.upiIdMasked || ""} • ${method.upiName || ""}`
-                                                                    : `${method.bankAccountName || ""} • ${method.bankAccountNumberMasked || ""} • ${method.bankIfsc || ""}`}
-                                                            </div>
+                                                        <div className="mt-0.5 font-mono text-[10px] font-medium uppercase tracking-wide text-neutral-g4 break-all">
+                                                            ID {method.id}
                                                         </div>
                                                     </div>
-                                                    <div className={`inline-flex items-center px-3 py-1 rounded-[4px] border font-display text-[9px] font-black uppercase tracking-[1px] ${payoutStatusClass(method.verificationStatus)}`}>
-                                                        {method.verificationStatus.replaceAll("_", " ")}
-                                                    </div>
+                                                </div>
+                                                <div
+                                                    className={`inline-flex shrink-0 items-center rounded-[4px] border px-3 py-1.5 font-display text-[9px] font-black uppercase tracking-[1px] ${payoutStatusClass(method.verificationStatus)}`}
+                                                >
+                                                    {method.verificationStatus.replaceAll("_", " ")}
                                                 </div>
                                             </div>
 
-                                            <div className="mt-4 space-y-2 font-display text-[10px] font-bold uppercase text-neutral-g4">
-                                                {method.providerValidation?.validationMode && (
-                                                    <div>Provider mode: {method.providerValidation.validationMode.replaceAll("_", " ")}</div>
+                                            <dl className="mt-4 grid gap-x-6 gap-y-3 sm:grid-cols-2">
+                                                {method.methodType === "UPI" ? (
+                                                    <>
+                                                        <div className="sm:col-span-2">
+                                                            <dt className="font-display text-[9px] font-black uppercase tracking-wider text-neutral-g3">
+                                                                UPI ID (masked)
+                                                            </dt>
+                                                            <dd className="mt-0.5 break-all font-mono text-[13px] font-semibold text-neutral-black">
+                                                                {method.upiIdMasked || "—"}
+                                                            </dd>
+                                                        </div>
+                                                        <div className="sm:col-span-2">
+                                                            <dt className="font-display text-[9px] font-black uppercase tracking-wider text-neutral-g3">
+                                                                Name on UPI
+                                                            </dt>
+                                                            <dd className="mt-0.5 font-body text-[13px] text-neutral-black">
+                                                                {method.upiName?.trim() || "—"}
+                                                            </dd>
+                                                        </div>
+                                                    </>
+                                                ) : (
+                                                    <>
+                                                        <div className="sm:col-span-2">
+                                                            <dt className="font-display text-[9px] font-black uppercase tracking-wider text-neutral-g3">
+                                                                Account holder
+                                                            </dt>
+                                                            <dd className="mt-0.5 font-body text-[13px] text-neutral-black">
+                                                                {method.bankAccountName?.trim() || "—"}
+                                                            </dd>
+                                                        </div>
+                                                        <div className="sm:col-span-2">
+                                                            <dt className="font-display text-[9px] font-black uppercase tracking-wider text-neutral-g3">
+                                                                Account number (masked)
+                                                            </dt>
+                                                            <dd className="mt-0.5 break-all font-mono text-[13px] font-semibold tracking-wide text-neutral-black">
+                                                                {method.bankAccountNumberMasked || "—"}
+                                                            </dd>
+                                                        </div>
+                                                        <div>
+                                                            <dt className="font-display text-[9px] font-black uppercase tracking-wider text-neutral-g3">
+                                                                IFSC
+                                                            </dt>
+                                                            <dd className="mt-0.5 font-mono text-[13px] font-semibold text-neutral-black">
+                                                                {method.bankIfsc?.trim() || "—"}
+                                                            </dd>
+                                                        </div>
+                                                        <div>
+                                                            <dt className="font-display text-[9px] font-black uppercase tracking-wider text-neutral-g3">
+                                                                Bank name
+                                                            </dt>
+                                                            <dd className="mt-0.5 font-body text-[13px] text-neutral-black">
+                                                                {method.bankName?.trim() || "—"}
+                                                            </dd>
+                                                        </div>
+                                                    </>
                                                 )}
-                                                {method.providerValidation?.registeredName && (
-                                                    <div>Registered name: {method.providerValidation.registeredName}</div>
-                                                )}
-                                                {typeof method.providerValidation?.nameMatchScore === "number" && (
-                                                    <div>Name match score: {method.providerValidation.nameMatchScore}</div>
-                                                )}
-                                                {(method.providerValidation?.reason || method.verificationNotes || method.rejectionReason) && (
-                                                    <div className="text-neutral-black">
-                                                        {method.providerValidation?.reason || method.verificationNotes || method.rejectionReason}
+                                                <div>
+                                                    <dt className="font-display text-[9px] font-black uppercase tracking-wider text-neutral-g3">
+                                                        Submitted
+                                                    </dt>
+                                                    <dd className="mt-0.5 font-body text-[12px] text-neutral-black">
+                                                        {formatTs(method.submittedAt)}
+                                                    </dd>
+                                                </div>
+                                                <div>
+                                                    <dt className="font-display text-[9px] font-black uppercase tracking-wider text-neutral-g3">
+                                                        Verified
+                                                    </dt>
+                                                    <dd className="mt-0.5 font-body text-[12px] text-neutral-black">
+                                                        {formatTs(method.verifiedAt)}
+                                                    </dd>
+                                                </div>
+                                                <div>
+                                                    <dt className="font-display text-[9px] font-black uppercase tracking-wider text-neutral-g3">
+                                                        Created / updated
+                                                    </dt>
+                                                    <dd className="mt-0.5 font-body text-[11px] leading-snug text-neutral-black">
+                                                        {formatTs(method.createdAt)}
+                                                        <span className="text-neutral-g3"> → </span>
+                                                        {formatTs(method.updatedAt)}
+                                                    </dd>
+                                                </div>
+                                                {method.rejectedAt ? (
+                                                    <div>
+                                                        <dt className="font-display text-[9px] font-black uppercase tracking-wider text-neutral-g3">
+                                                            Rejected at
+                                                        </dt>
+                                                        <dd className="mt-0.5 font-body text-[12px] text-danger">
+                                                            {formatTs(method.rejectedAt)}
+                                                        </dd>
+                                                    </div>
+                                                ) : null}
+                                            </dl>
+
+                                            {(method.providerContactId || method.providerFundAccountId) && (
+                                                <div className="mt-4 rounded-[4px] border border-neutral-black/10 bg-white p-3 font-mono text-[10px] leading-relaxed text-neutral-g4 break-all">
+                                                    {method.providerContactId ? (
+                                                        <div>
+                                                            <span className="font-display font-black uppercase text-neutral-g3">
+                                                                Razorpay contact{" "}
+                                                            </span>
+                                                            {method.providerContactId}
+                                                        </div>
+                                                    ) : null}
+                                                    {method.providerFundAccountId ? (
+                                                        <div className="mt-1">
+                                                            <span className="font-display font-black uppercase text-neutral-g3">
+                                                                Fund account{" "}
+                                                            </span>
+                                                            {method.providerFundAccountId}
+                                                        </div>
+                                                    ) : null}
+                                                </div>
+                                            )}
+
+                                            <div className="mt-4 space-y-2 border-t border-neutral-black/10 pt-4 font-display text-[10px] font-bold uppercase text-neutral-g4">
+                                                {method.providerValidation?.validationMode ? (
+                                                    <div>
+                                                        Provider mode:{" "}
+                                                        <span className="text-neutral-black">
+                                                            {method.providerValidation.validationMode.replaceAll("_", " ")}
+                                                        </span>
+                                                    </div>
+                                                ) : null}
+                                                {method.providerValidation?.validationStatus ? (
+                                                    <div>
+                                                        Provider status:{" "}
+                                                        <span className="text-neutral-black">
+                                                            {method.providerValidation.validationStatus}
+                                                        </span>
+                                                    </div>
+                                                ) : null}
+                                                {method.providerValidation?.registeredName ? (
+                                                    <div className="normal-case">
+                                                        Registered name: {method.providerValidation.registeredName}
+                                                    </div>
+                                                ) : null}
+                                                {(method.providerValidation?.reason ||
+                                                    method.verificationNotes ||
+                                                    method.rejectionReason) && (
+                                                    <div className="whitespace-pre-wrap border-l-2 border-primary/60 pl-3 normal-case text-[12px] font-semibold leading-relaxed text-neutral-black">
+                                                        {method.providerValidation?.reason ||
+                                                            method.verificationNotes ||
+                                                            method.rejectionReason}
                                                     </div>
                                                 )}
                                             </div>
 
                                             {method.reviews?.length ? (
-                                                <div className="mt-4 border-t border-neutral-black/10 pt-4 space-y-2">
-                                                    <p className="font-display text-[9px] font-black uppercase text-neutral-g3 mb-2">History</p>
-                                                    {method.reviews.slice(0, 3).map((review) => (
-                                                        <div key={review.id} className="font-display text-[10px] font-bold uppercase text-neutral-g4">
-                                                            {review.action.replaceAll("_", " ")} • {new Date(review.createdAt).toLocaleDateString("en-GB")}
-                                                            {review.note ? ` • ${review.note}` : ""}
-                                                        </div>
-                                                    ))}
+                                                <div className="mt-4 border-t border-neutral-black/10 pt-4">
+                                                    <p className="mb-3 font-display text-[9px] font-black uppercase text-neutral-g3">
+                                                        Review / audit history ({method.reviews.length})
+                                                    </p>
+                                                    <ul className="space-y-3">
+                                                        {method.reviews.map((review) => (
+                                                            <li
+                                                                key={review.id}
+                                                                className="rounded-[4px] border border-neutral-black/10 bg-white/80 p-3 font-body text-[11px] leading-snug text-neutral-black"
+                                                            >
+                                                                <span className="font-display text-[10px] font-black uppercase text-primary">
+                                                                    {review.action.replaceAll("_", " ")}
+                                                                </span>
+                                                                <span className="text-neutral-g3"> · </span>
+                                                                {formatTs(review.createdAt)}
+                                                                {review.reviewerAdmin ? (
+                                                                    <>
+                                                                        <span className="text-neutral-g3"> · </span>
+                                                                        Admin: {review.reviewerAdmin.name} (
+                                                                        {review.reviewerAdmin.email})
+                                                                    </>
+                                                                ) : null}
+                                                                {review.note ? (
+                                                                    <p className="mt-1.5 whitespace-pre-wrap border-l-2 border-neutral-g2 pl-2 text-[11px] font-medium normal-case">
+                                                                        {review.note}
+                                                                    </p>
+                                                                ) : null}
+                                                            </li>
+                                                        ))}
+                                                    </ul>
                                                 </div>
                                             ) : null}
                                         </div>
                                     ))}
+                                </div>
+                            )}
+                        </div>
+
+                        <div className="bg-white border-[3px] border-neutral-black p-8 rounded-[8px] shadow-[8px_8px_0px_0px_rgba(0,0,0,1)]">
+                            <div className="flex flex-wrap items-start justify-between gap-3 border-b-[1px] border-neutral-black/10 pb-4 mb-4">
+                                <h3 className="font-display text-[12px] font-black uppercase tracking-[2px] text-primary flex items-center gap-2">
+                                    <Receipt className="w-4 h-4" /> Settlement history
+                                </h3>
+                                <Link
+                                    to="/admin/settlements"
+                                    className="font-display text-[9px] font-black uppercase text-primary hover:underline"
+                                >
+                                    All settlements →
+                                </Link>
+                            </div>
+                            <p className="font-body text-[11px] text-neutral-g4 mb-4 leading-relaxed">
+                                Read-only rows from royalty runs (script-generated). Status and bank reference update when finance marks the batch paid.
+                            </p>
+                            {settlementsLoading ? (
+                                <div className="flex items-center gap-3 font-display text-[11px] font-black uppercase text-neutral-g4 py-6">
+                                    <Loader2 className="w-4 h-4 animate-spin" /> Loading settlements…
+                                </div>
+                            ) : settlements.length === 0 ? (
+                                <div className="border-[2px] border-dashed border-neutral-g2 p-5 rounded-[4px] font-display text-[10px] font-black uppercase text-neutral-g4">
+                                    No settlement records for this artist yet.
+                                </div>
+                            ) : (
+                                <div className="overflow-x-auto -mx-2">
+                                    <table className="w-full text-left border-collapse text-[11px]">
+                                        <thead>
+                                            <tr className="border-b-[2px] border-neutral-black bg-neutral-g1/50">
+                                                {["Period", "Amount", "Method", "Status", "Reference", "Notes", "Created"].map((h) => (
+                                                    <th key={h} className="font-display text-[9px] font-black uppercase tracking-wider text-neutral-g4 py-3 px-2 whitespace-nowrap">
+                                                        {h}
+                                                    </th>
+                                                ))}
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {settlements.map((s) => (
+                                                <tr key={s.id} className="border-b border-neutral-black/10">
+                                                    <td className="py-3 px-2 font-display font-bold uppercase whitespace-nowrap">
+                                                        {formatPeriodLabel(s.periodStart)}
+                                                    </td>
+                                                    <td className="py-3 px-2 font-display font-black whitespace-nowrap">
+                                                        ₹{s.amount.toLocaleString("en-IN", { minimumFractionDigits: 2 })}
+                                                    </td>
+                                                    <td className="py-3 px-2 font-display text-[10px] font-bold text-neutral-g3 uppercase max-w-[120px] break-words">
+                                                        {s.method}
+                                                    </td>
+                                                    <td className="py-3 px-2">
+                                                        <span
+                                                            className={`inline-block rounded-[3px] border px-2 py-0.5 font-display text-[8px] font-black uppercase ${settlementStatusClass(s.status)}`}
+                                                        >
+                                                            {s.status}
+                                                        </span>
+                                                    </td>
+                                                    <td className="py-3 px-2 font-mono text-[10px] break-all max-w-[100px]">
+                                                        {s.bankReference || "—"}
+                                                    </td>
+                                                    <td className="py-3 px-2 font-body text-[10px] text-neutral-g4 max-w-[160px] break-words">
+                                                        {s.notes || "—"}
+                                                    </td>
+                                                    <td className="py-3 px-2 font-body text-[10px] text-neutral-g4 whitespace-nowrap">
+                                                        {formatTs(s.createdAt)}
+                                                    </td>
+                                                </tr>
+                                            ))}
+                                        </tbody>
+                                    </table>
                                 </div>
                             )}
                         </div>

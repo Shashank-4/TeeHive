@@ -22,6 +22,7 @@ import {
 } from "../controllers/artistProfile.controller";
 import {
     getArtistPayoutMethodsHandler,
+    getArtistSettlementsHandler,
     saveArtistPayoutMethodsHandler,
 } from "../controllers/artistPayout.controller";
 import multer from "multer";
@@ -68,6 +69,7 @@ router.get("/dashboard", requireVerifiedArtist, getArtistDashboardConfigHandler)
 router.get("/stats/revenue-series", requireVerifiedArtist, getArtistRevenueSeriesHandler);
 router.get("/stats", requireVerifiedArtist, getArtistStatsHandler);
 router.get("/earnings/csv", requireVerifiedArtist, getArtistEarningsCsvHandler);
+router.get("/settlements", requireVerifiedArtist, getArtistSettlementsHandler);
 router.get("/orders", requireVerifiedArtist, getArtistOrdersHandler);
 
 export default router;

@@ -7,7 +7,6 @@ import {
     ShoppingBag,
     LogOut,
     ChevronLeft,
-    Crown,
     Palette,
     Tag,
     Settings,
@@ -17,8 +16,10 @@ import {
     Star,
     Menu,
     X,
+    Receipt,
 } from "lucide-react";
 import { useState, useEffect } from "react";
+import { useSiteHeaderLogo } from "../../hooks/useSiteHeaderLogo";
 
 const adminNavItems = [
     { to: "/admin/dashboard", icon: LayoutDashboard, label: "Command Center" },
@@ -28,6 +29,7 @@ const adminNavItems = [
     { to: "/admin/categories", icon: Tag, label: "Taxonomy" },
     { to: "/admin/colors", icon: Droplet, label: "Global Colors" },
     { to: "/admin/orders", icon: ShoppingBag, label: "Logistics" },
+    { to: "/admin/settlements", icon: Receipt, label: "Settlements" },
     { to: "/admin/reviews", icon: Star, label: "Feedbacks" },
     { to: "/admin/users", icon: Users, label: "Identities" },
     { to: "/admin/config", icon: Settings, label: "Protocol Config" },
@@ -39,6 +41,7 @@ export default function AdminSidebarLayout() {
     const location = useLocation();
     const [sidebarOpen, setSidebarOpen] = useState(true);
     const [mobileOpen, setMobileOpen] = useState(false);
+    const headerLogoSrc = useSiteHeaderLogo();
 
     useEffect(() => {
         if (user && !user.isAdmin) {
@@ -62,18 +65,15 @@ export default function AdminSidebarLayout() {
                     className="flex items-center gap-3 cursor-pointer group min-w-0 flex-1"
                     onClick={() => navigate("/admin/dashboard")}
                 >
-                    <div className="w-9 h-9 bg-neutral-black text-primary border-[2px] border-neutral-black rounded-[4px] flex items-center justify-center shrink-0 group-hover:scale-110 transition-transform">
-                        <Crown className="w-5 h-5" />
-                    </div>
+                    <img
+                        src={headerLogoSrc}
+                        alt="TeeHive"
+                        className={`object-contain shrink-0 group-hover:opacity-90 transition-opacity ${showOpen ? "h-11 w-auto max-w-[160px]" : "h-9 w-auto max-w-[40px]"}`}
+                    />
                     {showOpen && (
-                        <div className="flex flex-col min-w-0">
-                            <span className="font-display text-[18px] font-black tracking-[1px] text-neutral-black whitespace-nowrap leading-none">
-                                TEE<span className="text-primary italic">HIVE</span>
-                            </span>
-                            <span className="text-[9px] font-black uppercase tracking-[2px] text-neutral-black/40 mt-0.5">
-                                CONTROL_UNIT
-                            </span>
-                        </div>
+                        <span className="text-[9px] font-black uppercase tracking-[2px] text-neutral-black/40 whitespace-nowrap leading-none">
+                            CONTROL_UNIT
+                        </span>
                     )}
                 </div>
                 <div className="flex items-center gap-2 shrink-0">

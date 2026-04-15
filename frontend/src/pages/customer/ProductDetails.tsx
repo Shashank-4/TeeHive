@@ -20,7 +20,7 @@ import { PRODUCT_SIZES } from "../../constants/productSizes";
 import GstInclusiveNote from "../../components/shared/GstInclusiveNote";
 import ReturnPolicyNote from "../../components/shared/ReturnPolicyNote";
 import { BEE_BADGE } from "../../constants/brand";
-import { artistPublicPath } from "../../utils/artistRoutes";
+import { artistPublicPath, artistPublicDisplayName } from "../../utils/artistRoutes";
 import { STOREFRONT_TEE_MOCKUP_IMAGE_CLASS } from "../../utils/productMockup";
 import ArtistRatingInline from "../../components/shared/ArtistRatingInline";
 
@@ -51,7 +51,7 @@ interface Product {
     artist: {
         id: string;
         name: string;
-        displayName?: string;
+        displayName?: string | null;
         email: string;
         artistRating: number;
         reviewCount: number;
@@ -274,7 +274,7 @@ export default function ProductDetails() {
             primaryView: product.primaryView === "back" ? "back" : "front",
             mockupView: currentView === "back" ? "back" : "front",
             colorMockups: product.colorMockups ?? undefined,
-            artistName: product.artist.name,
+            artistName: artistPublicDisplayName(product.artist),
             availableColors:
                 product.availableColors?.length ? product.availableColors : [product.tshirtColor],
         });
@@ -380,7 +380,7 @@ export default function ProductDetails() {
 
                             <div className="flex items-center gap-3 p-3 bg-neutral-g1 border-[1.5px] border-neutral-black rounded-[2px]">
                                 <div className="w-10 h-10 sm:w-11 sm:h-11 bg-primary border border-neutral-black rounded-full flex items-center justify-center font-display text-[16px] font-black text-neutral-black shrink-0">
-                                    {product.artist.name.charAt(0).toUpperCase()}
+                                    {artistPublicDisplayName(product.artist).charAt(0).toUpperCase()}
                                 </div>
                                 <div className="min-w-0 flex-1">
                                     <div className="font-display text-[9px] font-extrabold tracking-[1px] uppercase text-neutral-g3 leading-none mb-0.5">
@@ -393,13 +393,12 @@ export default function ProductDetails() {
                                         })}
                                         className="font-display text-[16px] sm:text-[17px] font-black text-neutral-black tracking-tight hover:text-primary transition-colors no-underline block truncate"
                                     >
-                                        {product.artist.name}
+                                        {artistPublicDisplayName(product.artist)}
                                     </Link>
                                     <div className="font-display text-[12px] font-bold text-neutral-g3 tracking-tight flex flex-wrap items-center gap-x-2 gap-y-0.5 mt-0.5">
                                         <span className="lowercase">
                                             @
-                                            {product.artist.displayName?.replace(/\s+/g, "") ||
-                                                product.artist.name.replace(/\s+/g, "")}
+                                            {artistPublicDisplayName(product.artist).replace(/\s+/g, "")}
                                         </span>
                                         <ArtistRatingInline
                                             rating={product.artist.artistRating}

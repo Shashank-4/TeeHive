@@ -168,29 +168,70 @@ export default function ArtistDashboard() {
                     </div>
                 </div>
 
-                {/* Main Stats Grid */}
+                {/* Main Stats Grid — first card matches Earnings ledger “Total Earned” */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 md:gap-8 mb-12">
                     {[
-                        { label: "Total Earnings", val: `₹${stats?.totalRevenue?.toLocaleString() || 0}`, icon: "💰", color: "bg-primary/20", sub: "25% Artist Royality" },
-                        { label: "Orders Fulfilled", val: stats?.totalSales || 0, icon: "🛍️", color: "bg-info/20", sub: "Verified Hive Sales" },
-                        { label: "Live Products", val: stats?.publishedProducts || 0, icon: "📦", color: "bg-success/20", sub: `${stats?.draftProducts || 0} Drafts in Lab` },
-                        { label: "Designs Uploaded", val: stats?.totalDesigns || 0, icon: "🎨", color: "bg-neutral-g1/50", sub: "Source Graphics" }
-                    ].map((stat, i) => (
-                        <div key={i} className="bg-white border-[2px] border-neutral-black rounded-[6px] p-6 shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] hover:translate-x-[2px] hover:translate-y-[2px] hover:shadow-none transition-all">
-                            <div className={`w-12 h-12 rounded-[2px] border-[2px] border-neutral-black flex items-center justify-center text-[20px] mb-6 ${stat.color}`}>
-                                {stat.icon}
+                        {
+                            label: "Total Earned",
+                            value: stats?.totalEarnings ?? 0,
+                            color: "bg-primary/20",
+                            emoji: "₹",
+                            isCount: false,
+                            sub: "25% artist share from paid orders",
+                        },
+                        {
+                            label: "Orders Fulfilled",
+                            value: stats?.totalSales ?? 0,
+                            color: "bg-info/20",
+                            emoji: "✅",
+                            isCount: true,
+                            sub: "Verified Hive Sales",
+                        },
+                        {
+                            label: "Live Products",
+                            value: stats?.publishedProducts ?? 0,
+                            color: "bg-success/20",
+                            emoji: "📦",
+                            isCount: true,
+                            sub: `${stats?.draftProducts ?? 0} Drafts in Lab`,
+                        },
+                        {
+                            label: "Designs Uploaded",
+                            value: stats?.totalDesigns ?? 0,
+                            color: "bg-neutral-g2/50",
+                            emoji: "🎨",
+                            isCount: true,
+                            sub: "Source Graphics",
+                        },
+                    ].map((card, i) => (
+                        <div
+                            key={i}
+                            className="bg-white border-[2px] border-neutral-black rounded-[6px] p-6 shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] group hover:translate-x-[2px] hover:translate-y-[2px] hover:shadow-none transition-all"
+                        >
+                            <div
+                                className={`w-12 h-12 rounded-[2px] border-[2px] border-neutral-black flex items-center justify-center text-[20px] mb-6 ${card.color}`}
+                            >
+                                {card.emoji}
                             </div>
                             <div className="space-y-1">
-                                <div className="font-display text-[32px] font-black text-neutral-black leading-none tracking-tight flex items-baseline">
-                                    {statsLoading ? <Loader size="w-6 h-6" /> : stat.val}
+                                <div className="font-display text-[32px] font-black text-neutral-black leading-none tracking-tight">
+                                    {statsLoading ? (
+                                        <Loader size="w-6 h-6" />
+                                    ) : card.isCount ? (
+                                        card.value?.toLocaleString("en-IN")
+                                    ) : (
+                                        `₹${Number(card.value).toLocaleString("en-IN")}`
+                                    )}
                                 </div>
-                                <div className="font-display text-[10px] font-black uppercase tracking-[1.5px] text-neutral-g3">
-                                    {stat.label}
+                                <div className="font-display text-[10px] font-black uppercase tracking-[1px] text-neutral-g3">
+                                    {card.label}
                                 </div>
                             </div>
-                            <div className="mt-4 pt-4 border-t-[1px] border-neutral-black/5 font-display text-[9px] font-black text-neutral-g4 uppercase tracking-[1px]">
-                                ● {stat.sub}
-                            </div>
+                            {card.sub ? (
+                                <div className="mt-4 pt-4 border-t-[1px] border-neutral-black/5 font-display text-[9px] font-black text-neutral-g4 uppercase tracking-[1px]">
+                                    ● {card.sub}
+                                </div>
+                            ) : null}
                         </div>
                     ))}
                 </div>

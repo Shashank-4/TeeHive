@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { ArrowRight, Instagram, Mail, Shield, Zap, Palette } from "lucide-react";
 import api from "../../api/axios";
+import { useSiteHeaderLogo } from "../../hooks/useSiteHeaderLogo";
 
 const INSTAGRAM_URL =
     "https://www.instagram.com/teehive.co.in?igsh=YWlvN3gwZ2h6eG11";
@@ -62,6 +63,7 @@ function FooterInventoryLinks() {
 }
 
 export default function Footer() {
+    const headerLogoSrc = useSiteHeaderLogo();
 
     return (
         <div className="bg-white border-t-[3px] border-neutral-black py-20 px-4 md:px-16 overflow-hidden relative">
@@ -105,7 +107,7 @@ export default function Footer() {
                     <div className="space-y-2">
                         <Link to="/" className="inline-flex items-center no-underline group">
                             <img
-                                src="/assets/logoHorizontalBlack.svg"
+                                src={headerLogoSrc}
                                 alt="TeeHive — custom artist t-shirts and apparel, India"
                                 className="h-14 sm:h-16 md:h-20 w-auto max-w-[min(360px,92vw)] object-contain object-left transition-opacity group-hover:opacity-90"
                                 width={360}

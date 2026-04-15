@@ -1,6 +1,6 @@
 import { Outlet, NavLink, useNavigate, useLocation } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
-import api from "../../api/axios";
+import { useSiteHeaderLogo } from "../../hooks/useSiteHeaderLogo";
 import {
     LayoutDashboard,
     Palette,
@@ -36,7 +36,7 @@ export default function ArtistSidebarLayout() {
     const location = useLocation();
     const [sidebarOpen, setSidebarOpen] = useState(true);
     const [mobileOpen, setMobileOpen] = useState(false);
-    const [headerLogo, setHeaderLogo] = useState("");
+    const headerLogoSrc = useSiteHeaderLogo();
 
     const isVerified = user?.verificationStatus === "VERIFIED";
     const isPending = user?.verificationStatus === "PENDING_VERIFICATION";
@@ -50,19 +50,6 @@ export default function ArtistSidebarLayout() {
             navigate("/artist/verification-status", { replace: true });
         }
     }, [user, navigate, location.pathname, isVerified]);
-
-    useEffect(() => {
-        const fetchHeaderLogo = async () => {
-            try {
-                const res = await api.get("/api/config/site_banners");
-                const logo = res.data?.data?.config?.headerLogo;
-                if (typeof logo === "string") setHeaderLogo(logo);
-            } catch {
-                // Keep current fallback logo treatment.
-            }
-        };
-        fetchHeaderLogo();
-    }, []);
 
     const handleSignOut = async () => {
         await signOut();
@@ -113,24 +100,11 @@ export default function ArtistSidebarLayout() {
                     className="flex items-center gap-2 cursor-pointer min-w-0 flex-1"
                     onClick={() => navigate("/artist/dashboard")}
                 >
-                    {headerLogo ? (
-                        <img
-                            src={headerLogo}
-                            alt="TeeHive"
-                            className={`${showOpen ? "h-16 w-auto max-w-[140px]" : ""} object-contain shrink-0`}
-                        />
-                    ) : (
-                        <>
-                            <div className="w-8 h-8 bg-primary rounded-[4px] flex items-center justify-center shrink-0">
-                                <Crown className="w-4 h-4 text-neutral-black" />
-                            </div>
-                            {showOpen && (
-                                <span className="font-display text-[21px] font-black tracking-[2px] text-neutral-black whitespace-nowrap transition-opacity duration-200">
-                                    TEEHIVE
-                                </span>
-                            )}
-                        </>
-                    )}
+                    <img
+                        src={headerLogoSrc}
+                        alt="TeeHive"
+                        className={`object-contain shrink-0 ${showOpen ? "h-16 w-auto max-w-[140px]" : "h-8 w-auto max-w-[100px]"}`}
+                    />
                 </div>
                 {/* Desktop toggle */}
                 <button
@@ -206,24 +180,23 @@ export default function ArtistSidebarLayout() {
                 })}
             </nav>
 
-            {/* Storefront + Sign Out */}
-            <div className="px-[14px] py-3 border-t border-neutral-g2 shrink-0 space-y-2">
+            {/* Storefront + Sign Out — aligned with admin sidebar footer */}
+            <div className="px-4 py-6 border-t-[2px] border-neutral-black shrink-0 space-y-3 bg-white">
                 <button
                     type="button"
                     onClick={openPublicStorefront}
-                    className={`group w-full flex items-center gap-[10px] py-[11px] px-3 border-[1.5px] border-neutral-black rounded-[4px] font-display text-[11px] font-bold tracking-[0.5px] uppercase text-neutral-black bg-white hover:bg-neutral-black hover:text-white transition-all ${!showOpen ? "justify-center px-2 border-transparent hover:border-neutral-black" : ""}`}
+                    className={`group w-full flex items-center gap-3 py-3 px-3 border-[2px] border-neutral-black rounded-[4px] font-display text-[10px] font-black uppercase tracking-[1px] text-neutral-black bg-white hover:bg-neutral-black hover:text-white transition-all ${!showOpen ? "justify-center border-none p-2" : ""}`}
                 >
-                    <ExternalLink className="w-4 h-4 shrink-0 stroke-[1.8] transition-transform group-hover:translate-x-0.5 group-hover:-translate-y-0.5" />
+                    <ExternalLink className="w-4 h-4 shrink-0 transition-transform group-hover:translate-x-0.5 group-hover:-translate-y-0.5 stroke-[2]" />
                     {showOpen && <span>View Storefront</span>}
                 </button>
                 <button
                     type="button"
                     onClick={handleSignOut}
-                    className={`flex items-center gap-[10px] font-display text-[12px] font-bold tracking-[0.5px] uppercase text-neutral-g4 hover:text-danger transition-colors whitespace-nowrap ${!showOpen ? "justify-center w-full" : ""
-                        }`}
+                    className={`w-full flex items-center gap-3 py-3 px-3 bg-neutral-g1 border-[2px] border-neutral-black rounded-[4px] font-display text-[10px] font-black uppercase tracking-[1px] text-danger hover:bg-danger hover:text-white transition-all shadow-[4px_4px_0px_0px_rgba(0,0,0,0.1)] hover:shadow-none translate-y-[-1px] active:translate-y-0 ${!showOpen ? "justify-center border-none p-2 bg-transparent" : ""}`}
                 >
-                    <LogOut className="w-4 h-4 shrink-0 stroke-current stroke-[1.8]" />
-                    {showOpen && <span>Sign Out</span>}
+                    <LogOut className="w-4 h-4 shrink-0 stroke-current stroke-[2]" />
+                    {showOpen && <span>Terminate Session</span>}
                 </button>
             </div>
         </div>

@@ -5,7 +5,7 @@ import Loader from "../../components/shared/Loader";
 import api from "../../api/axios";
 import { useCart } from "../../context/CartContext";
 import { BEE_BADGE } from "../../constants/brand";
-import { artistPublicPath } from "../../utils/artistRoutes";
+import { artistPublicPath, artistPublicDisplayName } from "../../utils/artistRoutes";
 import {
     frontMockupUrl,
     backMockupUrl,
@@ -33,6 +33,7 @@ interface Product {
     artist: {
         id: string;
         name: string;
+        displayName?: string | null;
         artistSlug?: string | null;
         artistRating?: number;
         reviewCount?: number;
@@ -88,7 +89,7 @@ export default function Hive50Page() {
             primaryView: product.primaryView,
             mockupView: useBack ? "back" : "front",
             colorMockups: product.colorMockups ?? undefined,
-            artistName: product.artist.name,
+            artistName: artistPublicDisplayName(product.artist),
             availableColors: colors,
         });
         setAddedId(product.id);
@@ -170,7 +171,7 @@ export default function Hive50Page() {
                                                 to={artistPublicPath(product.artist)}
                                                 className="font-display text-[11px] font-bold tracking-[1.5px] uppercase text-primary mb-1 inline-block hover:text-white transition-colors no-underline"
                                             >
-                                                {product.artist.name}
+                                                {artistPublicDisplayName(product.artist)}
                                             </Link>
                                             <div className="flex justify-center mb-1 [&_span]:text-white/85 [&_span]:text-[10px]">
                                                 <ArtistRatingInline
@@ -257,7 +258,7 @@ export default function Hive50Page() {
                                                 to={artistPublicPath(product.artist)}
                                                 className="font-display text-[10px] font-bold tracking-[1.5px] uppercase text-neutral-g4 mb-1 block hover:text-neutral-black transition-colors no-underline"
                                             >
-                                                {product.artist.name}
+                                                {artistPublicDisplayName(product.artist)}
                                             </Link>
                                             <div className="mb-2">
                                                 <ArtistRatingInline
