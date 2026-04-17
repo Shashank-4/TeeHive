@@ -4,6 +4,7 @@ import { PutObjectCommand } from "@aws-sdk/client-s3";
 import { nanoid } from "nanoid";
 import { r2 } from "../util/s3";
 import { PrismaClient } from "@prisma/client";
+import { collectDesignIdsFromManifestInput } from "./product.service";
 import sharp from "sharp";
 
 const prisma = new PrismaClient();
@@ -155,27 +156,35 @@ export const createDesignService = async (input: {
 
 export const getDesignsByArtistService = async (artistId: string) => {
     try {
-        const designs = await prisma.design.findMany({
-            where: {
-                artistId: artistId,
-                isDeleted: false,
-            },
-            include: {
-                products: {
-                    where: {
-                        status: { in: ["DRAFT", "PUBLISHED"] },
-                    },
-                    select: { id: true },
+        const [designs, activeProducts] = await Promise.all([
+            prisma.design.findMany({
+                where: {
+                    artistId: artistId,
+                    isDeleted: false,
                 },
-            },
-            orderBy: {
-                createdAt: "desc",
-            },
-        });
+                orderBy: {
+                    createdAt: "desc",
+                },
+            }),
+            prisma.product.findMany({
+                where: {
+                    artistId,
+                    status: { in: ["DRAFT", "PUBLISHED"] },
+                },
+                select: { designId: true, draftEditorState: true },
+            }),
+        ]);
 
-        return designs.map(d => ({
+        const usedDesignIds = new Set<string>();
+        for (const p of activeProducts) {
+            for (const id of collectDesignIdsFromManifestInput(p.designId, p.draftEditorState)) {
+                usedDesignIds.add(id);
+            }
+        }
+
+        return designs.map((d) => ({
             ...d,
-            isManifested: d.products.length > 0
+            isManifested: usedDesignIds.has(d.id),
         }));
     } catch (error: any) {
         console.error("[Designs] Database error:", error);

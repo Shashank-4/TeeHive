@@ -222,7 +222,7 @@ export default function Cart() {
                                                         <div className="flex flex-col gap-4 mt-6">
                                                             <div className="flex flex-col gap-2 font-display text-[11px] font-bold text-neutral-black/45 tracking-[0.3px]">
                                                                 <span>Size</span>
-                                                                <div className="flex flex-wrap gap-2">
+                                                                <div className="flex flex-wrap ml-1 gap-2">
                                                                     {PRODUCT_SIZES.map((size) => (
                                                                         <button
                                                                             key={size}
@@ -236,10 +236,10 @@ export default function Cart() {
                                                                                     item.color
                                                                                 )
                                                                             }
-                                                                            className={`min-w-[40px] px-2 py-1.5 rounded-[2px] border-[1.5px] font-display text-[11px] font-black transition-all ${
+                                                                            className={`min-w-[46px] h-[44px] px-1.5 sm:min-w-[52px] sm:h-[48px] rounded-[2px] border-[1.5px] font-display text-[11px] sm:text-[12px] font-black transition-all ${
                                                                                 item.size === size
-                                                                                    ? "border-neutral-black bg-primary text-neutral-black shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]"
-                                                                                    : "border-neutral-g2 bg-white text-neutral-g3 hover:border-neutral-black hover:text-neutral-black"
+                                                                                    ? "border-neutral-black bg-primary text-neutral-black shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] -translate-x-0.5 -translate-y-0.5"
+                                                                                    : "border-neutral-black bg-white text-neutral-black shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:translate-x-[-1px] hover:translate-y-[-1px] hover:shadow-[3px_3px_0px_0px_rgba(0,0,0,1)]"
                                                                             }`}
                                                                         >
                                                                             {size}

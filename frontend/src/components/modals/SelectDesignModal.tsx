@@ -47,7 +47,10 @@ const SelectDesignModal: React.FC<SelectDesignModalProps> = ({
     }, []);
 
     const handleSelect = (design: Design) => {
-        if (design.isManifested && design.id !== (targetView === "front" ? currentFrontDesignId : currentBackDesignId)) return;
+        const isCurrent = design.id === (targetView === "front" ? currentFrontDesignId : currentBackDesignId);
+        const isOther = targetView === "front" ? currentBackDesignId === design.id : currentFrontDesignId === design.id;
+        // Match grid `isManifestedDisabled`: allow same design on the other slot of this mockup session.
+        if (design.isManifested && !isCurrent && !isOther) return;
         if (design.status !== "APPROVED") return;
         onDesignSelect(design, targetView);
         onClose();

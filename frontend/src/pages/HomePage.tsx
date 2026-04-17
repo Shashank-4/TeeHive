@@ -551,7 +551,7 @@ function HomePage() {
                                                 : specialOffer.discountPercent;
                                         return (
                                             <div key={product.id} className="w-full max-w-[320px] mx-auto group flex flex-col">
-                                                <div className="relative aspect-[4/5] bg-white rounded-[8px] border-[2.5px] border-neutral-black overflow-hidden transition-all duration-500 shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] group-hover:bg-neutral-g1 group-hover:shadow-none group-hover:translate-x-[4px] group-hover:translate-y-[4px]">
+                                                <div className="relative aspect-[4/5] bg-white rounded-[8px] border-[2.5px] border-neutral-black overflow-hidden shadow-[8px_8px_0px_0px_rgba(0,0,0,1)]">
                                                     <Link to={`/products/${product.id}`} className="no-underline w-full h-full block absolute inset-0 z-0">
                                                         {product.mockupImageUrl ? (
                                                             <ImageWithSkeleton
@@ -561,7 +561,7 @@ function HomePage() {
                                                                         : product.mockupImageUrl
                                                                 }
                                                                 alt={product.name}
-                                                                className={`absolute inset-0 h-full w-full ${STOREFRONT_TEE_MOCKUP_IMAGE_CLASS} transition-transform duration-500 group-hover:scale-[1.06]`}
+                                                                className={`absolute inset-0 h-full w-full scale-100 ${STOREFRONT_TEE_MOCKUP_IMAGE_CLASS} transition-transform duration-500 ease-out group-hover:scale-[1.06]`}
                                                                 wrapperClassName="h-full w-full overflow-hidden"
                                                             />
                                                         ) : (
@@ -588,26 +588,36 @@ function HomePage() {
                                                             <ShoppingCart className="w-5 h-5" />
                                                         </button>
                                                     </div>
-                                                    <div className="absolute bottom-0 left-0 w-full p-5 bg-gradient-to-t from-neutral-black to-transparent opacity-0 group-hover:opacity-100 transition-opacity z-10 pointer-events-none group-hover:pointer-events-auto">
-                                                        <div className="font-display text-[10px] font-black text-primary uppercase tracking-[2px] mb-1">
-                                                            {artistPublicDisplayName(product.artist)}
-                                                        </div>
-                                                        <div className="font-display text-[18px] font-black text-white leading-tight truncate">{product.name}</div>
-                                                    </div>
                                                 </div>
-                                                <div className="py-5 flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
-                                                    <div className="flex items-baseline gap-3 flex-wrap">
-                                                        {strikePrice != null && (
-                                                            <span className="font-display text-[18px] font-black text-neutral-black/45 line-through tabular-nums">
-                                                                ₹{strikePrice.toLocaleString("en-IN")}
-                                                            </span>
-                                                        )}
-                                                        <span className="font-display text-[26px] font-black text-neutral-black tabular-nums">
-                                                            ₹{product.price.toLocaleString("en-IN")}
-                                                        </span>
+                                                <div className="py-5 flex flex-col gap-3">
+                                                    <div className="min-w-0 space-y-1">
+                                                        <Link
+                                                            to={artistPublicPath(product.artist)}
+                                                            className="font-display text-[10px] font-black text-neutral-black/55 uppercase tracking-[2px] truncate hover:text-neutral-black hover:underline decoration-2 underline-offset-2 no-underline block"
+                                                        >
+                                                            {artistPublicDisplayName(product.artist)}
+                                                        </Link>
+                                                        <Link
+                                                            to={`/products/${product.id}`}
+                                                            className="font-display text-[15px] sm:text-[16px] font-black text-neutral-black uppercase leading-snug tracking-tight truncate no-underline block hover:underline decoration-2 underline-offset-2 decoration-neutral-black"
+                                                        >
+                                                            {product.name}
+                                                        </Link>
                                                     </div>
-                                                    <div className="font-display text-[10px] font-black text-neutral-black/50 uppercase tracking-[2px]">
-                                                        {(product.categories?.[0] || product.category || "Design").toString()}
+                                                    <div className="flex flex-wrap items-end justify-between gap-3">
+                                                        <div className="flex items-baseline gap-3 flex-wrap">
+                                                            {strikePrice != null && (
+                                                                <span className="font-display text-[18px] font-black text-neutral-black/45 line-through tabular-nums">
+                                                                    ₹{strikePrice.toLocaleString("en-IN")}
+                                                                </span>
+                                                            )}
+                                                            <span className="font-display text-[26px] font-black text-neutral-black tabular-nums">
+                                                                ₹{product.price.toLocaleString("en-IN")}
+                                                            </span>
+                                                        </div>
+                                                        <div className="font-display text-[10px] font-black text-neutral-black/50 uppercase tracking-[2px] shrink-0">
+                                                            {(product.categories?.[0] || product.category || "Design").toString()}
+                                                        </div>
                                                     </div>
                                                 </div>
                                             </div>
@@ -716,7 +726,7 @@ function HomePage() {
                                     key={product.id}
                                     className="w-[280px] max-w-[92vw] md:w-[320px] shrink-0 snap-start group"
                                 >
-                                    <div className="relative isolate aspect-[4/5] bg-neutral-black rounded-[8px] border-[2.5px] border-neutral-black overflow-hidden transition-all duration-500 shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[4px] hover:translate-y-[4px]">
+                                    <div className="relative isolate aspect-[4/5] bg-neutral-black rounded-[8px] border-[2.5px] border-neutral-black overflow-hidden shadow-[8px_8px_0px_0px_rgba(0,0,0,1)]">
                                         <Link to={`/products/${product.id}`} className="absolute inset-0 z-0 no-underline">
                                             {product.mockupImageUrl ? (
                                                 <ImageWithSkeleton
@@ -726,7 +736,7 @@ function HomePage() {
                                                             : product.mockupImageUrl
                                                     }
                                                     alt={product.name}
-                                                    className={`absolute inset-0 h-full w-full min-h-[101%] min-w-full max-w-none ${STOREFRONT_TEE_MOCKUP_IMAGE_CLASS} transition-transform duration-500 will-change-transform backface-hidden group-hover:scale-[1.06]`}
+                                                    className={`absolute inset-0 h-full w-full min-h-[101%] min-w-full max-w-none scale-100 ${STOREFRONT_TEE_MOCKUP_IMAGE_CLASS} transition-transform duration-500 ease-out will-change-transform backface-hidden group-hover:scale-[1.06]`}
                                                     wrapperClassName="absolute inset-0 min-h-0 overflow-hidden bg-neutral-black"
                                                     wrapperLayout="absolute-fill"
                                                 />
@@ -742,44 +752,54 @@ function HomePage() {
                                             </div>
                                         )}
 
-                                        <div className="absolute top-4 right-4 flex flex-col gap-2 scale-0 group-hover:scale-100 transition-all duration-300">
+                                        <div className="absolute top-4 right-4 z-20 flex flex-col gap-2 scale-0 group-hover:scale-100 transition-all duration-300">
                                             <button
+                                                type="button"
                                                 onClick={() => handleQuickAdd(product)}
                                                 className={`w-12 h-12 rounded-[4px] border-[2px] border-neutral-black flex items-center justify-center transition-all shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] active:shadow-none active:translate-y-1 ${addedId === product.id ? 'bg-success text-white' : 'bg-white text-neutral-black hover:bg-neutral-black hover:text-white'}`}
                                             >
                                                 <ShoppingCart className="w-5 h-5" />
                                             </button>
                                         </div>
-
-                                        <div className="absolute bottom-0 left-0 w-full p-6 bg-gradient-to-t from-neutral-black to-transparent opacity-0 group-hover:opacity-100 transition-opacity">
-                                            <div className="font-display text-[10px] font-black text-primary uppercase tracking-[2px] mb-1">
-                                                {artistPublicDisplayName(product.artist)}
-                                            </div>
-                                            <div className="font-display text-[20px] font-black text-white hover:text-primary transition-colors cursor-pointer truncate">{product.name}</div>
-                                        </div>
                                     </div>
-                                    <div className="py-5 flex items-center justify-between gap-2 flex-wrap">
-                                        <div className="flex items-baseline gap-2 flex-wrap min-w-0">
-                                            {product.isDiscounted &&
-                                                product.originalPrice != null &&
-                                                product.originalPrice > product.price && (
-                                                    <span className="font-display text-[16px] font-black text-white/45 line-through tabular-nums">
-                                                        ₹{product.originalPrice.toLocaleString("en-IN")}
-                                                    </span>
-                                                )}
-                                            {!product.isDiscounted &&
-                                                product.compareAtPrice != null &&
-                                                product.compareAtPrice > product.price && (
-                                                    <span className="font-display text-[16px] font-black text-white/45 line-through tabular-nums">
-                                                        ₹{product.compareAtPrice.toLocaleString("en-IN")}
-                                                    </span>
-                                                )}
-                                            <div className="font-display text-[24px] font-black text-white italic tracking-tighter tabular-nums">
-                                                ₹{product.price.toLocaleString("en-IN")}
-                                            </div>
+                                    <div className="py-5 flex flex-col gap-3">
+                                        <div className="min-w-0 space-y-1">
+                                            <Link
+                                                to={artistPublicPath(product.artist)}
+                                                className="font-display text-[10px] font-black text-primary uppercase tracking-[2px] truncate hover:text-white hover:underline decoration-2 underline-offset-2 no-underline block"
+                                            >
+                                                {artistPublicDisplayName(product.artist)}
+                                            </Link>
+                                            <Link
+                                                to={`/products/${product.id}`}
+                                                className="font-display text-[16px] md:text-[18px] font-black text-white uppercase leading-snug tracking-tight truncate no-underline block hover:underline decoration-2 underline-offset-2 decoration-primary"
+                                            >
+                                                {product.name}
+                                            </Link>
                                         </div>
-                                        <div className="font-display text-[10px] font-black text-white/40 uppercase tracking-[2px] shrink-0">
-                                            {(product.categories?.[0] || product.category || "Design").toString()}
+                                        <div className="flex items-center justify-between gap-2 flex-wrap">
+                                            <div className="flex items-baseline gap-2 flex-wrap min-w-0">
+                                                {product.isDiscounted &&
+                                                    product.originalPrice != null &&
+                                                    product.originalPrice > product.price && (
+                                                        <span className="font-display text-[16px] font-black text-white/45 line-through tabular-nums">
+                                                            ₹{product.originalPrice.toLocaleString("en-IN")}
+                                                        </span>
+                                                    )}
+                                                {!product.isDiscounted &&
+                                                    product.compareAtPrice != null &&
+                                                    product.compareAtPrice > product.price && (
+                                                        <span className="font-display text-[16px] font-black text-white/45 line-through tabular-nums">
+                                                            ₹{product.compareAtPrice.toLocaleString("en-IN")}
+                                                        </span>
+                                                    )}
+                                                <div className="font-display text-[24px] font-black text-white italic tracking-tighter tabular-nums">
+                                                    ₹{product.price.toLocaleString("en-IN")}
+                                                </div>
+                                            </div>
+                                            <div className="font-display text-[10px] font-black text-white/40 uppercase tracking-[2px] shrink-0">
+                                                {(product.categories?.[0] || product.category || "Design").toString()}
+                                            </div>
                                         </div>
                                     </div>
                                 </div>
@@ -816,13 +836,13 @@ function HomePage() {
                             </p>
                             <div className="flex flex-wrap gap-5">
                                 <Link to="/artists" className="group/btn relative px-10 py-5 bg-primary text-neutral-black font-display text-[16px] font-black uppercase tracking-[2px] rounded-[4px] transition-all duration-300 shadow-[8px_8px_0px_0px_rgba(255,222,0,0.2)] hover:shadow-[4px_4px_0px_0px_rgba(255,222,0,1)] hover:translate-x-[4px] hover:translate-y-[4px] no-underline inline-flex items-center gap-4">
-                                    Browse Directory <ArrowRight className="w-5 h-5 group-hover/btn:translate-x-2 transition-transform" />
+                                    Browse Artists <ArrowRight className="w-5 h-5 group-hover/btn:translate-x-2 transition-transform" />
                                 </Link>
                                 <button
                                     onClick={handleRegisterNode}
                                     className="px-10 py-5 bg-transparent text-white border-[2.5px] border-white/20 hover:border-primary hover:text-primary font-display text-[16px] font-black uppercase tracking-[2px] rounded-[4px] transition-all"
                                 >
-                                    Register Node
+                                    Become an Artist
                                 </button>
                             </div>
                         </div>
@@ -875,7 +895,7 @@ function HomePage() {
                     { icon: Shirt, title: "Comfy Tees", sub: "Quality cotton prints made to feel good and last." },
                     { icon: Palette, title: "25% Royalty", sub: "A meaningful slice of every sale goes to the creator." },
                     { icon: ShieldCheck, title: "5-day returns", sub: "Not the right fit? You have five days to start a return." },
-                    { icon: Truck, title: "Free Shipping", sub: "We ship across India at no extra delivery charge." },
+                    { icon: Truck, title: "Free Shipping", sub: "We ship across India at no extra delivery charge. Most orders arrive in 5–7 business days." },
                 ].map((item, i) => (
                     <div key={i} className={`p-10 flex flex-col items-center text-center gap-6 group hover:bg-neutral-black/50 transition-all ${i < 3 ? 'lg:border-r-[2px] border-white/10' : ''}`}>
                         <div className="w-16 h-16 bg-primary text-neutral-black rounded-[4px] flex items-center justify-center shadow-[4px_4px_0px_0px_rgba(255,255,255,0.1)] group-hover:shadow-[4px_4px_0px_0px_rgba(255,222,0,0.5)] group-hover:translate-x-[-2px] group-hover:translate-y-[-2px] transition-all rotate-[5deg] group-hover:rotate-0">

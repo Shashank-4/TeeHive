@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
-import { X, Loader2, Package, User, MapPin, Truck, AlertCircle, Phone } from "lucide-react";
+import { Link } from "react-router-dom";
+import { X, Loader2, Package, User, MapPin, Truck, AlertCircle, Phone, ExternalLink } from "lucide-react";
 import api from "../../api/axios";
 import ReturnPolicyNote from "../shared/ReturnPolicyNote";
 
@@ -180,7 +181,41 @@ export default function OrderDetailsModal({ orderId, onClose }: OrderDetailsModa
                                                 <div className="flex flex-col sm:flex-row justify-between gap-2 items-start">
                                                     <div>
                                                         <h4 className="font-display text-[14px] font-black uppercase truncate">{item.productName}</h4>
+                                                        {item.productId && (
+                                                            <Link
+                                                                to={`/products/${item.productId}`}
+                                                                target="_blank"
+                                                                rel="noopener noreferrer"
+                                                                className="mt-1 inline-flex items-center gap-1 font-display text-[10px] font-black uppercase text-primary underline underline-offset-2 decoration-2 decoration-primary hover:text-neutral-black hover:decoration-neutral-black"
+                                                            >
+                                                                <ExternalLink className="w-3 h-3 shrink-0" aria-hidden />
+                                                                Storefront product
+                                                            </Link>
+                                                        )}
                                                         <p className="font-display text-[11px] font-bold text-neutral-g4 uppercase mt-1">Var: {item.variant}</p>
+                                                        {Array.isArray(item.designCodesLabeled) && item.designCodesLabeled.length > 0 ? (
+                                                            <div className="mt-2 space-y-1">
+                                                                <p className="font-display text-[9px] font-black text-neutral-g3 uppercase tracking-wider">
+                                                                    Design codes
+                                                                </p>
+                                                                {item.designCodesLabeled.map(
+                                                                    (row: { side: string; code: string }, idx: number) => (
+                                                                        <p
+                                                                            key={`${row.side}-${row.code}-${idx}`}
+                                                                            className="font-display text-[10px] font-black text-neutral-black uppercase tracking-wide"
+                                                                        >
+                                                                            {row.side === "back" ? "Back" : "Front"}:{" "}
+                                                                            <span className="text-primary not-italic">{row.code}</span>
+                                                                        </p>
+                                                                    )
+                                                                )}
+                                                            </div>
+                                                        ) : Array.isArray(item.designCodes) && item.designCodes.length > 0 ? (
+                                                            <p className="font-display text-[10px] font-black text-neutral-black uppercase mt-2 tracking-wide">
+                                                                Design code{item.designCodes.length > 1 ? "s" : ""}:{" "}
+                                                                <span className="text-primary not-italic">{item.designCodes.join(" · ")}</span>
+                                                            </p>
+                                                        ) : null}
                                                     </div>
                                                     <div className="text-left sm:text-right">
                                                         <p className="font-display text-[14px] font-black italic">₹{item.totalPrice.toLocaleString('en-IN')}</p>

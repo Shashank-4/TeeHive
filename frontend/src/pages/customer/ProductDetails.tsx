@@ -21,7 +21,11 @@ import GstInclusiveNote from "../../components/shared/GstInclusiveNote";
 import ReturnPolicyNote from "../../components/shared/ReturnPolicyNote";
 import { BEE_BADGE } from "../../constants/brand";
 import { artistPublicPath, artistPublicDisplayName } from "../../utils/artistRoutes";
-import { STOREFRONT_TEE_MOCKUP_IMAGE_CLASS } from "../../utils/productMockup";
+import {
+    STOREFRONT_TEE_MOCKUP_IMAGE_CLASS,
+    frontMockupUrl,
+    backMockupUrl,
+} from "../../utils/productMockup";
 import ArtistRatingInline from "../../components/shared/ArtistRatingInline";
 
 interface Product {
@@ -65,6 +69,33 @@ interface Product {
     }>;
 }
 
+/** Listing shape from `/api/products` for related picks + shop-style cards */
+interface RelatedListingProduct {
+    id: string;
+    name: string;
+    price: number;
+    originalPrice?: number;
+    isDiscounted?: boolean;
+    discountPercent?: number;
+    compareAtPrice?: number;
+    categories?: string[];
+    tshirtColor: string;
+    primaryColor?: string;
+    availableColors?: string[];
+    colorMockups?: Record<string, { front: string; back?: string }> | null;
+    mockupImageUrl: string;
+    backMockupImageUrl?: string;
+    primaryView?: "front" | "back";
+    artist: {
+        id: string;
+        name: string;
+        displayName?: string | null;
+        artistSlug?: string | null;
+        artistRating: number;
+        reviewCount: number;
+    };
+}
+
 export default function ProductDetails() {
     const { productId } = useParams<{ productId: string }>();
     const navigate = useNavigate();
@@ -77,6 +108,9 @@ export default function ProductDetails() {
     const [quantity, setQuantity] = useState(1);
     const [addedToCart, setAddedToCart] = useState(false);
     const [sizeGuideOpen, setSizeGuideOpen] = useState(false);
+    const [relatedProducts, setRelatedProducts] = useState<RelatedListingProduct[]>([]);
+    const [relatedLoading, setRelatedLoading] = useState(false);
+    const [relatedAddedId, setRelatedAddedId] = useState<string | null>(null);
     const { addItem, items } = useCart();
 
     const sizes = PRODUCT_SIZES;
@@ -220,6 +254,79 @@ export default function ProductDetails() {
 
         if (productId) fetchProduct();
     }, [productId]);
+
+    useEffect(() => {
+        if (!product) {
+            setRelatedProducts([]);
+            return;
+        }
+        const loadRelated = async () => {
+            setRelatedLoading(true);
+            try {
+                const res = await api.get("/api/products?limit=48&sort=popular");
+                const list: RelatedListingProduct[] = res.data?.data?.products ?? [];
+                const curCats = new Set(
+                    (product.categories || []).map((c) => String(c).toLowerCase().trim()).filter(Boolean)
+                );
+                const scored = list
+                    .filter((p) => p.id !== product.id)
+                    .map((p) => {
+                        let score = 0;
+                        if (p.artist?.id === product.artist.id) score += 4;
+                        for (const c of p.categories || []) {
+                            if (curCats.has(String(c).toLowerCase().trim())) {
+                                score += 2;
+                                break;
+                            }
+                        }
+                        return { p, score };
+                    })
+                    .sort((a, b) => b.score - a.score)
+                    .map(({ p }) => p)
+                    .slice(0, 8);
+                setRelatedProducts(scored);
+            } catch {
+                setRelatedProducts([]);
+            } finally {
+                setRelatedLoading(false);
+            }
+        };
+        loadRelated();
+    }, [product]);
+
+    const handleRelatedQuickAdd = (p: RelatedListingProduct) => {
+        const colors = p.availableColors?.length ? p.availableColors : [p.tshirtColor];
+        const pickColor = p.primaryColor || p.tshirtColor;
+        const baseMock = {
+            mockupImageUrl: p.mockupImageUrl,
+            backMockupImageUrl: p.backMockupImageUrl,
+            colorMockups: p.colorMockups,
+            primaryColor: p.primaryColor,
+            tshirtColor: p.tshirtColor,
+        };
+        const useBack = p.primaryView === "back";
+        const img = useBack ? backMockupUrl(baseMock, pickColor) : frontMockupUrl(baseMock, pickColor);
+        addItem({
+            productId: p.id,
+            name: p.name,
+            price: p.price,
+            quantity: 1,
+            size: "M",
+            color: canonicalHex(pickColor),
+            image: img,
+            mockupImageUrl: p.mockupImageUrl,
+            backMockupImageUrl: p.backMockupImageUrl,
+            defaultProductColor: p.tshirtColor,
+            primaryColor: p.primaryColor,
+            primaryView: p.primaryView,
+            mockupView: useBack ? "back" : "front",
+            colorMockups: p.colorMockups ?? undefined,
+            artistName: artistPublicDisplayName(p.artist),
+            availableColors: colors,
+        });
+        setRelatedAddedId(p.id);
+        setTimeout(() => setRelatedAddedId(null), 2000);
+    };
 
     if (isLoading) {
         return (
@@ -365,7 +472,7 @@ export default function ProductDetails() {
                     </div>
 
                     {/* RIGHT: Product Info — tighter vertical rhythm for first-screen fit */}
-                    <div className="space-y-5 sm:space-y-5 lg:space-y-4 lg:max-h-[min(78vh,680px)] lg:overflow-y-auto lg:pr-2 [scrollbar-width:thin] pb-2">
+                    <div className="space-y-5 sm:space-y-5 lg:space-y-4 pb-2">
                         <div>
                             <div className="flex flex-wrap items-center gap-2 mb-2">
                                 <StockStatusPill stockStatus={currentStockStatus} />
@@ -465,7 +572,7 @@ export default function ProductDetails() {
                                         Size Guide
                                     </button>
                                 </div>
-                                <div className="flex flex-wrap gap-2">
+                                <div className="flex flex-wrap ml-1 gap-2">
                                     {sizes.map((size) => {
                                         const soldOut = isGloballyUnavailable(selectedColor, size) || (hasVariantInventory && isVariantUnavailable(selectedColor, size));
                                         return (
@@ -476,7 +583,9 @@ export default function ProductDetails() {
                                                 onClick={() => setSelectedSize(size)}
                                                 className={`min-w-[46px] h-[44px] px-1.5 sm:min-w-[52px] sm:h-[48px] rounded-[2px] border-[1.5px] font-display text-[11px] sm:text-[12px] font-black transition-all ${selectedSize === size
                                                     ? "border-neutral-black bg-primary text-neutral-black shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] -translate-x-0.5 -translate-y-0.5"
-                                                    : soldOut ? "border-neutral-g1 bg-neutral-g1 text-neutral-g2 opacity-50 cursor-not-allowed line-through" : "border-neutral-g2 text-neutral-g3 hover:border-neutral-black hover:text-neutral-black"
+                                                    : soldOut
+                                                        ? "border-neutral-g1 bg-neutral-g1 text-neutral-g2 opacity-50 cursor-not-allowed line-through shadow-none"
+                                                        : "border-neutral-black bg-white text-neutral-black shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:translate-x-[-1px] hover:translate-y-[-1px] hover:shadow-[3px_3px_0px_0px_rgba(0,0,0,1)]"
                                                     }`}
                                             >
                                                 {size}
@@ -565,7 +674,7 @@ export default function ProductDetails() {
                                 <div className="w-8 h-8 sm:w-9 sm:h-9 bg-neutral-g1 border border-neutral-g2 rounded-full flex items-center justify-center shrink-0">
                                     <Truck className="w-3.5 h-3.5 text-primary" />
                                 </div>
-                                <span className="leading-tight">Free<br />Shipping</span>
+                                <span className="leading-tight">5-7 Days<br />Delivery</span>
                             </div>
                             <div className="flex items-center gap-2 text-neutral-g4 font-display text-[9px] sm:text-[10px] font-extrabold uppercase tracking-[0.04em]">
                                 <div className="w-8 h-8 sm:w-9 sm:h-9 bg-neutral-g1 border border-neutral-g2 rounded-full flex items-center justify-center shrink-0">
@@ -583,6 +692,106 @@ export default function ProductDetails() {
                         <ReturnPolicyNote className="mt-3" />
                     </div>
                 </div>
+
+                {/* Related — same category / same artist first, shop-style cards */}
+                {(relatedLoading || relatedProducts.length > 0) && (
+                    <section className="mt-14 sm:mt-20 pt-10 sm:pt-12 border-t-[1.5px] border-neutral-g2">
+                        <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-4 mb-8">
+                            <div>
+                                <p className="font-display text-[10px] font-extrabold tracking-[2px] uppercase text-neutral-g3 mb-2">
+                                    <span aria-hidden>{BEE_BADGE}</span> More from the hive
+                                </p>
+                                <h2 className="font-display text-[clamp(22px,3vw,32px)] font-black text-neutral-black uppercase tracking-tight">
+                                    You may also like
+                                </h2>
+                            </div>
+                            <Link
+                                to="/products"
+                                className="font-display text-[11px] font-black uppercase tracking-wide text-neutral-black underline underline-offset-2 decoration-2 hover:text-primary transition-colors shrink-0"
+                            >
+                                View all products
+                            </Link>
+                        </div>
+                        {relatedLoading ? (
+                            <div className="flex justify-center py-16">
+                                <Loader size="w-12 h-12" />
+                            </div>
+                        ) : (
+                            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 sm:gap-6">
+                                {relatedProducts.map((rp) => (
+                                    <div
+                                        key={rp.id}
+                                        className="bg-white border-[1.5px] border-neutral-g2 rounded-[4px] overflow-hidden group/card transition-all hover:shadow-[0_12px_40px_rgba(0,0,0,0.08)] hover:border-neutral-black"
+                                    >
+                                        <Link to={`/products/${rp.id}`} className="block aspect-square overflow-hidden bg-neutral-g1 relative">
+                                            <ImageWithSkeleton
+                                                src={
+                                                    rp.primaryView === "back"
+                                                        ? rp.backMockupImageUrl || rp.mockupImageUrl
+                                                        : rp.mockupImageUrl
+                                                }
+                                                alt={rp.name}
+                                                className={`w-full h-full ${STOREFRONT_TEE_MOCKUP_IMAGE_CLASS} group-hover/card:scale-105 transition-transform`}
+                                                wrapperClassName="w-full h-full"
+                                            />
+                                            {rp.isDiscounted && (rp.discountPercent ?? 0) > 0 && (
+                                                <div className="absolute top-2 left-2 sm:top-3 sm:left-3 bg-danger text-white font-display text-[9px] sm:text-[10px] font-black px-1.5 py-0.5 sm:px-2 sm:py-1 uppercase tracking-[1px] shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] z-10">
+                                                    -{rp.discountPercent}%
+                                                </div>
+                                            )}
+                                        </Link>
+                                        <div className="p-3 sm:p-4">
+                                            <Link
+                                                to={artistPublicPath(rp.artist)}
+                                                className="font-display text-[9px] sm:text-[10px] font-bold tracking-[1.5px] uppercase text-neutral-g4 mb-1 block hover:text-neutral-black transition-colors no-underline truncate"
+                                            >
+                                                {artistPublicDisplayName(rp.artist)}
+                                            </Link>
+                                            <div className="mb-1.5">
+                                                <ArtistRatingInline
+                                                    rating={rp.artist.artistRating ?? 0}
+                                                    reviewCount={rp.artist.reviewCount ?? 0}
+                                                    compact
+                                                />
+                                            </div>
+                                            <Link to={`/products/${rp.id}`} className="no-underline block">
+                                                <h3 className="font-display text-[13px] sm:text-[15px] font-bold text-neutral-black mb-2 truncate hover:text-primary transition-colors">
+                                                    {rp.name}
+                                                </h3>
+                                            </Link>
+                                            <div className="flex items-center justify-between mb-3 gap-2 flex-wrap">
+                                                <div className="flex items-baseline gap-2 min-w-0">
+                                                    <span className="font-display text-[14px] sm:text-[16px] font-black text-neutral-black shrink-0">
+                                                        ₹{rp.price.toLocaleString("en-IN")}
+                                                    </span>
+                                                    {rp.isDiscounted && (
+                                                        <span className="font-display text-[10px] sm:text-[11px] font-bold text-neutral-g3 line-through truncate">
+                                                            ₹{rp.originalPrice?.toLocaleString("en-IN")}
+                                                        </span>
+                                                    )}
+                                                </div>
+                                                <span className="font-display text-[8px] sm:text-[9px] font-bold tracking-[1px] uppercase text-neutral-g3 bg-neutral-g1 px-1.5 py-0.5 shrink-0 max-w-[100px] truncate">
+                                                    {(rp.categories?.[0] || "Design").toString()}
+                                                </span>
+                                            </div>
+                                            <button
+                                                type="button"
+                                                onClick={() => handleRelatedQuickAdd(rp)}
+                                                className={`w-full py-2 sm:py-2.5 font-display text-[10px] sm:text-[11px] font-extrabold tracking-[1px] uppercase rounded-[3px] transition-all border-[1.5px] ${
+                                                    relatedAddedId === rp.id
+                                                        ? "bg-success text-white border-success"
+                                                        : "bg-neutral-black text-white border-neutral-black hover:bg-primary hover:text-neutral-black hover:border-primary"
+                                                }`}
+                                            >
+                                                {relatedAddedId === rp.id ? "Added!" : "+ Add to cart"}
+                                            </button>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        )}
+                    </section>
+                )}
             </div>
 
             <SizeGuideModal open={sizeGuideOpen} onClose={() => setSizeGuideOpen(false)} />
