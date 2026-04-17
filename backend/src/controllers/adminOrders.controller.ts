@@ -171,10 +171,11 @@ export const getOrderByIdHandler = async (req: Request, res: Response) => {
                     include: {
                         product: {
                             include: {
-                                artist: { select: { id: true, name: true, displayName: true } }
-                            }
-                        }
-                    }
+                                artist: { select: { id: true, name: true, displayName: true } },
+                                design: { select: { id: true, designCode: true } },
+                            },
+                        },
+                    },
                 },
                 returnClaim: {
                     include: {
@@ -187,6 +188,53 @@ export const getOrderByIdHandler = async (req: Request, res: Response) => {
         if (!order) {
             return res.status(404).json({ status: "error", message: "Order not found" });
         }
+
+        const designIdSet = new Set<string>();
+        for (const item of order.items) {
+            const p = item.product;
+            if (!p) continue;
+            designIdSet.add(p.designId);
+            const st = p.draftEditorState as { frontDesign?: { id?: string }; backDesign?: { id?: string } } | null;
+            const fid = st?.frontDesign?.id;
+            const bid = st?.backDesign?.id;
+            if (typeof fid === "string" && fid) designIdSet.add(fid);
+            if (typeof bid === "string" && bid) designIdSet.add(bid);
+        }
+        const designRows =
+            designIdSet.size > 0
+                ? await prisma.design.findMany({
+                      where: { id: { in: [...designIdSet] } },
+                      select: { id: true, designCode: true },
+                  })
+                : [];
+        const designCodeById = new Map(
+            designRows.map((d) => [d.id, (d.designCode && String(d.designCode).trim()) || d.id.slice(0, 8).toUpperCase()])
+        );
+
+        type DesignCodeLabeled = { side: "front" | "back"; code: string };
+
+        const lineItemDesignCodesLabeled = (product: (typeof order.items)[0]["product"]): DesignCodeLabeled[] => {
+            if (!product) return [];
+            const st = product.draftEditorState as { frontDesign?: { id?: string }; backDesign?: { id?: string } } | null;
+            const frontId = typeof st?.frontDesign?.id === "string" ? st.frontDesign.id : undefined;
+            const backId = typeof st?.backDesign?.id === "string" ? st.backDesign.id : undefined;
+            const codeFor = (id: string | undefined): string | null => {
+                if (!id) return null;
+                return designCodeById.get(id) ?? null;
+            };
+            const out: DesignCodeLabeled[] = [];
+            const pushSide = (side: "front" | "back", id: string | undefined) => {
+                const c = codeFor(id);
+                if (c) out.push({ side, code: c });
+            };
+            if (frontId) pushSide("front", frontId);
+            if (backId && backId !== frontId) pushSide("back", backId);
+            if (out.length === 0) {
+                const c = codeFor(product.designId);
+                if (c) out.push({ side: "front", code: c });
+            }
+            return out;
+        };
 
         // Commission math: 25% of the item's unit price * quantity
         const COMMISSION_RATE = 0.25;
@@ -208,11 +256,14 @@ export const getOrderByIdHandler = async (req: Request, res: Response) => {
                 artistPayoutsMap.set(artistId, existing);
             }
 
+            const designCodesLabeled = lineItemDesignCodesLabeled(item.product);
             return {
                 id: item.id,
                 productId: item.productId,
                 productName: item.product?.name || "Unknown Product",
                 mockupImageUrl: item.product?.mockupImageUrl,
+                designCodes: designCodesLabeled.map((d) => d.code),
+                designCodesLabeled,
                 variant: `${item.size} / ${item.color}`,
                 quantity: item.quantity,
                 unitPrice: item.price,

@@ -7,6 +7,60 @@ const prisma = new PrismaClient();
 
 const PAID_ORDER_STATUSES = ["PAID", "SHIPPED", "DELIVERED"] as const;
 
+/** All design IDs “used” by a product row: FK + optional front/back from mockup editor JSON. */
+export function collectDesignIdsFromManifestInput(
+    designId: string,
+    draftEditorState: unknown
+): string[] {
+    const ids = new Set<string>();
+    if (designId) ids.add(designId);
+    let state: unknown = draftEditorState;
+    if (typeof state === "string") {
+        try {
+            state = JSON.parse(state) as unknown;
+        } catch {
+            state = null;
+        }
+    }
+    if (state && typeof state === "object" && !Array.isArray(state)) {
+        const front = (state as { frontDesign?: { id?: string } }).frontDesign?.id;
+        const back = (state as { backDesign?: { id?: string } }).backDesign?.id;
+        if (typeof front === "string" && front) ids.add(front);
+        if (typeof back === "string" && back) ids.add(back);
+    }
+    return [...ids];
+}
+
+/** No design ID may appear on more than one active (draft/published) product for the same artist. */
+async function assertDesignIdsExclusiveForArtist(
+    artistId: string,
+    designIds: string[],
+    excludeProductId?: string
+) {
+    const unique = [...new Set(designIds.filter(Boolean))];
+    if (unique.length === 0) return;
+
+    const siblings = await prisma.product.findMany({
+        where: {
+            artistId,
+            status: { in: ["DRAFT", "PUBLISHED"] },
+            ...(excludeProductId ? { id: { not: excludeProductId } } : {}),
+        },
+        select: { designId: true, draftEditorState: true },
+    });
+
+    for (const did of unique) {
+        for (const p of siblings) {
+            const used = new Set(collectDesignIdsFromManifestInput(p.designId, p.draftEditorState));
+            if (used.has(did)) {
+                throw new Error(
+                    "This design is already manifested in another active product. Each design belongs to a unique product identity."
+                );
+            }
+        }
+    }
+}
+
 /** Units assigned to new products when the artist does not send a stock value. Configured in admin (inventory_defaults). */
 export async function getDefaultProductStock(): Promise<number> {
     const row = await prisma.siteConfig.findUnique({ where: { key: "inventory_defaults" } });
@@ -172,18 +226,11 @@ export const createProductService = async (data: CreateProductInput) => {
         throw new Error("Only approved designs can be used to create products.");
     }
 
-    // --- NEW: Block Design Reuse ---
-    const existingProductNode = await prisma.product.findFirst({
-        where: {
-            designId: data.designId,
-            artistId: data.artistId,
-            status: { in: ["DRAFT", "PUBLISHED"] },
-        },
-    });
-    if (existingProductNode) {
-        throw new Error("This design is already manifested in another active product. Each design belongs to a unique product identity.");
-    }
-    // ---------------------------------
+    // Block design reuse on FK and on front/back slots in draftEditorState (back-only products use designId for back art).
+    await assertDesignIdsExclusiveForArtist(
+        data.artistId,
+        collectDesignIdsFromManifestInput(data.designId, data.draftEditorState)
+    );
 
     // Enforce 10-product limit per artist
     const productCount = await prisma.product.count({
@@ -517,6 +564,19 @@ export const updateProductService = async (
     if (product.status === "PUBLISHED") {
         throw new Error(
             "Published products cannot be edited. Create a new product if you need changes, or delete a draft first."
+        );
+    }
+
+    const touchesManifestDesigns =
+        data.designId !== undefined || data.draftEditorState !== undefined;
+    if (touchesManifestDesigns) {
+        const mergedDesignId = data.designId ?? product.designId;
+        const mergedDraft =
+            data.draftEditorState !== undefined ? data.draftEditorState : product.draftEditorState;
+        await assertDesignIdsExclusiveForArtist(
+            artistId,
+            collectDesignIdsFromManifestInput(mergedDesignId, mergedDraft),
+            id
         );
     }
 
