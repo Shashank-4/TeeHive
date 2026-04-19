@@ -23,6 +23,32 @@ import promotionRouter from "./routes/promotion.routes";
 import colorRouter from "./routes/color.routes";
 import reviewRouter from "./routes/review.routes";
 
+/** Production CORS: FRONTEND_URLS (comma-separated) overrides; else FRONTEND_URL + www/apex variant for real domains. */
+function productionCorsOrigins(): string[] {
+    const explicit = process.env.FRONTEND_URLS?.split(",")
+        .map((s) => s.trim())
+        .filter(Boolean);
+    if (explicit?.length) return explicit;
+
+    const primary = process.env.FRONTEND_URL;
+    if (!primary) return [];
+
+    const out = new Set<string>([primary]);
+    try {
+        const u = new URL(primary);
+        if (u.hostname === "localhost" || u.hostname === "127.0.0.1") return [primary];
+        if (!u.hostname.includes(".")) return [primary];
+        if (u.hostname.startsWith("www.")) {
+            out.add(`${u.protocol}//${u.hostname.slice(4)}`);
+        } else {
+            out.add(`${u.protocol}//www.${u.hostname}`);
+        }
+    } catch {
+        return [primary];
+    }
+    return [...out];
+}
+
 const PORT = process.env.PORT || 3000;
 const app = express();
 
@@ -54,15 +80,16 @@ app.use(express.json());
 app.use(cookieParser());
 app.use(
     cors({
-        origin: process.env.NODE_ENV === "production"
-            ? [process.env.FRONTEND_URL!]
-            : [
-                  process.env.FRONTEND_URL || "http://localhost:5173",
-                  "http://localhost:5173",
-                  "http://127.0.0.1:5173",
-                  "http://localhost:3000",
-                  "http://127.0.0.1:3000",
-              ],
+        origin:
+            process.env.NODE_ENV === "production"
+                ? productionCorsOrigins()
+                : [
+                      process.env.FRONTEND_URL || "http://localhost:5173",
+                      "http://localhost:5173",
+                      "http://127.0.0.1:5173",
+                      "http://localhost:3000",
+                      "http://127.0.0.1:3000",
+                  ],
         credentials: true,
     })
 );
